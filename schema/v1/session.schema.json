@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wololo/v1/session.schema.json",
+  "title": "wololo session pointer (sessions/<session id>.json)",
+  "description": "Which run a Claude Code session drives. One active run per session.",
+  "type": "object",
+  "required": ["session_id", "run_id", "heartbeat_at"],
+  "properties": {
+    "session_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "heartbeat_at": { "type": "number" },
+    "cwd": { "type": "string" }
+  }
+}

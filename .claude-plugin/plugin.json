@@ -1,0 +1,15 @@
+{
+  "name": "wololo",
+  "version": "0.1.0",
+  "description": "Takes an issue from definition to PR, showing at every moment which stage it is in and what it is waiting on.",
+  "userConfig": {
+    "data_dir": {
+      "type": "string",
+      "title": "Data directory",
+      "description": "Where configs, runs, debates and screenshots are stored. Empty uses ~/.claude/wololo.",
+      "default": ""
+    }
+  },
+  "types": "./types/index.d.ts",
+  "license": "MIT"
+}

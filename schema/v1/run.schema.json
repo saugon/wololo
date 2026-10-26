@@ -1,0 +1,408 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wololo/v1/run.schema.json",
+  "title": "wololo run snapshot (runs/<id>/run.json)",
+  "description": "A cache of the run, rebuilt from events.jsonl when missing. Times are seconds since the Unix epoch. A reader derives `orphaned` itself: status not done/failed/cancelled and owner.heartbeat_at older than 90 seconds.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "source",
+    "project",
+    "mode",
+    "risk",
+    "status",
+    "stage",
+    "stages",
+    "owner",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "github_issue",
+            "text",
+            "file"
+          ]
+        },
+        "ref": {
+          "type": "string"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "owner__repo from the origin remote, or local__<name>-<hash>"
+        },
+        "path": {
+          "type": "string"
+        },
+        "worktree": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "full",
+        "checkpoints",
+        "guided"
+      ]
+    },
+    "risk": {
+      "enum": [
+        "low",
+        "high",
+        "unknown"
+      ]
+    },
+    "lang": {
+      "enum": [
+        "es",
+        "en"
+      ]
+    },
+    "slot": {
+      "type": "integer",
+      "description": "Port slot of the run; parallel runs get different slots."
+    },
+    "status": {
+      "enum": [
+        "running",
+        "waiting_user",
+        "waiting_permission",
+        "waiting_agents",
+        "waiting_ci",
+        "waiting_tests",
+        "blocked",
+        "stalled",
+        "done",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "stage": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "context",
+            "definition",
+            "gate_a",
+            "plan",
+            "implement",
+            "evidence",
+            "gate_b",
+            "pr"
+          ]
+        },
+        "index": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "since": {
+          "type": "number"
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "number"
+          },
+          "finished_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "gates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      }
+    },
+    "waiting": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "on": {
+          "enum": [
+            "user",
+            "permission"
+          ]
+        },
+        "question": {
+          "type": "string"
+        },
+        "since": {
+          "type": "number"
+        }
+      }
+    },
+    "blocked": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "since": {
+          "type": "number"
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "number"
+          },
+          "finished_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "ci",
+              "tests",
+              "external",
+              "server",
+              "other"
+            ]
+          },
+          "started_at": {
+            "type": "number"
+          },
+          "finished_at": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "items": {
+      "type": "object",
+      "properties": {
+        "done": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        },
+        "current": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "pr": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "number": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "ready"
+          ]
+        },
+        "ci": {
+          "enum": [
+            "pending",
+            "passing",
+            "failing",
+            null
+          ]
+        }
+      }
+    },
+    "screenshots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "caption": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "owner": {
+      "type": "object",
+      "properties": {
+        "session_id": {
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "heartbeat_at": {
+          "type": "number"
+        }
+      }
+    },
+    "last_seq": {
+      "type": "integer"
+    },
+    "last_user_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "last_answer_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "created_at": {
+      "type": "number"
+    },
+    "updated_at": {
+      "type": "number"
+    },
+    "finished_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "outcome": {
+      "enum": [
+        "done",
+        "failed",
+        "cancelled",
+        null
+      ]
+    },
+    "summary": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  }
+}

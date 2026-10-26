@@ -1,0 +1,339 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wololo/v1/config.schema.json",
+  "title": "wololo config (config.json global, projects/<key>/config.json per project)",
+  "description": "Both files hold only the keys they change. Project overrides global, global overrides the defaults; objects merge, arrays replace.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "autonomy": {
+      "enum": [
+        "full",
+        "checkpoints",
+        "guided"
+      ]
+    },
+    "paths": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "definition": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "implementation": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "debate": {
+      "type": "object",
+      "properties": {
+        "depth": {
+          "enum": [
+            "by_risk",
+            "light",
+            "deep"
+          ]
+        },
+        "risk_signals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "max_rounds": {
+          "type": "integer"
+        },
+        "critic": {
+          "enum": [
+            "claude",
+            "external"
+          ]
+        },
+        "external_cmd": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "properties": {
+        "reviewer": {
+          "enum": [
+            "claude",
+            "external",
+            "both"
+          ]
+        }
+      }
+    },
+    "isolation": {
+      "enum": [
+        "worktree",
+        "branch"
+      ]
+    },
+    "worktree_dir": {
+      "type": "string",
+      "description": "Relative to the main checkout. Variables: {repo} {run} {ref} {slug}."
+    },
+    "branch": {
+      "type": "string",
+      "description": "Variables: {repo} {run} {ref} {slug}."
+    },
+    "commands": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "cmd": {
+                "type": "string"
+              },
+              "port": {
+                "type": "string",
+                "description": "A number or an expression of {slot}, e.g. 4000+10*{slot}."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "app_url": {
+          "type": "string"
+        },
+        "login": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "screenshots": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max": {
+          "type": "integer"
+        }
+      }
+    },
+    "pr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "wait_ci": {
+          "type": "boolean"
+        },
+        "base": {
+          "type": "string"
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "properties": {
+        "update_issue": {
+          "type": "boolean"
+        },
+        "create_issue_from_text": {
+          "type": "boolean"
+        }
+      }
+    },
+    "languages": {
+      "type": "object",
+      "properties": {
+        "chat": {
+          "enum": [
+            "es",
+            "en"
+          ]
+        },
+        "spec": {
+          "type": "string"
+        },
+        "issue": {
+          "type": "string"
+        },
+        "pr": {
+          "type": "string"
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "effort": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "project_agents": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "budgets": {
+      "type": "object",
+      "properties": {
+        "design_reversals": {
+          "type": "integer"
+        },
+        "debate_rounds": {
+          "type": "integer"
+        },
+        "ci_fix_attempts": {
+          "type": "integer"
+        },
+        "run_minutes": {
+          "type": "integer"
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "auto_allow": {
+          "type": "boolean"
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "properties": {
+        "header": {
+          "type": "boolean"
+        },
+        "band": {
+          "type": "boolean"
+        },
+        "pane": {
+          "enum": [
+            "auto",
+            "command",
+            "off"
+          ]
+        },
+        "statusline": {
+          "type": "boolean"
+        },
+        "notify": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "properties": {
+        "follow": {
+          "enum": [
+            "wololo",
+            "project"
+          ]
+        },
+        "rules_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Project files holding its testing rules; read when follow is project."
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Globs that identify test files."
+        },
+        "touched": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "match": {
+                "type": "string"
+              },
+              "cmd": {
+                "type": "string",
+                "description": "Command with {files}: the matching test files, space-separated."
+              }
+            }
+          }
+        },
+        "suite": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "e2e": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "suite_runs": {
+          "enum": [
+            "local",
+            "ci"
+          ]
+        },
+        "e2e_runs": {
+          "enum": [
+            "local",
+            "ci",
+            "off"
+          ]
+        },
+        "background": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
