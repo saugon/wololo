@@ -39,6 +39,8 @@ export type Status =
   | 'waiting_tests'
   | 'blocked'
   | 'stalled'
+  | 'pausing'
+  | 'paused'
   | 'orphaned'
   | 'done'
   | 'failed'
@@ -75,6 +77,9 @@ export type EventType =
   | 'blocked'
   | 'unblocked'
   | 'stalled'
+  | 'pause.requested'
+  | 'paused'
+  | 'resumed'
   | 'ci.updated'
   | 'pr.opened'
   | 'pr.ready'
@@ -107,6 +112,7 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'pr.ready',
   'signing.deferred',
   'signing.done',
+  'paused',
   'screenshot.saved',
   'run.finished',
 ])
@@ -228,6 +234,8 @@ export type Run = {
   outcome: Outcome | null
   summary: string | null
   doing?: { text: string; since: number } | null
+  pause_requested_at?: number | null
+  paused?: { note: string; since: number } | null
 }
 
 export type Live = {
@@ -296,6 +304,8 @@ export function emptyRun(id: string, ts: number): Run {
     outcome: null,
     summary: null,
     doing: null,
+    pause_requested_at: null,
+    paused: null,
   }
 }
 
@@ -498,6 +508,18 @@ export function apply(run: Run, ev: RunEvent): Run {
     case 'blocked':
       r.blocked = { reason: str(d.reason), since: ev.ts }
       break
+    case 'pause.requested':
+      r.pause_requested_at = ev.ts
+      break
+    case 'paused':
+      r.paused = { note: str(d.note), since: ev.ts }
+      r.pause_requested_at = null
+      r.doing = null
+      break
+    case 'resumed':
+      r.paused = null
+      r.pause_requested_at = null
+      break
     case 'unblocked':
       r.blocked = null
       break
@@ -554,6 +576,9 @@ export function deriveStatus(run: Run, live: Live): Status {
   if (live.question || run.waiting?.on === 'user') return 'waiting_user'
   if (run.blocked) return 'blocked'
   if (live.permission || run.waiting?.on === 'permission') return 'waiting_permission'
+  if (run.paused) return 'paused'
+  const isBusy = live.isTurnRunning || liveTasks(run).length > 0 || liveAgents(run).length > 0
+  if (run.pause_requested_at) return isBusy ? 'pausing' : 'paused'
   if (live.isTurnRunning) return 'running'
   const tasks = liveTasks(run)
   if (tasks.some(t => t.kind === 'ci')) return 'waiting_ci'
@@ -563,7 +588,7 @@ export function deriveStatus(run: Run, live: Live): Status {
 }
 
 export function effectiveStatus(run: Run, nowSeconds: number): Status {
-  if (isTerminal(run.status)) return run.status
+  if (isTerminal(run.status) || run.status === 'paused') return run.status
   return nowSeconds - run.owner.heartbeat_at > ORPHAN_AFTER_SECONDS ? 'orphaned' : run.status
 }
 
@@ -707,6 +732,8 @@ const BADGES: Record<Lang, Record<Status, string>> = {
     waiting_tests: 'CORRIENDO TESTS',
     blocked: 'BLOQUEADO',
     stalled: 'DETENIDO',
+    pausing: 'PAUSANDO',
+    paused: 'PAUSADO',
     orphaned: 'SESIÓN CERRADA',
     done: 'TERMINADO',
     failed: 'FALLÓ',
@@ -721,6 +748,8 @@ const BADGES: Record<Lang, Record<Status, string>> = {
     waiting_tests: 'RUNNING TESTS',
     blocked: 'BLOCKED',
     stalled: 'STOPPED',
+    pausing: 'PAUSING',
+    paused: 'PAUSED',
     orphaned: 'SESSION CLOSED',
     done: 'DONE',
     failed: 'FAILED',
@@ -736,6 +765,8 @@ const ICONS: Record<Status, string> = {
   waiting_user: '?',
   waiting_permission: '!',
   stalled: '‖',
+  pausing: '⏸',
+  paused: '⏸',
   orphaned: '○',
   blocked: '✕',
   failed: '✕',
@@ -761,6 +792,12 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number): stri
       return run.blocked ? `${run.blocked.reason} · ${ago(run.blocked.since)}` : ''
     case 'stalled':
       return es ? 'terminó el turno sin nada pendiente' : 'the turn ended with nothing pending'
+    case 'pausing':
+      return [es ? 'termina el paso en curso y se pausa' : 'finishing the current step, then pausing', working].filter(Boolean).join(' · ')
+    case 'paused': {
+      const note = run.paused?.note ? `${run.paused.note} · ` : ''
+      return `${note}${es ? 'podés cerrar la sesión · /wololo resume para seguir' : 'safe to close the session · /wololo resume to go on'}`
+    }
     case 'orphaned':
       return '/wololo resume'
     case 'waiting_ci':

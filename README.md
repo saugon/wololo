@@ -43,6 +43,7 @@ What it decides on its own is recorded as an assumption, shown at the gates and 
 - **Notification** when the run starts waiting for you, gets blocked, or finishes.
 - `/wololo status` (or `/wololo-status`) shows the runs of every project as a card, one block per run with its badge, stage and what it is doing, without a model turn (`all` adds finished ones). `/wololo` with no arguments summarizes what happened since your last message.
 - **History**: what happened, in order and in words: blocks and their reason, every question with the answer given, gates, decisions, assumptions, corrections, commits, the PR. The last events show in the expanded card; `/wololo-history` prints it all (`all` adds agents and tasks), and every run keeps it in `history.md`.
+- **Pause**: `/wololo pause` lets the run finish the step in progress, note where it stopped and turn ⏸ PAUSED, with a notice when it is safe to close the session (to restart the machine, say). `/wololo resume` picks it up from that note, in the same session or another.
 
 The state is derived from what the session does, not from what the model says:
 

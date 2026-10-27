@@ -111,3 +111,14 @@ test('doing says what is being done until the stage changes or it is replaced', 
   run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'stage.entered', data: { stage: 'definition' } })
   expect(run.doing).toBe(null)
 })
+
+test('a pause requested while work runs reads as pausing, and as paused once nothing runs', async () => {
+  let run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 130, run: 'r1', type: 'pause.requested', data: {} })
+  expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('pausing')
+  expect(deriveStatus(run, IDLE)).toBe('paused')
+  run = apply(run, { v: 1, seq: 4, ts: 140, run: 'r1', type: 'paused', data: { note: 'sigue el ítem 4' } })
+  expect(header(run, 'paused', 200)).toBe('[wololo #4312 · 1/8 Contexto · ⏸ pausado: sigue el ítem 4 · podés cerrar la sesión · /wololo resume para seguir]')
+  expect(effectiveStatus({ ...run, status: 'paused' }, 10_000)).toBe('paused')
+  run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'resumed', data: {} })
+  expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('running')
+})

@@ -1,7 +1,7 @@
 ---
 name: wololo
 description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | help | status | history | resume <run> | panel | init | config | cancel
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | help | status | history | pause | resume [run] | panel | init | config | cancel
 ---
 
 # wololo
@@ -24,7 +24,8 @@ Take the text after `/wololo`:
 | `help` | The mod answers it before you see it, as `/wololo-help`. If it reaches you anyway, list the subcommands of this table, the `--full`/`--checkpoints`/`--guided` flags and the card's keys (m, r, i, h, d, p). |
 | `status` | The mod answers it before you see it, as `/wololo-status`: a card of every active run. If it reaches you anyway, `get` scope `all` and print `table` verbatim in a code block, with one line under it per run that waits on the person. |
 | `history` | `get` scope `history`; print `lines` verbatim in a code block, and the path of `history.md`. With `all`, add `include_minor: true`. `/wololo-history` shows the same without a model turn. |
-| `resume <run>` | `resume` with that run id, then follow `stages/resume.md`. |
+| `pause` | The mod answers it before you see it, as `/wololo-pause`. |
+| `resume [run]` | `resume` with that run id (left out: this session's run, after a pause), then follow `stages/resume.md`. |
 | `panel` | `panel` (open). `panel off` closes it. |
 | `init` | Follow `stages/init.md`. |
 | `config` | The mod answers it before you see it, as `/wololo-config`: a dialog with every section. If it reaches you anyway, `get` scope `config`, show the effective config and the two config paths, offer edits with AskUserQuestion, and write the project config only after the person confirms. |
@@ -107,12 +108,19 @@ Record `blocked {reason}`, then ask with AskUserQuestion. Record `unblocked` onc
 **Files.**
 - Every artifact of the run lives in `run_dir`: `source.md`, `context.md`, `spec.md`, `plan.md`, `log.md`, `debate/`, `screenshots/`, `pr-body.md`, `summary.md`.
 - Nothing of wololo's goes into the repository.
+- Write and update the run's files with Write and Edit, never with shell redirection (`cat >>`, `echo >`): the mod approves those tools in `run_dir` without asking, and a shell write stops the run on a permission prompt.
 
 **Tests.**
 - During development, run the tests the run created or changed, as `mcp__wololo__tests {scope: "touched"}` lists them.
 - Once every item is done, run the full suite (`scope: "suite"`). It runs locally or is left to CI, as the config says.
 - When `config.tests.follow` is `project`, read `config.tests.rules_from` before the first item; the project's rules win wherever they differ.
 - A suite that takes long runs in the background; the mod shows "corriendo tests".
+
+**Pausing.** When a message or a tool result says the person asked to pause:
+- start nothing new: no new item, no new subagent, no new long command;
+- let the subagents already running report, and commit an item that is already verified;
+- note in `log.md` where the run stopped and what comes next;
+- record `paused {note}` with that in one sentence, then end the turn saying it is safe to close the session.
 
 **Waiting.** For anything long, use background work: a subagent with `run_in_background`, or a background Bash command. Then end the turn. The mod shows the run as waiting on those jobs, and their notification wakes you. Never sleep-poll.
 

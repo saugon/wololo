@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { historyMarkdown, timeline } from '../hooks/history'
 import { type RunEvent, rebuild } from '../hooks/model'
-import { buildView, progressOf } from '../hooks/ui'
+import { buildView, pageOf, progressOf, wrapLines } from '../hooks/ui'
 
 function events(list: Array<[RunEvent['type'], Record<string, unknown>]>): RunEvent[] {
   return list.map(([type, data], i) => ({ v: 1, seq: i + 1, ts: 1_800_000_000 + i * 60, run: 'r1', type, data }))
@@ -162,4 +162,27 @@ test('the progress bar fills done stages, the current one by its items, and says
   const finished = rebuild('r1', [...list, ...events([['run.finished', { outcome: 'done' }]]).map(e => ({ ...e, seq: 99 }))])
   expect(progressOf(finished).percent).toBe(100)
   expect(progressOf(finished).segments.every(segment => segment.state === 'done' && segment.filled === '████')).toBe(true)
+})
+
+test('a tab shows a window that fits, starting near the item in progress', async () => {
+  const rows = Array.from({ length: 15 }, (_, i) => ({ text: `${i === 11 ? '▶' : '✓'} ${i + 1}.`, tone: 'text' as const }))
+  const around = pageOf(rows, 6, -1, 11)
+  expect(around.rows.map(row => row.text)).toEqual(['✓ 10.', '✓ 11.', '▶ 12.', '✓ 13.', '✓ 14.', '✓ 15.'])
+  expect(around.start).toBe(9)
+  const first = pageOf(rows, 6, 0, 11)
+  expect(first.rows[0]?.text).toBe('✓ 1.')
+  const past = pageOf(rows, 6, 40, -1)
+  expect(past.start).toBe(9)
+  expect(pageOf(rows.slice(0, 3), 6, -1, -1)).toEqual({ rows: rows.slice(0, 3), start: 0, size: 6, total: 3 })
+})
+
+test('a long detail wraps on words and ends in an ellipsis past its line budget', () => {
+  const text = 'Pausado tras el ítem 12/15. Sigue: revisar el ítem 12, luego los ítems 13 a 15 y la suite final.'
+  const lines = wrapLines(text, 30, 2)
+  expect(lines).toHaveLength(2)
+  expect(lines.every(line => line.length <= 30)).toBe(true)
+  expect(lines[0]).toBe('Pausado tras el ítem 12/15.')
+  expect(lines[1]?.endsWith('…')).toBe(true)
+  expect(wrapLines('corto', 30, 3)).toEqual(['corto'])
+  expect(wrapLines('', 30, 3)).toEqual([])
 })

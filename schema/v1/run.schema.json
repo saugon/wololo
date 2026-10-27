@@ -114,6 +114,8 @@
         "waiting_tests",
         "blocked",
         "stalled",
+        "pausing",
+        "paused",
         "done",
         "failed",
         "cancelled"

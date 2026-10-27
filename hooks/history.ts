@@ -66,6 +66,12 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     }
     case 'blocked':
       return one('✕', `${es ? 'Bloqueado' : 'Blocked'}: ${str(d.reason)}`)
+    case 'pause.requested':
+      return one('⏸', es ? 'Pausa pedida' : 'Pause requested')
+    case 'paused':
+      return one('⏸', `${es ? 'Pausado' : 'Paused'}${d.note ? `: ${str(d.note)}` : ''}`)
+    case 'resumed':
+      return one('▶', es ? 'Retomado' : 'Resumed')
     case 'unblocked': {
       if (d.by === 'answer') return one('⟳', es ? 'Desbloqueado con tu respuesta' : 'Unblocked by your answer')
       if (d.by === 'message') return one('⟳', es ? 'Desbloqueado con tu mensaje' : 'Unblocked by your message')

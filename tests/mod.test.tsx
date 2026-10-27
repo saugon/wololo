@@ -124,21 +124,21 @@ test('start writes the run, the band shows it, questions are recorded, a push to
     props: { hasSurvey: false, isWorking: true, maxRows: 4, bodyColumns: 140, scroll: { offset: 0, bodyRows: 4 }, view: {} },
   })
   expect((await short.find({ type: 'Text', text: /%$/ }))?.text).toBe('6%')
-  expect(await short.find({ type: 'Text', text: /modo checkpoints/ })).toBeUndefined()
+  expect((await short.find({ type: 'Text', text: /checkpoints$/ }))?.text).toBe('⏸ checkpoints')
   await short.unmount()
   const probe = await $.ui.mount({
     plugin: 'wololo',
     surface: 'terminal',
     component: 'AbovePrompt',
-    props: { hasSurvey: false, isWorking: true, maxRows: 12, bodyColumns: 140, scroll: { offset: 0, bodyRows: 12 }, view: {} },
+    props: { hasSurvey: false, isWorking: true, maxRows: 40, bodyColumns: 140, scroll: { offset: 0, bodyRows: 40 }, view: {} },
   })
-  expect((await probe.find({ type: 'Text', text: /^wololo · / }))?.text).toBe('wololo · #12 Partial payments')
+  expect((await probe.find({ type: 'Text', text: /Partial payments$/ }))?.text).toBe('#12 Partial payments')
   expect((await probe.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
-  expect((await probe.find({ type: 'Text', text: /^1\/8/ }))?.text).toBe('1/8 Contexto')
-  expect((await probe.find({ type: 'Text', text: /^Rev$/ }))?.text).toBe('Rev')
+  expect((await probe.find({ type: 'Text', text: /^Contexto$/ }))?.text).toBe('Contexto')
+  expect((await probe.find({ type: 'Text', text: /^Rev\s+$/ }))?.text?.trim()).toBe('Rev')
   expect((await probe.find({ type: 'Text', text: /%$/ }))?.text).toBe('6%')
-  expect((await probe.find({ type: 'Text', text: /modo checkpoints/ }))?.text).toBe('⏸ modo checkpoints')
-  expect((await probe.find({ type: 'Text', text: /frena para aprobar/ }))?.text).toBe('· frena para aprobar el spec y el PR (/wololo config)')
+  expect((await probe.find({ type: 'Text', text: /checkpoints$/ }))?.text).toBe('⏸ checkpoints')
+  expect((await probe.find({ type: 'Text', text: /^━+$/ }))?.text.length).toBeGreaterThan(0)
   expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
   await probe.press({ key: 'toggle' })
   expect((await probe.find({ type: 'Text', text: /^Archivos del run/ }))?.text).toContain(`${DATA}/runs/`)
@@ -256,7 +256,6 @@ test('a run whose snapshot predates the items list is rebuilt from its events on
   expect((await ui.find({ type: 'Text', text: /^✓ 1\./ }))?.text).toBe('✓ 1. Back: migración  084cc5051')
   expect((await ui.find({ type: 'Text', text: /^▶ 2\./ }))?.text).toBe('▶ 2. Back: API')
   expect((await ui.find({ type: 'Text', text: /^· 3\./ }))?.text).toBe('· 3. Front: tipos')
-  expect((await ui.find({ type: 'Text', text: / i: Ítems / }))?.text).toBe(' i: Ítems ')
   await ui.unmount()
 })
 
@@ -302,7 +301,7 @@ test('/wololo help lists every command and key as a card', async ($, on) => {
   on('command.register', (_, e) => ({ value: { command: e.name } }))
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   const help = await $.command.run({ command: 'wololo', args: 'help' } as never)
-  expect(help.text).toContain('/wololo resume <id>: retomar un run cuya sesión se cerró')
+  expect(help.text).toContain('/wololo pause: termina el paso en curso y se pausa, para poder cerrar la sesión')
   expect(help.text).not.toContain('—')
   const ui = await $.ui.mount({
     plugin: 'wololo',
@@ -369,4 +368,44 @@ test('the init review walks from what was detected to the chosen sections and sa
     autonomy: 'guided',
   })
   await ui.unmount()
+})
+
+test('the expanded card pages its tab instead of growing past its rows', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  for (const stage of ['definition', 'gate_a']) await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)
+  const ui = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 22, bodyColumns: 140, scroll: { offset: 0, bodyRows: 22 }, view: {} },
+  })
+  await ui.press({ key: 'toggle' })
+  const range = (await ui.find({ type: 'Text', text: /^1–\d+ de \d+$/ }))?.text ?? ''
+  expect(range).toMatch(/^1–\d+ de \d+$/)
+  await ui.press({ key: 'page-down' })
+  expect((await ui.find({ type: 'Text', text: /^\d+–\d+ de \d+$/ }))?.text).not.toBe(range)
+  await ui.unmount()
+})
+
+test('/wololo pause asks the run to pause, and resume clears it', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  const asked = await $.command.run({ command: 'wololo', args: 'pause' } as never)
+  expect(asked.text).toContain('pausa pedida')
+  const pausing = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((pausing.run as { status: string }).status).toBe('pausing')
+  expect(pausing.header).toContain('⏸ pausando')
+  const paused = parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'paused', data: { note: 'ítem 3 commiteado; sigue el 4' } } as never)).result)
+  expect(paused.status).toBe('paused')
+  const resumed = parse((await $.tool.call({ tool: 'mcp__wololo__resume' } as never)).result)
+  expect(resumed.stage).toBe(null)
+  const after = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((after.run as { paused: unknown; pause_requested_at: unknown }).paused).toBe(null)
+  expect((after.run as { pause_requested_at: unknown }).pause_requested_at).toBe(null)
 })

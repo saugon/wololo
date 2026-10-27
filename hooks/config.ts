@@ -117,7 +117,7 @@ export const DEFAULT_CONFIG: Config = {
     band: true,
     pane: 'auto',
     statusline: false,
-    notify: ['waiting_user', 'waiting_permission', 'blocked', 'stalled', 'done', 'failed'],
+    notify: ['waiting_user', 'waiting_permission', 'blocked', 'stalled', 'paused', 'done', 'failed'],
     colors: { working: 'claude', waiting: 'warning', blocked: 'error', done: 'success' },
   },
 }

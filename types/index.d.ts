@@ -4,12 +4,15 @@ export type Row = { text: string; tone: Tone }
 
 export type Pill = { label: string; state: 'done' | 'current' | 'pending' }
 
-export type Segment = { short: string; state: 'done' | 'current' | 'pending'; filled: string; empty: string }
+export type Segment = { short: string; state: 'done' | 'current' | 'pending'; filled: string; empty: string; fraction: number }
 
 export type Progress = { segments: Segment[]; percent: number }
 
 export type Band = {
   title: string
+  heading: string
+  modeChip: string
+  stageText: string
   mode: string
   modeLine: { icon: string; name: string; hint: string; color: string }
   stage: string
@@ -49,6 +52,6 @@ export type ConfigDialog = {
 
 declare module 'claude-code' {
   interface PluginState {
-    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean; dialog: ConfigDialog | null }
+    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean; dialog: ConfigDialog | null; owner: string; page: number }
   }
 }

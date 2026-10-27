@@ -17,6 +17,7 @@ import {
   emptyRun,
   header,
   isTerminal,
+  ORPHAN_AFTER_SECONDS,
   nextSeq,
   sinceLastSeen,
 } from './model'
@@ -43,7 +44,7 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type StatusCard, buildView, statusCards, statusTable } from './ui'
+import { type StatusCard, barLabels, buildView, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
 
 type Engine = EngineInterface
 
@@ -64,6 +65,9 @@ const tabAtom = atom({ plugin: 'wololo', key: 'tab' } as const, 'summary')
 const detailAtom = atom({ plugin: 'wololo', key: 'detail' } as const, false)
 const dialogAtom = atom({ plugin: 'wololo', key: 'dialog' } as const, null)
 const CONFIG_PANE = 'wololo-config'
+const ownerAtom = atom({ plugin: 'wololo', key: 'owner' } as const, '')
+const pageAtom = atom({ plugin: 'wololo', key: 'page' } as const, -1)
+const INSTANCE = Math.random().toString(36).slice(2, 10)
 
 let paths: Paths | undefined
 let root = ''
@@ -230,6 +234,11 @@ function contextLine(): string {
   return `wololo: run ${run.id} is active in this session (stage ${run.stage?.id ?? 'none'}, status ${run.status}, mode ${run.mode}). Run files: ${runDir(paths, run.id)}. Skill files: ${root}. Record every transition with ${TOOL_PREFIX}event.`
 }
 
+function pauseNotice(): string | null {
+  if (!run || run.outcome || !run.pause_requested_at || run.paused) return null
+  return `wololo: the person asked to pause run ${run.id}. Start nothing new: let the agents already running report, commit an item that is already verified, note in log.md what comes next, record paused {note: "<where it stopped and what comes next>"} with ${TOOL_PREFIX}event, and end your turn telling them it is safe to close the session.`
+}
+
 function orientation(): string {
   if (!run || !paths) return ''
   const dir = runDir(paths, run.id)
@@ -240,7 +249,13 @@ function orientation(): string {
   ].join(' ')
 }
 
+async function isOwner($: Engine): Promise<boolean> {
+  const owner = await read($, ownerAtom)
+  return !owner || owner === INSTANCE
+}
+
 async function refresh($: Engine, ts?: number) {
+  if (!(await isOwner($))) return
   if (!run) {
     await update($, viewAtom, () => null)
     return
@@ -447,6 +462,24 @@ function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unk
       </Box>
     )
   })
+}
+
+async function pauseRun($: Engine): Promise<{ text: string }> {
+  const es = (run?.lang ?? config.languages.chat) === 'es'
+  if (!run || run.outcome) return { text: es ? 'wololo: no hay un run activo en esta sesión.' : 'wololo: no active run in this session.' }
+  if (run.paused) return { text: es ? 'wololo: el run ya está pausado. /wololo resume lo retoma.' : 'wololo: the run is already paused. /wololo resume picks it up.' }
+  if (!run.pause_requested_at) await emit($, 'pause.requested', { by: 'person' })
+  if (run.status === 'paused') {
+    await emit($, 'paused', { note: es ? 'pausado entre pasos, sin nada corriendo' : 'paused between steps, nothing running' })
+    await flush($)
+    return { text: es ? 'wololo: run pausado. Podés cerrar la sesión; /wololo resume lo retoma.' : 'wololo: run paused. You can close the session; /wololo resume picks it up.' }
+  }
+  await flush($)
+  return {
+    text: es
+      ? 'wololo: pausa pedida. El run termina el paso en curso y se pausa; la tarjeta pasa a ⏸ PAUSADO y te aviso cuando sea seguro cerrar.'
+      : 'wololo: pause requested. The run finishes the current step and pauses; the card turns ⏸ PAUSED and you get a notice when it is safe to close.',
+  }
 }
 
 async function statusOutput($: Engine, args: string): Promise<{ text: string }> {
@@ -681,7 +714,7 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
 
 async function resumeRun($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!paths) return fail('wololo is not ready yet.')
-  const id = String(input.run_id ?? '')
+  const id = String(input.run_id ?? run?.id ?? '')
   if (run && !run.outcome && run.id !== id)
     return fail(`Run ${run.id} is active in this session; finish or cancel it before resuming another.`)
   const target = await reviveRun($, id)
@@ -689,7 +722,8 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   const ts = await nowSeconds($)
   const status = effectiveStatus(target, ts)
   if (isTerminal(status)) return fail(`Run ${id} already finished (${status}).`)
-  if (target.owner.session_id !== sessionId && status !== 'orphaned') {
+  const isStale = ts - target.owner.heartbeat_at > ORPHAN_AFTER_SECONDS
+  if (target.owner.session_id !== sessionId && !isStale) {
     return fail(`Run ${id} is owned by a live session (heartbeat ${Math.round(ts - target.owner.heartbeat_at)}s ago). Resume it there.`)
   }
   const dir = runDir(paths, id)
@@ -701,6 +735,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   config = (await loadConfig($, target.project.key)).config
   live = { isTurnRunning: true, question: null, permission: null }
   await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() })
+  if (run.paused || run.pause_requested_at) await emit($, 'resumed', {})
   await flush($)
   await writePointer($)
   return ok({
@@ -829,7 +864,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
     name: 'resume',
     description:
       "Takes over a run whose session closed (or this session's own run after a restart) and returns what happened since the person last looked.",
-    inputSchema: { type: 'object', properties: { run_id: { type: 'string' } }, required: ['run_id'] },
+    inputSchema: { type: 'object', properties: { run_id: { type: 'string', description: "Left out: this session's run." } } },
   },
   {
     name: 'external_turn',
@@ -1089,6 +1124,9 @@ export const register: Register = (on, options) => {
         .register({ name: 'wololo-config', description: "Opens wololo's config: this project's and yours" })
         .catch(() => undefined)
       await $.command
+        .register({ name: 'wololo-pause', description: 'Pauses the wololo run at the next clean point, so the session can be closed' })
+        .catch(() => undefined)
+      await $.command
         .register({ name: 'wololo-help', description: 'What every wololo command and key does' })
         .catch(() => undefined)
       await $.command
@@ -1118,11 +1156,16 @@ export const register: Register = (on, options) => {
         }
       }
 
+      await update($, ownerAtom, () => INSTANCE)
       timer?.cancel()
       timer = $.clock.every(TICK_MS, () => {
         if (isWriting) return
         isWriting = true
         void quietly(async () => {
+          if (!(await isOwner($))) {
+            timer?.cancel()
+            return
+          }
           ticks += 1
           if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
           if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
@@ -1197,9 +1240,10 @@ export const register: Register = (on, options) => {
     if (tool.startsWith(TOOL_PREFIX)) {
       const input = e as unknown as Record<string, unknown>
       const text = await handleOwnTool($, tool.slice(TOOL_PREFIX.length), input).catch(error => fail(String(error)))
-      const context = reorient && run ? [orientation()] : undefined
-      if (context) reorient = false
-      return context ? { result: text, context } : { result: text }
+      const notice = pauseNotice()
+      const notes = [...(reorient && run ? [orientation()] : []), ...(notice ? [notice] : [])]
+      if (reorient && run) reorient = false
+      return notes.length > 0 ? { result: text, context: notes } : { result: text }
     }
     if (!run || run.outcome) return next(e)
 
@@ -1303,6 +1347,10 @@ export const register: Register = (on, options) => {
       live.permission = null
       lastTurnEndAt = await nowSeconds($)
       await refresh($)
+      if (run.pause_requested_at && !run.paused && run.status === 'paused') {
+        const es = run.lang === 'es'
+        await emit($, 'paused', { note: run.doing?.text ?? (es ? 'pausado al terminar el turno' : 'paused at the end of the turn') })
+      }
       if (run.status !== 'stalled' || run.mode !== 'full' || e.isAborted) return
       if (run.counts.nudges < MAX_NUDGES) {
         await emit($, 'stalled', {})
@@ -1330,7 +1378,8 @@ export const register: Register = (on, options) => {
         isDirty = true
         await liftBlock($, 'message')
       }
-      const context = [contextLine(), ...(reorient ? [orientation()] : [])]
+      const notice = pauseNotice()
+      const context = [contextLine(), ...(reorient ? [orientation()] : []), ...(notice ? [notice] : [])]
       reorient = false
       input = { ...e, context: [...(e.context ?? []), ...context] }
     })
@@ -1359,80 +1408,108 @@ export const register: Register = (on, options) => {
     const tab = await read($, tabAtom)
     const withDetail = await read($, detailAtom)
     const lang = run?.lang ?? 'es'
+    const tabRowsFixed = 6
+    const bandRows = (isRoomy: boolean, detailRows: number) =>
+      (isRoomy ? 4 : 2) + 1 + (isRoomy ? 1 : 0) + 1 + detailRows + (band.progress ? (isRoomy ? 1 : 0) + 2 : 0)
+    const detailWidth = (isRoomy: boolean) => Math.max(20, e.props.bodyColumns - (isRoomy ? 4 : 2) - 2 - 1)
+    const roomyDetail = band.detail ? wrapLines(clip(band.detail, 220), detailWidth(true), 3).length : 0
+    const roomy = isExpanded
+      ? e.props.maxRows - bandRows(true, roomyDetail) - tabRowsFixed >= 13
+      : e.props.maxRows >= bandRows(true, roomyDetail)
+    const detailRoom = Math.max(1, e.props.maxRows - bandRows(roomy, 0) - (isExpanded ? tabRowsFixed + 3 : 0))
+    const detailLines = band.detail ? wrapLines(clip(band.detail, 220), detailWidth(roomy), Math.min(3, detailRoom)) : []
+    const fixedRows = bandRows(roomy, detailLines.length) + tabRowsFixed
+    const page = isExpanded
+      ? pageOf(tabRows(view, tab, withDetail, lang), Math.max(3, e.props.maxRows - fixedRows), await read($, pageAtom), tab === 'items' ? (view.items ?? []).findIndex(row => row.text.startsWith('▶')) : -1)
+      : { rows: [], start: 0, size: 0, total: 0 }
+    const barWidth = Math.max(24, e.props.bodyColumns - (roomy ? 4 : 2) - 2 - 7)
+    const isWaitingTone = band.tone === 'warning' || band.tone === 'error'
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={1}>
+      <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={roomy ? 2 : 1} paddingY={roomy ? 1 : 0}>
         <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
-          <Text bold>{band.title}</Text>
-          <Box flexDirection="row" columnGap={2}>
-            <Button
-              key="toggle"
-              hotkey="m"
-              plain
-              dimColor
-              label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
-              onPress={() => update($, expandedAtom, value => !value)}
-            />
-          </Box>
-        </Box>
-        {band.progress && (
-        <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
-          <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-            {band.progress.segments.map(segment => {
-              const color = segment.state === 'done' ? paint('success') : segment.state === 'current' ? paint(band.tone) : 'subtle'
-              return (
-                <Box flexDirection="row" columnGap={1}>
-                  <Text color={color} bold={segment.state === 'current'}>
-                    {segment.short}
-                  </Text>
-                  <Box flexDirection="row">
-                    <Text color={color}>{segment.filled}</Text>
-                    <Text color="subtle">{segment.empty}</Text>
-                  </Box>
-                </Box>
-              )
-            })}
-          </Box>
-          <Text bold>{`${band.progress.percent}%`}</Text>
-        </Box>
-        )}
-        <Box flexDirection="row" columnGap={1}>
-          <Box flexShrink={0}>
-            <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
-          </Box>
-          <Box flexShrink={0}>
-            <Text bold>{band.stage}</Text>
-          </Box>
-          {band.detail !== '' && (
-            <Text color={paint(band.tone)} wrap="truncate-end">
-              {`· ${band.detail}`}
+          <Box flexDirection="row" columnGap={1} flexShrink={1}>
+            <Box flexShrink={0}>
+              <Text bold color={paint('working')}>
+                wololo
+              </Text>
+            </Box>
+            <Text color="subtle">·</Text>
+            <Text bold wrap="truncate-end">
+              {band.heading ?? band.title.replace(/^wololo · /, '')}
             </Text>
+          </Box>
+          <Box flexShrink={0}>
+            <Text color={band.modeLine.color}>{band.modeChip ?? band.mode}</Text>
+          </Box>
+        </Box>
+        <Box flexDirection="column" marginTop={roomy ? 1 : 0}>
+          <Box flexDirection="row" columnGap={2}>
+            <Box flexShrink={0}>
+              <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
+            </Box>
+            <Text bold wrap="truncate-end">
+              {band.stageText ?? band.stage}
+            </Text>
+          </Box>
+          {detailLines.length > 0 && (
+            <Box flexDirection="column" paddingLeft={1}>
+              {detailLines.map(line => (
+                <Text color={isWaitingTone ? paint(band.tone) : 'subtle'} wrap="truncate-end">
+                  {line}
+                </Text>
+              ))}
+            </Box>
           )}
         </Box>
-        {(isExpanded || e.props.maxRows >= 7) && (
-          <Box flexDirection="row" columnGap={1}>
-            <Box flexShrink={0}>
-              <Text bold color={band.modeLine.color}>{`${band.modeLine.icon} ${band.modeLine.name}`}</Text>
+        {band.progress && (
+          <Box flexDirection="column" marginTop={roomy ? 1 : 0}>
+            <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+              <Box flexDirection="row">
+                {thinBar(band.progress.segments, barWidth).map(part => (
+                  <Text color={!part.filled ? 'subtle' : part.state === 'done' ? paint('success') : paint(band.tone)}>{part.text}</Text>
+                ))}
+              </Box>
+              <Box flexShrink={0}>
+                <Text bold>{`${band.progress.percent}%`}</Text>
+              </Box>
             </Box>
-            <Text color="subtle" wrap="truncate-end">{`· ${band.modeLine.hint}`}</Text>
+            <Box flexDirection="row">
+              {barLabels(band.progress.segments, barWidth).map(label => (
+                <Text color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'} bold={label.state === 'current'}>
+                  {label.text}
+                </Text>
+              ))}
+            </Box>
           </Box>
         )}
+        <Box position="absolute" bottom={0} right={0}>
+          <Button
+            key="toggle"
+            hotkey="m"
+            plain
+            dimColor
+            label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
+            onPress={() => update($, expandedAtom, value => !value)}
+          />
+        </Box>
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>
             <Box flexDirection="row" columnGap={3}>
-              {TABS.map(item =>
-                item.id === tab ? (
-                  <Text inverse bold color="suggestion">{` ${item.key}: ${tabName(lang, item.id)} `}</Text>
-                ) : (
-                  <Button
-                    key={`tab-${item.id}`}
-                    hotkey={item.key}
-                    plain
-                    dimColor
-                    label={tabName(lang, item.id)}
-                    onPress={() => update($, tabAtom, () => item.id)}
-                  />
-                ),
-              )}
+              {TABS.map(item => (
+                <Button
+                  key={`tab-${item.id}`}
+                  hotkey={item.key}
+                  variant={item.id === tab ? 'primary' : undefined}
+                  plain={item.id === tab ? undefined : true}
+                  dimColor={item.id !== tab}
+                  label={tabName(lang, item.id)}
+                  onPress={async () => {
+                    await update($, tabAtom, () => item.id)
+                    await update($, pageAtom, () => -1)
+                    void $.ui.focus({ requestId: e.requestId, key: `tab-${item.id}` }).catch(() => undefined)
+                  }}
+                />
+              ))}
               {tab === 'history' && (
                 <Button
                   key="detail"
@@ -1453,9 +1530,32 @@ export const register: Register = (on, options) => {
               />
             </Box>
             <Box flexDirection="column" marginTop={1}>
-              {tabRows(view, tab, withDetail, lang).map(row => (
-                <Text color={paint(row.tone)}>{row.text || ' '}</Text>
+              {page.rows.map(row => (
+                <Text color={paint(row.tone)} wrap="truncate-end">
+                  {row.text || ' '}
+                </Text>
               ))}
+              {page.total > page.size && (
+                <Box flexDirection="row" columnGap={3} marginTop={1}>
+                  <Text color="subtle">{`${page.start + 1}–${page.start + page.rows.length} ${lang === 'es' ? 'de' : 'of'} ${page.total}`}</Text>
+                  <Button
+                    key="page-down"
+                    hotkey="j"
+                    plain
+                    dimColor
+                    label={lang === 'es' ? '↓ siguientes' : '↓ next'}
+                    onPress={() => update($, pageAtom, () => Math.min(page.start + page.size, Math.max(0, page.total - page.size)))}
+                  />
+                  <Button
+                    key="page-up"
+                    hotkey="k"
+                    plain
+                    dimColor
+                    label={lang === 'es' ? '↑ anteriores' : '↑ previous'}
+                    onPress={() => update($, pageAtom, () => Math.max(0, page.start - page.size))}
+                  />
+                </Box>
+              )}
             </Box>
           </Box>
         )}
@@ -1487,11 +1587,14 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'wololo-help' }, async () => ({ text: helpText(run?.lang ?? config.languages.chat) }))
 
+  on('command.run', { command: 'wololo-pause' }, async $ => pauseRun($))
+
   on('command.run', { command: 'wololo-config' }, async $ => ({ text: configOpened(await openConfig($, 'config')) }))
 
   on('command.run', { command: 'wololo' }, async ($, e, next) => {
     const args = String(e.args ?? '').trim()
     if (/^help\b/.test(args)) return { text: helpText(run?.lang ?? config.languages.chat) }
+    if (/^pause\b/.test(args)) return pauseRun($)
     if (/^config\b/.test(args)) return { text: configOpened(await openConfig($, 'config')) }
     const status = /^status\b\s*(.*)$/.exec(args)
     return status ? statusOutput($, status[1] ?? '') : next(e)
@@ -1605,9 +1708,26 @@ export const register: Register = (on, options) => {
     const effective = effectiveOf(dialog)
     const footer = dialog.message ? <Text color={dialog.message.startsWith(es ? 'Guardado' : 'Saved') ? 'success' : 'error'}>{dialog.message}</Text> : null
     const header = (
-      <Text bold color="claude">
-        {`wololo · ${dialog.mode === 'review' ? 'init' : 'config'} · ${dialog.projectKey.replace('__', '/')}${dialog.dirty ? (es ? ' · sin guardar' : ' · unsaved') : ''}`}
-      </Text>
+      <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+        <Text bold color="claude" wrap="truncate-end">
+          {`wololo · ${dialog.mode === 'review' ? 'init' : 'config'} · ${dialog.projectKey.replace('__', '/')}${dialog.dirty ? (es ? ' · sin guardar' : ' · unsaved') : ''}`}
+        </Text>
+        <Box flexShrink={0}>
+          <Button
+            key="close"
+            hotkey="x"
+            plain
+            label={es ? '× cerrar' : '× close'}
+            onPress={async () => {
+              if (dialog.mode === 'review') await finishReview($, false)
+              else {
+                await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
+                await update($, dialogAtom, () => null)
+              }
+            }}
+          />
+        </Box>
+      </Box>
     )
 
     if (dialog.mode === 'review') {
@@ -1766,27 +1886,35 @@ export const register: Register = (on, options) => {
     const band = view.band
     return (
       <Box flexDirection="column">
-        <Text bold>{band.title}</Text>
+        <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+          <Text bold wrap="truncate-end">
+            {band.title}
+          </Text>
+          <Box flexShrink={0}>
+            <Button key="close" hotkey="x" plain label={lang === 'es' ? '× cerrar' : '× close'} onPress={() => void $.ui.close({ id: PANE }).catch(() => undefined)} />
+          </Box>
+        </Box>
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
           <Text bold>{band.stage}</Text>
           {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
         </Box>
         <Box flexDirection="row" columnGap={3} marginTop={1}>
-          {TABS.map(item =>
-                item.id === tab ? (
-                  <Text inverse bold color="suggestion">{` ${item.key}: ${tabName(lang, item.id)} `}</Text>
-                ) : (
-                  <Button
-                    key={`tab-${item.id}`}
-                    hotkey={item.key}
-                    plain
-                    dimColor
-                    label={tabName(lang, item.id)}
-                    onPress={() => update($, tabAtom, () => item.id)}
-                  />
-                ),
-              )}
+          {TABS.map(item => (
+                <Button
+                  key={`tab-${item.id}`}
+                  hotkey={item.key}
+                  variant={item.id === tab ? 'primary' : undefined}
+                  plain={item.id === tab ? undefined : true}
+                  dimColor={item.id !== tab}
+                  label={tabName(lang, item.id)}
+                  onPress={async () => {
+                    await update($, tabAtom, () => item.id)
+                    await update($, pageAtom, () => -1)
+                    void $.ui.focus({ requestId: PANE, key: `tab-${item.id}` }).catch(() => undefined)
+                  }}
+                />
+              ))}
           {tab === 'history' && (
             <Button
               key="detail"

@@ -57,6 +57,32 @@ function bar(fraction: number): { filled: string; empty: string } {
   return { filled, empty: '░'.repeat(BAR_CELLS - Math.ceil(halves / 2)) }
 }
 
+export function stageText(run: Run): string {
+  const es = run.lang === 'es'
+  if (!run.stage) return es ? 'arrancando' : 'starting'
+  const label = STAGES[run.stage.index]?.label[run.lang] ?? run.stage.id
+  if (run.stage.id !== 'implement' || run.items.total === 0) return label
+  const current = run.items.current
+  if (current) return `${label} · ${es ? 'ítem' : 'item'} ${current.n} ${es ? 'de' : 'of'} ${run.items.total}`
+  return `${label} · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}`
+}
+
+export function thinBar(segments: readonly Segment[], width: number): Array<{ text: string; state: Segment['state']; filled: boolean }> {
+  const cells = Math.max(3, Math.floor(width / Math.max(1, segments.length)))
+  return segments.flatMap(segment => {
+    const filled = segment.state === 'done' ? cells : Math.round(segment.fraction * cells)
+    return [
+      { text: '━'.repeat(filled), state: segment.state, filled: true },
+      { text: '─'.repeat(cells - filled), state: segment.state, filled: false },
+    ].filter(part => part.text.length > 0)
+  })
+}
+
+export function barLabels(segments: readonly Segment[], width: number): Array<{ text: string; state: Segment['state'] }> {
+  const cells = Math.max(3, Math.floor(width / Math.max(1, segments.length)))
+  return segments.map(segment => ({ text: segment.short.padEnd(cells), state: segment.state }))
+}
+
 export function progressOf(run: Run): Progress {
   const lang = run.lang
   const done = new Set(run.stages.filter(stage => stage.finished_at !== null).map(stage => stage.id))
@@ -69,12 +95,13 @@ export function progressOf(run: Run): Progress {
       stage.id === 'implement' && run.items.total > 0 ? Math.min(1, run.items.done / run.items.total) : 0.5
     const fraction = isDone ? 1 : isCurrent ? within : 0
     total += fraction
-    return { short: SHORT[stage.id]?.[lang] ?? stage.id, state: isDone ? 'done' : isCurrent ? 'current' : 'pending', ...bar(fraction) }
+    return { short: SHORT[stage.id]?.[lang] ?? stage.id, state: isDone ? 'done' : isCurrent ? 'current' : 'pending', fraction, ...bar(fraction) }
   })
   return { segments, percent: run.outcome === 'done' ? 100 : Math.round((total / STAGES.length) * 100) }
 }
 
 export function toneOf(status: Status): Tone {
+  if (status === 'paused') return 'subtle'
   if (status === 'done') return 'success'
   if (status === 'failed' || status === 'blocked') return 'error'
   if (isWaitingOnPerson(status) || status === 'orphaned') return 'warning'
@@ -100,6 +127,9 @@ export function buildView(
   const band: Band = {
     title: `wololo · ${run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title}`,
     mode: run.mode,
+    heading: run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title,
+    modeChip: `${modeLine(run.mode, lang).icon} ${run.mode}`,
+    stageText: stageText(run),
     modeLine: modeLine(run.mode, lang),
     stage: stageLabel(run),
     activity: activity(run, status, now),
@@ -258,4 +288,30 @@ export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last
       ago: ago(run.updated_at),
     }
   })
+}
+
+export function wrapLines(text: string, width: number, max: number): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word
+    if (next.length <= width) line = next
+    else {
+      if (line) lines.push(line)
+      line = word.length > width ? word.slice(0, width) : word
+    }
+  }
+  if (line) lines.push(line)
+  if (lines.length <= max) return lines
+  const kept = lines.slice(0, max)
+  const last = kept[max - 1] ?? ''
+  kept[max - 1] = `${last.length >= width ? last.slice(0, width - 1) : last}…`
+  return kept
+}
+
+export function pageOf(rows: Row[], size: number, wanted: number, focus: number): { rows: Row[]; start: number; size: number; total: number } {
+  const total = rows.length
+  const last = Math.max(0, total - size)
+  const start = wanted >= 0 ? Math.min(wanted, last) : focus >= 0 ? Math.min(Math.max(0, focus - 2), last) : 0
+  return { rows: rows.slice(start, start + size), start, size, total }
 }
