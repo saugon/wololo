@@ -70,7 +70,7 @@ Nothing is written into your repositories. All configuration and run data live i
 <data>/projects/<owner>__<repo>/config.json per project (overrides the defaults)
 ```
 
-`/wololo init` detects the project's commands, ports, agents and base branch, and proposes the project file. `/wololo config` shows the effective config. Every key, with its default, is in `hooks/config.ts`. The main ones:
+`/wololo init` detects the project's commands, ports, agents and base branch, and walks you through the proposal in a pane: what was detected, the sections to review, one screen each. `/wololo config` opens every setting in a two-column dialog (sections on the left, radios, checkboxes and fields on the right) and saves to this project or to your defaults, validating first. Every key, with its default, is in `hooks/config.ts`. The main ones:
 
 | Key | What |
 |---|---|

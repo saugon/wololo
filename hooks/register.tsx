@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register } from 'claude-code'
+import type { ElementTable, EngineInterface, Register } from 'claude-code'
 
-import { type Config, DEFAULT_CONFIG, expand, parseJson, planTouched, ports, projectKey, resolve, slugify, touchedPattern } from './config'
+import { type Config, DEFAULT_CONFIG, expand, merge, parseJson, planTouched, ports, projectKey, resolve, slugify, touchedPattern, validate } from './config'
 import {
   type EventType,
   type Live,
@@ -22,6 +22,7 @@ import {
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
+import { type Field, SECTIONS, fieldValue, parseInput, setAt, summarize } from './configui'
 import { helpLangOf, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { checkEvent, hintFor, stageForFile } from './rules'
@@ -41,7 +42,7 @@ import {
   writeAtomic,
   writeJson,
 } from './store'
-import type { Row, ViewState } from '../types'
+import type { ConfigDialog, Row, ViewState } from '../types'
 import { type StatusCard, buildView, statusCards, statusTable } from './ui'
 
 type Engine = EngineInterface
@@ -61,6 +62,8 @@ const viewAtom = atom({ plugin: 'wololo', key: 'view' } as const, null)
 const expandedAtom = atom({ plugin: 'wololo', key: 'expanded' } as const, false)
 const tabAtom = atom({ plugin: 'wololo', key: 'tab' } as const, 'summary')
 const detailAtom = atom({ plugin: 'wololo', key: 'detail' } as const, false)
+const dialogAtom = atom({ plugin: 'wololo', key: 'dialog' } as const, null)
+const CONFIG_PANE = 'wololo-config'
 
 let paths: Paths | undefined
 let root = ''
@@ -309,10 +312,141 @@ async function reviveRun($: Engine, id: string): Promise<Run | undefined> {
   }
 }
 
+function configOpened(answer: string): string {
+  if (answer.startsWith('ERROR')) return answer
+  const es = (run?.lang ?? config.languages.chat) === 'es'
+  return es ? 'wololo: la config está abierta en el panel. Esc la cierra.' : 'wololo: the config is open in the pane. Esc closes it.'
+}
+
 function statusStamp(ts: number, lang: string): string {
   const date = new Date(ts * 1000)
   const time = [date.getHours(), date.getMinutes(), date.getSeconds()].map(n => String(n).padStart(2, '0')).join(':')
   return lang === 'es' ? `estado a las ${time}` : `status at ${time}`
+}
+
+async function readObject($: Engine, path: string): Promise<Record<string, unknown>> {
+  const parsed = parseJson(await readText($, path))
+  const value = parsed.value
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+}
+
+async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Record<string, unknown>): Promise<string> {
+  if (!paths) return fail('wololo is not ready yet.')
+  const info = await projectInfo($, await $.session.cwd())
+  if (!info) return fail('This folder is not inside a git repository.')
+  const projectPath = projectConfigPath(paths, info.key)
+  const dialog: ConfigDialog = {
+    mode,
+    target: 'project',
+    section: 0,
+    projectKey: info.key,
+    paths: { project: projectPath, global: paths.globalConfig },
+    files: { project: proposal ?? (await readObject($, projectPath)), global: await readObject($, paths.globalConfig) },
+    dirty: mode === 'review',
+    message: '',
+    step: 'summary',
+    chosen: [],
+    cursor: 0,
+  }
+  await update($, dialogAtom, () => dialog)
+  const opened = await $.ui
+    .open({ id: CONFIG_PANE, title: mode === 'review' ? 'wololo · init' : 'wololo · config', focus: true, closeOnEscape: true, holdToasts: true, rows: 32 })
+    .catch(() => undefined)
+  return ok({ opened: true, placed: opened, project_key: info.key, project_path: projectPath })
+}
+
+function effectiveOf(dialog: ConfigDialog): unknown {
+  return merge(merge(DEFAULT_CONFIG, dialog.files.global), dialog.files.project)
+}
+
+async function setField($: Engine, field: Field, value: unknown) {
+  await update($, dialogAtom, (dialog): ConfigDialog | null => {
+    if (!dialog) return dialog
+    const files = { ...dialog.files, [dialog.target]: setAt(dialog.files[dialog.target], field.path, value) }
+    return { ...dialog, files, dirty: true, message: '' }
+  })
+}
+
+async function saveConfig($: Engine, lang: string): Promise<boolean> {
+  const dialog = await read($, dialogAtom)
+  if (!dialog) return false
+  const content = dialog.files[dialog.target]
+  const errors = validate(content)
+  if (errors.length > 0) {
+    await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, message: errors.slice(0, 3).join(' · ') } : d))
+    return false
+  }
+  await writeJson($, dialog.paths[dialog.target], content)
+  if (run) config = (await loadConfig($, run.project.key)).config
+  await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, dirty: false, message: lang === 'es' ? `Guardado en ${d.paths[d.target]}` : `Saved to ${d.paths[d.target]}` } : d))
+  return true
+}
+
+async function finishReview($: Engine, saved: boolean) {
+  const dialog = await read($, dialogAtom)
+  await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
+  await update($, dialogAtom, () => null)
+  if (run && !run.outcome) {
+    live.question = null
+    await emit($, 'question.answered', { pairs: [{ header: 'init', question: 'config', answer: saved ? 'saved' : 'cancelled' }], response: null })
+  }
+  const text = saved
+    ? `wololo: the person reviewed and saved the project config at ${dialog?.paths.project ?? 'its path'}. Continue.`
+    : 'wololo: the person cancelled the config review; nothing was written. Ask them how to go on.'
+  void $.prompt.submit({ text }).catch(() => undefined)
+}
+
+type Els = ElementTable<'terminal'>
+
+function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unknown, lang: 'es' | 'en') {
+  const { Box, Button, Input, Text } = els
+  return fields.map(field => {
+    const current = fieldValue(field, effective)
+    if (field.kind === 'radio') {
+      return (
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold>{field.label[lang]}</Text>
+          {field.options.map(option => (
+            <Box flexDirection="row" columnGap={2}>
+              <Button
+                key={`${field.path}=${option.value}`}
+                plain
+                dimColor={current !== option.value}
+                label={`${current === option.value ? '●' : '○'} ${option.label[lang]}`}
+                onPress={() => setField($, field, option.value)}
+              />
+              {option.help && <Text color="subtle">{option.help[lang]}</Text>}
+            </Box>
+          ))}
+        </Box>
+      )
+    }
+    if (field.kind === 'check') {
+      const isOn = current === 'true'
+      return (
+        <Box flexDirection="row" columnGap={2} marginTop={1}>
+          <Button key={field.path} plain dimColor={!isOn} label={`${isOn ? '☑' : '☐'} ${field.label[lang]}`} onPress={() => setField($, field, !isOn)} />
+          {field.help && <Text color="subtle">{field.help[lang]}</Text>}
+        </Box>
+      )
+    }
+    return (
+      <Box flexDirection="column" marginTop={1}>
+        <Input
+          key={field.path}
+          label={field.label[lang]}
+          value={current}
+          placeholder={field.help?.[lang] ?? ''}
+          onSubmit={async text => {
+            const parsed = parseInput(field, text)
+            if (parsed.error) await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, message: parsed.error ?? '' } : d))
+            else await setField($, field, parsed.value)
+          }}
+        />
+        {field.help && <Text color="subtle">{field.help[lang]}</Text>}
+      </Box>
+    )
+  })
 }
 
 async function statusOutput($: Engine, args: string): Promise<{ text: string }> {
@@ -719,6 +853,12 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
     inputSchema: { type: 'object', properties: { open: { type: 'boolean' } } },
   },
   {
+    name: 'review_config',
+    description:
+      'Opens the config review for the person, as /wololo init asks: what was detected, which sections to review, one screen per section, then save. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person\'s save or cancel arrives as a message.',
+    inputSchema: { type: 'object', properties: { proposal: { type: 'object' } }, required: ['proposal'] },
+  },
+  {
     name: 'tests',
     description:
       'Says which tests to run now, from the config\'s tests block. scope "touched": the test files this run created or changed (committed or not) against its base, grouped into ready-to-run commands, plus the ones no configured command matches. scope "suite": the full-suite and e2e commands, and whether they run locally or are left to CI. Run every command it returns exactly as written, from the work tree.',
@@ -840,6 +980,15 @@ async function handleOwnTool($: Engine, name: string, input: Record<string, unkn
       return togglePane($, input)
     case 'tests':
       return testsToRun($, input)
+    case 'review_config': {
+      const proposal = isObject(input.proposal) ? input.proposal : {}
+      const opened = await openConfig($, 'review', proposal)
+      if (run && !run.outcome && !opened.startsWith('ERROR')) {
+        live.question = 'init: revisar la config'
+        await emit($, 'question.asked', { question: 'init: revisar la config del proyecto', count: 1, questions: [{ header: 'init', question: 'config' }] })
+      }
+      return opened.startsWith('ERROR') ? opened : ok({ opened: true, next: 'End your turn. The person reviews the config in the pane; their save or cancel arrives as a message.' })
+    }
     case 'publish':
       return publish($, input)
     default:
@@ -935,6 +1084,9 @@ export const register: Register = (on, options) => {
       for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: false })
       await $.command
         .register({ name: 'wololo-more', description: 'Expands or collapses the wololo card above the prompt' })
+        .catch(() => undefined)
+      await $.command
+        .register({ name: 'wololo-config', description: "Opens wololo's config: this project's and yours" })
         .catch(() => undefined)
       await $.command
         .register({ name: 'wololo-help', description: 'What every wololo command and key does' })
@@ -1313,9 +1465,12 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'wololo-help' }, async () => ({ text: helpText(run?.lang ?? config.languages.chat) }))
 
+  on('command.run', { command: 'wololo-config' }, async $ => ({ text: configOpened(await openConfig($, 'config')) }))
+
   on('command.run', { command: 'wololo' }, async ($, e, next) => {
     const args = String(e.args ?? '').trim()
     if (/^help\b/.test(args)) return { text: helpText(run?.lang ?? config.languages.chat) }
+    if (/^config\b/.test(args)) return { text: configOpened(await openConfig($, 'config')) }
     const status = /^status\b\s*(.*)$/.exec(args)
     return status ? statusOutput($, status[1] ?? '') : next(e)
   }).catch(($, e, next) => next(e))
@@ -1404,6 +1559,179 @@ export const register: Register = (on, options) => {
   on('command.run', { command: 'wololo-more' }, async $ => {
     const isExpanded = await update($, expandedAtom, value => !value)
     return { text: isExpanded ? 'wololo: card expanded.' : 'wololo: card collapsed.' }
+  })
+
+  on('ui.close', async ($, e, next) => {
+    const closed = await next(e)
+    if (e.id === CONFIG_PANE && e.origin.kind === 'person') {
+      await quietly(async () => {
+        const dialog = await read($, dialogAtom)
+        if (dialog?.mode === 'review') await finishReview($, false)
+        else await update($, dialogAtom, () => null)
+      })
+    }
+    return closed
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'Pane', requestId: CONFIG_PANE }, async ($, e) => {
+    const els = $.ui.resolve(e) as unknown as Els
+    const { Box, Button, Text } = els
+    const dialog = await read($, dialogAtom)
+    const lang: 'es' | 'en' = (run?.lang ?? config.languages.chat) === 'en' ? 'en' : 'es'
+    const es = lang === 'es'
+    if (!dialog) return <Text dimColor>{es ? 'No hay nada abierto. /wololo config lo abre.' : 'Nothing open. /wololo config opens it.'}</Text>
+    const effective = effectiveOf(dialog)
+    const footer = dialog.message ? <Text color={dialog.message.startsWith(es ? 'Guardado' : 'Saved') ? 'success' : 'error'}>{dialog.message}</Text> : null
+    const header = (
+      <Text bold color="claude">
+        {`wololo · ${dialog.mode === 'review' ? 'init' : 'config'} · ${dialog.projectKey.replace('__', '/')}${dialog.dirty ? (es ? ' · sin guardar' : ' · unsaved') : ''}`}
+      </Text>
+    )
+
+    if (dialog.mode === 'review') {
+      if (dialog.step === 'summary') {
+        const lines = summarize(dialog.files.project)
+        return (
+          <Box flexDirection="column">
+            {header}
+            <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} marginTop={1}>
+              <Text bold>{es ? 'Config detectada' : 'Detected config'}</Text>
+              {lines.length === 0 && <Text color="subtle">{es ? 'Nada distinto de los defaults.' : 'Nothing differs from the defaults.'}</Text>}
+              {lines.map(line => (
+                <Text color="subtle">{line}</Text>
+              ))}
+            </Box>
+            <Box flexDirection="row" columnGap={3} marginTop={1}>
+              <Button key="save-as-is" hotkey="g" variant="primary" label={es ? 'Guardar así' : 'Save as is'} onPress={async () => (await saveConfig($, lang)) && finishReview($, true)} />
+              <Button key="review" hotkey="r" label={es ? 'Revisar por secciones' : 'Review by section'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose' } : d))} />
+              <Button key="cancel" hotkey="c" label={es ? 'Cancelar' : 'Cancel'} onPress={() => finishReview($, false)} />
+            </Box>
+            {footer}
+          </Box>
+        )
+      }
+      if (dialog.step === 'choose') {
+        return (
+          <Box flexDirection="column">
+            {header}
+            <Box marginTop={1}>
+              <Text bold>{es ? '¿Qué querés revisar?' : 'What do you want to review?'}</Text>
+            </Box>
+            {SECTIONS.map(section => {
+              const isOn = dialog.chosen.includes(section.id)
+              return (
+                <Box flexDirection="row" columnGap={2}>
+                  <Button
+                    key={`choose-${section.id}`}
+                    plain
+                    dimColor={!isOn}
+                    label={`${isOn ? '☑' : '☐'} ${section.title[lang]}`}
+                    onPress={() =>
+                      update($, dialogAtom, (d): ConfigDialog | null =>
+                        d ? { ...d, chosen: isOn ? d.chosen.filter(id => id !== section.id) : [...d.chosen, section.id] } : d,
+                      )
+                    }
+                  />
+                  <Text color="subtle">{section.help[lang]}</Text>
+                </Box>
+              )
+            })}
+            <Box flexDirection="row" columnGap={3} marginTop={1}>
+              <Button
+                key="continue"
+                hotkey="n"
+                variant="primary"
+                label={dialog.chosen.length > 0 ? (es ? 'Continuar' : 'Continue') : es ? 'Guardar sin revisar' : 'Save without review'}
+                onPress={async () => {
+                  if (dialog.chosen.length > 0) await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'section', cursor: 0 } : d))
+                  else if (await saveConfig($, lang)) await finishReview($, true)
+                }}
+              />
+              <Button key="back" hotkey="b" label={es ? 'Atrás' : 'Back'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'summary' } : d))} />
+            </Box>
+            {footer}
+          </Box>
+        )
+      }
+      const chosen = SECTIONS.filter(section => dialog.chosen.includes(section.id))
+      const section = chosen[dialog.cursor] ?? chosen[0]
+      const isLast = dialog.cursor >= chosen.length - 1
+      return (
+        <Box flexDirection="column">
+          {header}
+          <Box marginTop={1}>
+              <Text bold>{`${section?.title[lang] ?? ''} (${dialog.cursor + 1}/${chosen.length})`}</Text>
+            </Box>
+          <Text color="subtle">{section?.help[lang] ?? ''}</Text>
+          {section ? fieldRows(els, $, section.fields, effective, lang) : null}
+          <Box flexDirection="row" columnGap={3} marginTop={1}>
+            <Button
+              key="next"
+              hotkey="n"
+              variant="primary"
+              label={isLast ? (es ? 'Guardar' : 'Save') : es ? 'Siguiente' : 'Next'}
+              onPress={async () => {
+                if (!isLast) await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, cursor: d.cursor + 1 } : d))
+                else if (await saveConfig($, lang)) await finishReview($, true)
+              }}
+            />
+            <Button
+              key="back"
+              hotkey="b"
+              label={es ? 'Atrás' : 'Back'}
+              onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? (d.cursor > 0 ? { ...d, cursor: d.cursor - 1 } : { ...d, step: 'choose' }) : d))}
+            />
+          </Box>
+          {footer}
+        </Box>
+      )
+    }
+
+    const section = SECTIONS[dialog.section] ?? SECTIONS[0]
+    return (
+      <Box flexDirection="column">
+        {header}
+        <Box flexDirection="row" columnGap={1} marginTop={1}>
+          <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} flexShrink={0}>
+            <Text bold color="subtle">{es ? 'Secciones' : 'Sections'}</Text>
+            {SECTIONS.map((item, index) =>
+              index === dialog.section ? (
+                <Text inverse bold color="suggestion">{` ${item.title[lang]} `}</Text>
+              ) : (
+                <Button key={`section-${item.id}`} plain dimColor label={item.title[lang]} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, section: index } : d))} />
+              ),
+            )}
+          </Box>
+          <Box flexDirection="column" borderStyle="round" borderColor="suggestion" paddingX={1} flexGrow={1}>
+            <Text bold>{section?.title[lang] ?? ''}</Text>
+            <Text color="subtle">{section?.help[lang] ?? ''}</Text>
+            {section ? fieldRows(els, $, section.fields, effective, lang) : null}
+          </Box>
+        </Box>
+        <Box flexDirection="row" columnGap={2} marginTop={1}>
+          <Text bold>{es ? 'Guardar en:' : 'Save to:'}</Text>
+          <Button
+            key="target-project"
+            plain
+            dimColor={dialog.target !== 'project'}
+            label={`${dialog.target === 'project' ? '●' : '○'} ${es ? 'este proyecto' : 'this project'}`}
+            onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, target: 'project' } : d))}
+          />
+          <Button
+            key="target-global"
+            plain
+            dimColor={dialog.target !== 'global'}
+            label={`${dialog.target === 'global' ? '●' : '○'} ${es ? 'todos (global)' : 'everywhere (global)'}`}
+            onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, target: 'global' } : d))}
+          />
+        </Box>
+        <Box flexDirection="row" columnGap={3} marginTop={1}>
+          <Button key="save" hotkey="s" variant="primary" label={es ? 'Guardar' : 'Save'} onPress={() => saveConfig($, lang)} />
+          <Text color="subtle">{es ? 'Tab/flechas recorren · Enter elige · Esc cierra' : 'Tab/arrows move · Enter picks · Esc closes'}</Text>
+        </Box>
+        {footer}
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {

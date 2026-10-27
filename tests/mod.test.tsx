@@ -307,3 +307,56 @@ test('/wololo help lists every command and key as a card', async ($, on) => {
   const direct = await $.command.run({ command: 'wololo-help', args: '' } as never)
   expect(direct.text).toBe(help.text)
 })
+
+const CONFIG_PANE = {
+  plugin: 'wololo',
+  surface: 'terminal',
+  component: 'Pane',
+  requestId: 'wololo-config',
+  props: { title: 'wololo · config', isFocused: true, bodyColumns: 120, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
+} as const
+
+test('/wololo config edits a radio and a checkbox and saves the project file', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('ui.close', () => ({ value: undefined }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ tests: { suite: ['make test'] } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const opened = await $.command.run({ command: 'wololo', args: 'config' } as never)
+  expect(opened.text).toContain('config está abierta')
+  const ui = await $.ui.mount(CONFIG_PANE)
+  expect((await ui.find({ type: 'Text', text: / Autonomía / }))?.text).toBe(' Autonomía ')
+  await ui.press({ key: 'autonomy=full' })
+  await ui.press({ key: 'permissions.auto_allow' })
+  expect((await ui.find({ type: 'Text', text: /sin guardar/ }))?.text).toContain('acme/shop · sin guardar')
+  await ui.press({ key: 'save' })
+  expect(JSON.parse(host.files.get(`${DATA}/projects/acme__shop/config.json`) ?? '{}')).toEqual({
+    tests: { suite: ['make test'] },
+    autonomy: 'full',
+    permissions: { auto_allow: false },
+  })
+  await ui.press({ key: 'section-tests' })
+  expect((await ui.find({ type: 'Text', text: /^Qué tests corre/ }))?.text).toBe('Qué tests corre y cuándo')
+  await ui.unmount()
+})
+
+test('the init review walks from what was detected to the chosen sections and saves', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('ui.close', () => ({ value: undefined }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const answer = parse((await $.tool.call({ tool: 'mcp__wololo__review_config', proposal: { tests: { suite: ['make test'], suite_runs: 'ci' } } } as never)).result)
+  expect(answer.opened).toBe(true)
+  const ui = await $.ui.mount(CONFIG_PANE)
+  expect((await ui.find({ type: 'Text', text: /^tests\.suite_runs/ }))?.text).toBe('tests.suite_runs: ci')
+  await ui.press({ key: 'review' })
+  await ui.press({ key: 'choose-autonomy' })
+  await ui.press({ key: 'continue' })
+  await ui.press({ key: 'autonomy=guided' })
+  await ui.press({ key: 'next' })
+  expect(JSON.parse(host.files.get(`${DATA}/projects/acme__shop/config.json`) ?? '{}')).toEqual({
+    tests: { suite: ['make test'], suite_runs: 'ci' },
+    autonomy: 'guided',
+  })
+  await ui.unmount()
+})

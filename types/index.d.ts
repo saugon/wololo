@@ -29,8 +29,22 @@ export type ViewState = {
   title: string
 }
 
+export type ConfigDialog = {
+  mode: 'config' | 'review'
+  target: 'project' | 'global'
+  section: number
+  projectKey: string
+  paths: { project: string; global: string }
+  files: { project: Record<string, unknown>; global: Record<string, unknown> }
+  dirty: boolean
+  message: string
+  step: 'summary' | 'choose' | 'section'
+  chosen: string[]
+  cursor: number
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean }
+    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean; dialog: ConfigDialog | null }
   }
 }

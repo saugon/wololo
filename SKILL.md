@@ -12,7 +12,7 @@ wololo carries one issue to a PR in eight stages:
 
 The wololo mod shows the person the run's stage and what it is waiting on, in a band above the prompt, a pane, the status line and a header on each of your replies. It also writes the run to disk for dashboards. **It only knows what you record**, so recording the run truthfully is part of the work, not overhead.
 
-Tools: `mcp__wololo__start`, `event`, `get`, `tests`, `publish`, `resume`, `external_turn`, `panel`. Files of this skill: the directory holding this SKILL.md (`skill_root` in the tools' answers).
+Tools: `mcp__wololo__start`, `event`, `get`, `tests`, `publish`, `review_config`, `resume`, `external_turn`, `panel`. Files of this skill: the directory holding this SKILL.md (`skill_root` in the tools' answers).
 
 ## Route the request
 
@@ -27,7 +27,7 @@ Take the text after `/wololo`:
 | `resume <run>` | `resume` with that run id, then follow `stages/resume.md`. |
 | `panel` | `panel` (open). `panel off` closes it. |
 | `init` | Follow `stages/init.md`. |
-| `config` | `get` scope `config`; show the effective config and the two config paths; offer edits with AskUserQuestion; write the project config only after the person confirms. |
+| `config` | The mod answers it before you see it, as `/wololo-config`: a dialog with every section. If it reaches you anyway, `get` scope `config`, show the effective config and the two config paths, offer edits with AskUserQuestion, and write the project config only after the person confirms. |
 | `cancel` | Confirm with AskUserQuestion, then `event` `run.finished {outcome: "cancelled", summary}`, stop any server the run started, and leave the worktree and branch in place. |
 | anything else | Start a run (below). |
 

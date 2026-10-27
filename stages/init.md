@@ -27,8 +27,8 @@ Goal: a project config at `project_config_path` (from `get` scope `config`), out
    - `pr.base`;
    - `project_agents`: a role mapped to a repository agent;
    - `debate.risk_signals`: the risky domain words the project uses.
-4. **Show it** in a code block, with one line per part saying what it does, then AskUserQuestion: **Guardar (Recomendado)** / **Ajustar** / **Cancelar**.
-   - When init runs inside a `full` run, save without asking and record an `assumption`.
-5. **Save it** with Write at `project_config_path`. Then run `get` scope `config` again and fix whatever `errors` lists.
+4. **Let the person review it**: call `mcp__wololo__review_config {proposal}` with the JSON, then end your turn. The pane shows what was detected, lets them pick the sections to review, one screen per section, and saves the file itself. Their save or cancel reaches you as a message: on save, run `get` scope `config` and fix whatever `errors` lists; on cancel, ask them how to go on.
+   - When init runs inside a `full` run, skip the review: Write the JSON at `project_config_path` yourself and record an `assumption`.
+   - If `review_config` answers with an error (no terminal to draw on), show the JSON in a code block with one line per part, ask with AskUserQuestion (**Guardar (Recomendado)** / **Ajustar** / **Cancelar**), and Write it at `project_config_path` on a yes.
 
 Never write the config into the repository.

@@ -41,8 +41,8 @@ export function helpSections(lang: string): HelpSection[] {
       {
         title: 'Configure',
         lines: [
-          { key: '/wololo init', text: "detect this project's commands, ports and agents and propose its config" },
-          { key: '/wololo config', text: 'see and change the config (yours and this project’s)' },
+          { key: '/wololo init', text: "detects this project's commands, ports and agents, and walks you through the proposal" },
+          { key: '/wololo config', text: 'a dialog with every setting: radios, checkboxes, fields; saves here or everywhere' },
         ],
       },
       {
@@ -94,8 +94,8 @@ export function helpSections(lang: string): HelpSection[] {
     {
       title: 'Configurar',
       lines: [
-        { key: '/wololo init', text: 'detecta comandos, puertos y agentes del proyecto y propone su config' },
-        { key: '/wololo config', text: 'ver y cambiar la config (la tuya y la del proyecto)' },
+        { key: '/wololo init', text: 'detecta comandos, puertos y agentes, y te guía paso a paso por la propuesta' },
+        { key: '/wololo config', text: 'un diálogo con cada opción: radios, checks y campos; guarda acá o para todos' },
       ],
     },
     {
