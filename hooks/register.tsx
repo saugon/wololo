@@ -22,6 +22,7 @@ import {
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
+import { helpLangOf, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { checkEvent, hintFor, stageForFile } from './rules'
 import {
@@ -936,6 +937,9 @@ export const register: Register = (on, options) => {
         .register({ name: 'wololo-more', description: 'Expands or collapses the wololo card above the prompt' })
         .catch(() => undefined)
       await $.command
+        .register({ name: 'wololo-help', description: 'What every wololo command and key does' })
+        .catch(() => undefined)
+      await $.command
         .register({ name: 'wololo-status', description: 'Shows every wololo run across projects (add "all" for finished ones)' })
         .catch(() => undefined)
       await $.command
@@ -1307,12 +1311,46 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'wololo-status' }, async ($, e) => statusOutput($, String(e.args ?? '')))
 
+  on('command.run', { command: 'wololo-help' }, async () => ({ text: helpText(run?.lang ?? config.languages.chat) }))
+
   on('command.run', { command: 'wololo' }, async ($, e, next) => {
-    const status = /^status\b\s*(.*)$/.exec(String(e.args ?? '').trim())
+    const args = String(e.args ?? '').trim()
+    if (/^help\b/.test(args)) return { text: helpText(run?.lang ?? config.languages.chat) }
+    const status = /^status\b\s*(.*)$/.exec(args)
     return status ? statusOutput($, status[1] ?? '') : next(e)
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
+    const helpLang = helpLangOf(e.props.text)
+    if (helpLang) {
+      const { Box, Text } = $.ui.resolve(e)
+      const sections = helpSections(helpLang)
+      return (
+        <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+          <Text bold color="subtle">
+            {helpLang === 'es' ? 'wololo · ayuda' : 'wololo · help'}
+          </Text>
+          {sections.map(section => {
+            const width = Math.max(...section.lines.map(line => line.key.length)) + 2
+            return (
+              <Box flexDirection="column" marginTop={1}>
+                <Text bold color="claude">
+                  {section.title}
+                </Text>
+                {section.lines.map(line => (
+                  <Box flexDirection="row">
+                    <Box width={width} flexShrink={0}>
+                      <Text color="suggestion">{line.key}</Text>
+                    </Box>
+                    <Text>{line.text}</Text>
+                  </Box>
+                ))}
+              </Box>
+            )
+          })}
+        </Box>
+      )
+    }
     const stamp = /(?:estado a las|status at) \d{2}:\d{2}:\d{2}\s*$/.exec(e.props.text)?.[0].trim()
     const cards = stamp ? statusRenders.get(stamp) : undefined
     if (!cards) return next(e)

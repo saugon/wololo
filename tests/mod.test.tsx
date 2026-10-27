@@ -285,3 +285,25 @@ test('/wololo-status draws every active run as a card', async ($, on) => {
   expect((await again.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
   await again.unmount()
 })
+
+test('/wololo help lists every command and key as a card', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const help = await $.command.run({ command: 'wololo', args: 'help' } as never)
+  expect(help.text).toContain('/wololo resume <id>: retomar un run cuya sesión se cerró')
+  expect(help.text).not.toContain('—')
+  const ui = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'CommandOutput',
+    props: { command: 'wololo', args: 'help', text: `wololo: ${help.text ?? ''}`, isErrored: false },
+  })
+  expect((await ui.find({ type: 'Text', text: /^Seguir un run$/ }))?.text).toBe('Seguir un run')
+  expect((await ui.find({ type: 'Text', text: /^r · i · h$/ }))?.text).toBe('r · i · h')
+  expect((await ui.find({ type: 'Text', text: /^pestañas/ }))?.text).toBe('pestañas: Resumen, Ítems, Historial')
+  await ui.unmount()
+  const direct = await $.command.run({ command: 'wololo-help', args: '' } as never)
+  expect(direct.text).toBe(help.text)
+})

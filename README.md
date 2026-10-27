@@ -3,6 +3,7 @@
 A Claude Code plugin that takes an issue from definition to a pull request, and always shows **which stage it is in, what is working in the background, and whether it is waiting for you**.
 
 ```
+/wololo help            # every command and key
 /wololo #4312
 /wololo "let waiters split a bill in several payments"
 /wololo docs/plans/kds.md --guided

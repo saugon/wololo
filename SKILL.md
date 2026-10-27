@@ -1,7 +1,7 @@
 ---
 name: wololo
 description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | status | history | resume <run> | panel | init | config | cancel
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | help | status | history | resume <run> | panel | init | config | cancel
 ---
 
 # wololo
@@ -21,6 +21,7 @@ Take the text after `/wololo`:
 | Text | Do |
 |---|---|
 | empty | If this session has an active run (`get` scope `run` succeeds): `get` scope `since_last_seen`, show the lines under a heading "Mientras no estabas" (or "Since you last looked" in English), say what the run waits on, and carry on if it is not waiting on the person. Otherwise `get` scope `all` and show the table, then one line on how to start a run. |
+| `help` | The mod answers it before you see it, as `/wololo-help`. If it reaches you anyway, list the subcommands of this table, the `--full`/`--checkpoints`/`--guided` flags and the card's keys (m, r, i, h, d, p). |
 | `status` | The mod answers it before you see it, as `/wololo-status`: a card of every active run. If it reaches you anyway, `get` scope `all` and print `table` verbatim in a code block, with one line under it per run that waits on the person. |
 | `history` | `get` scope `history`; print `lines` verbatim in a code block, and the path of `history.md`. With `all`, add `include_minor: true`. `/wololo-history` shows the same without a model turn. |
 | `resume <run>` | `resume` with that run id, then follow `stages/resume.md`. |
