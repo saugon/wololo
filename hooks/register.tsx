@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { ElementTable, EngineInterface, Register } from 'claude-code'
+import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
 import { type Config, DEFAULT_CONFIG, expand, merge, parseJson, planTouched, ports, projectKey, resolve, slugify, touchedPattern, validate } from './config'
 import {
@@ -8,6 +8,8 @@ import {
   type Run,
   type RunEvent,
   type Source,
+  type StageId,
+  type TimeKind,
   STAGES,
   apply,
   clip,
@@ -20,6 +22,7 @@ import {
   ORPHAN_AFTER_SECONDS,
   nextSeq,
   sinceLastSeen,
+  timeKind,
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
@@ -44,7 +47,7 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type StatusCard, barLabels, buildView, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
+import { type StatusCard, barLabels, buildView, fitChips, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
 
 type Engine = EngineInterface
 
@@ -86,6 +89,10 @@ let lastTurnEndAt = 0
 let reorient = false
 let historyCache: Entry[] | undefined
 let pendingPermission: { toolUseId: string; tool: string; what: string } | null = null
+let pendingUsage = new Map<string, { stage: StageId; role: string; input: number; output: number; cache_read: number; cache_write: number; usd: number }>()
+let lastUsd: number | null = null
+let timeMark: { stage: StageId; kind: TimeKind; since: number } | null = null
+let pendingTime = new Map<string, { stage: StageId; kind: TimeKind; seconds: number }>()
 const headers = new Map<string, string>()
 const statusRenders = new Map<string, StatusCard[]>()
 
@@ -257,6 +264,7 @@ async function isOwner($: Engine): Promise<boolean> {
 async function refresh($: Engine, ts?: number) {
   if (!(await isOwner($))) return
   if (!run) {
+    timeMark = null
     await update($, viewAtom, () => null)
     return
   }
@@ -264,6 +272,7 @@ async function refresh($: Engine, ts?: number) {
   const status = deriveStatus(run, live)
   const previous = run.status
   run.status = status
+  noteTime(at)
   const history = historyCache && pending.length === 0 ? historyCache : undefined
   const view = buildView(run, status, recent, at, paths ? runDir(paths, run.id) : undefined, history)
   await update($, viewAtom, () => view)
@@ -282,6 +291,61 @@ async function emit($: Engine, type: EventType, data: Record<string, unknown> = 
   pending.push(ev)
   recent = [...recent, ev].slice(-RECENT)
   await refresh($, ts)
+}
+
+function closeTime(at: number) {
+  if (!timeMark) return
+  const seconds = at - timeMark.since
+  if (seconds > 0) {
+    const key = `${timeMark.stage}|${timeMark.kind}`
+    const was = pendingTime.get(key) ?? { stage: timeMark.stage, kind: timeMark.kind, seconds: 0 }
+    pendingTime.set(key, { ...was, seconds: was.seconds + seconds })
+  }
+  timeMark = { ...timeMark, since: at }
+}
+
+function noteTime(at: number) {
+  const kind = run && !run.outcome ? timeKind(run.status) : null
+  const stage = run?.stage?.id ?? null
+  if (timeMark && timeMark.kind === kind && timeMark.stage === stage) return
+  closeTime(at)
+  timeMark = kind && stage ? { stage, kind, since: at } : null
+}
+
+async function costDelta($: Engine): Promise<number> {
+  const usd = (await $.session.usage().catch(() => undefined))?.cost?.usd
+  if (typeof usd !== 'number') return 0
+  const was = lastUsd
+  lastUsd = usd
+  if (was === null) return 0
+  return usd >= was ? usd - was : usd
+}
+
+async function noteUsage($: Engine, agentId: string | undefined, usage: TurnUsage | null) {
+  if (!run || run.outcome) return
+  const usd = await costDelta($)
+  if (!run.stage || run.paused || !usage) return
+  const role = agentId === undefined ? 'main' : (run.agents.find(a => a.id === agentId)?.role ?? 'other')
+  const key = `${run.stage.id}|${role}`
+  const was = pendingUsage.get(key) ?? { stage: run.stage.id, role, input: 0, output: 0, cache_read: 0, cache_write: 0, usd: 0 }
+  pendingUsage.set(key, {
+    ...was,
+    input: was.input + usage.input_tokens,
+    output: was.output + usage.output_tokens,
+    cache_read: was.cache_read + usage.cache_read_input_tokens,
+    cache_write: was.cache_write + usage.cache_creation_input_tokens,
+    usd: was.usd + usd,
+  })
+}
+
+async function flushMeasures($: Engine) {
+  closeTime(await nowSeconds($))
+  const times = [...pendingTime.values()]
+  const usage = [...pendingUsage.values()]
+  pendingTime = new Map()
+  pendingUsage = new Map()
+  for (const entry of times) await emit($, 'time', entry)
+  for (const entry of usage) await emit($, 'usage', { ...entry, usd: Math.round(entry.usd * 1e6) / 1e6 })
 }
 
 async function flush($: Engine) {
@@ -533,6 +597,7 @@ async function heartbeat($: Engine) {
     if (revived) run = { ...revived, owner: run.owner, status: run.status, last_user_at: run.last_user_at }
   }
   await reconcileAgents($, ts)
+  await flushMeasures($)
   await writeJson($, `${runDir(paths, run.id)}/owner.json`, run.owner)
   await writePointer($)
   isDirty = true
@@ -611,6 +676,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const mode = ['full', 'checkpoints', 'guided'].includes(String(input.mode)) ? String(input.mode) : config.autonomy
   const risk = ['low', 'high', 'unknown'].includes(String(input.risk)) ? String(input.risk) : 'unknown'
 
+  await costDelta($)
   run = emptyRun(id, ts)
   historyCache = undefined
   recent = []
@@ -728,6 +794,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   }
   const dir = runDir(paths, id)
   const events = await readEvents($, dir)
+  await costDelta($)
   run = target
   historyCache = undefined
   recent = events.slice(-RECENT)
@@ -1115,6 +1182,7 @@ export const register: Register = (on, options) => {
       const home = (await $.env.get('HOME')) ?? ''
       paths = pathsFor(dataRoot(options, home))
       sessionId = await $.session.id()
+      await costDelta($)
 
       for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: false })
       await $.command
@@ -1316,7 +1384,7 @@ export const register: Register = (on, options) => {
         id: spawned.agentId,
         role,
         description: e.description,
-        model: e.model ?? null,
+        model: ('model' in spawned && typeof spawned.model === 'string' ? spawned.model : undefined) ?? e.model ?? null,
         background: e.background,
       })
     })
@@ -1334,9 +1402,17 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('turn.step', async function* ($, e, next) {
+    const response = yield* next(e)
+    await quietly(() => noteUsage($, e.agentId, response.usage))
+    return response
+  })
+
   on('turn.complete', async ($, e, next) => {
     await quietly(async () => {
-      if (!run || run.outcome) return
+      if (!run) return
+      await flushMeasures($)
+      if (run.outcome) return
       if (e.agentId !== undefined) {
         const agent = run.agents.find(a => a.id === e.agentId && a.finished_at === null)
         if (agent) await emit($, 'agent.finished', { id: agent.id, role: agent.role, status: e.isAborted ? 'killed' : 'completed' })
@@ -1409,8 +1485,9 @@ export const register: Register = (on, options) => {
     const withDetail = await read($, detailAtom)
     const lang = run?.lang ?? 'es'
     const tabRowsFixed = 6
+    const agentRows = (band.agents ?? []).length > 0 ? 1 : 0
     const bandRows = (isRoomy: boolean, detailRows: number) =>
-      (isRoomy ? 4 : 2) + 1 + (isRoomy ? 1 : 0) + 1 + detailRows + (band.progress ? (isRoomy ? 1 : 0) + 2 : 0)
+      (isRoomy ? 4 : 2) + 1 + (isRoomy ? 1 : 0) + 1 + detailRows + agentRows + (band.progress ? (isRoomy ? 1 : 0) + 2 : 0)
     const detailWidth = (isRoomy: boolean) => Math.max(20, e.props.bodyColumns - (isRoomy ? 4 : 2) - 2 - 1)
     const roomyDetail = band.detail ? wrapLines(clip(band.detail, 220), detailWidth(true), 3).length : 0
     const roomy = isExpanded
@@ -1423,6 +1500,7 @@ export const register: Register = (on, options) => {
       ? pageOf(tabRows(view, tab, withDetail, lang), Math.max(3, e.props.maxRows - fixedRows), await read($, pageAtom), tab === 'items' ? (view.items ?? []).findIndex(row => row.text.startsWith('▶')) : -1)
       : { rows: [], start: 0, size: 0, total: 0 }
     const barWidth = Math.max(24, e.props.bodyColumns - (roomy ? 4 : 2) - 2 - 7)
+    const chips = fitChips(band.agents ?? [], detailWidth(roomy))
     const isWaitingTone = band.tone === 'warning' || band.tone === 'error'
     return (
       <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={roomy ? 2 : 1} paddingY={roomy ? 1 : 0}>
@@ -1458,6 +1536,14 @@ export const register: Register = (on, options) => {
                   {line}
                 </Text>
               ))}
+            </Box>
+          )}
+          {chips.length > 0 && (
+            <Box flexDirection="row" paddingLeft={1}>
+              {chips.flatMap((chip, index) => [
+                ...(index > 0 ? [<Text color="subtle">{' · '}</Text>] : []),
+                <Text color={paint(chip.color)}>{chip.label}</Text>,
+              ])}
             </Box>
           )}
         </Box>

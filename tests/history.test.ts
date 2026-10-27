@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import { historyMarkdown, timeline } from '../hooks/history'
-import { type RunEvent, rebuild } from '../hooks/model'
-import { buildView, pageOf, progressOf, wrapLines } from '../hooks/ui'
+import { type RunEvent, rebuild, shortModel } from '../hooks/model'
+import { buildView, fitChips, pageOf, progressOf, wrapLines } from '../hooks/ui'
 
 function events(list: Array<[RunEvent['type'], Record<string, unknown>]>): RunEvent[] {
   return list.map(([type, data], i) => ({ v: 1, seq: i + 1, ts: 1_800_000_000 + i * 60, run: 'r1', type, data }))
@@ -110,7 +110,7 @@ test('the summary starts with what is going on now, then the stages', async () =
     'Ahora',
     '▶ 5/8 Implementación · 0/6 ítems',
     '  Ítem 6: Front: estado por mesa',
-    '  ⟳ revisor (1m): Review item 6',
+    '  ◉ revisor 1m  Review item 6',
   ])
   expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
 })
@@ -185,4 +185,100 @@ test('a long detail wraps on words and ends in an ellipsis past its line budget'
   expect(lines[1]?.endsWith('…')).toBe(true)
   expect(wrapLines('corto', 30, 3)).toEqual(['corto'])
   expect(wrapLines('', 30, 3)).toEqual([])
+})
+
+test('the card names the live agents by role and model, and counts the ones that finished in the item', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'implement' }],
+    ['plan.ready', { items: ['a', 'b', 'c'] }],
+    ['agent.started', { id: 'a0', role: 'explorer', model: 'claude-haiku-5-5' }],
+    ['agent.finished', { id: 'a0' }],
+    ['item.started', { n: 2, title: 'b' }],
+    ['agent.started', { id: 'a1', role: 'implementer', model: 'claude-sonnet-5-5', description: 'Item 2' }],
+    ['agent.finished', { id: 'a1' }],
+    ['agent.started', { id: 'a2', role: 'verifier', model: 'claude-sonnet-5-5' }],
+    ['agent.finished', { id: 'a2', status: 'failed' }],
+    ['agent.started', { id: 'a3', role: 'reviewer', model: 'claude-opus-5-5[1m]', description: 'Review item 2' }],
+    ['agent.started', { id: 'a4', role: 'explorer', model: 'claude-haiku-5-5' }],
+    ['agent.started', { id: 'a5', role: 'explorer', model: 'claude-haiku-5-5' }],
+  ])
+  const run = rebuild('r1', list)
+  const view = buildView(run, 'waiting_agents', list, 1_800_000_780)
+  expect(view.band.agents.map(chip => `${chip.icon} ${chip.text}`)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exploradores (haiku) 2m', '+ 1 listo', '✕ 1 falló'])
+  expect(view.band.detail).toBe('')
+  expect(view.header).toContain('revisor (3m), 2 exploradores (2m)')
+  expect(view.details.slice(3, 9).map(row => row.text)).toEqual([
+    '  ◉ revisor       opus   3m  Review item 2',
+    '  ⌕ explorador    haiku  2m',
+    '  ⌕ explorador    haiku  1m',
+    '  Terminados en el ítem 2',
+    '  ✎ implementador sonnet 1m  Item 2',
+    '  ✓ verificador   sonnet 1m falló',
+  ])
+  expect(view.details[8]?.tone).toBe('error')
+  expect(buildView(run, 'waiting_user', list, 1_800_000_780).band.agents).toEqual([])
+})
+
+test('agent chips that do not fit are cut with an ellipsis, never past the width', () => {
+  const chips = [
+    { icon: '◉', color: 'merged', text: 'revisor (opus) 3m' },
+    { icon: '⌕', color: 'suggestion', text: '2 exploradores (haiku) 2m' },
+  ]
+  expect(fitChips(chips, 80).map(chip => chip.label)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exploradores (haiku) 2m'])
+  const cut = fitChips(chips, 30)
+  expect(cut.map(chip => chip.label)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exp…'])
+  expect(cut.reduce((sum, chip, i) => sum + chip.label.length + (i > 0 ? 3 : 0), 0)).toBeLessThanOrEqual(30)
+  expect(fitChips(chips, 22).map(chip => chip.label)).toEqual(['◉ revisor (opus) 3m'])
+})
+
+test('a model id reads as its family', () => {
+  expect(shortModel('claude-opus-5-5[1m]')).toBe('opus')
+  expect(shortModel('claude-sonnet-5-5')).toBe('sonnet')
+  expect(shortModel('gpt-5-codex')).toBe('gpt-5-codex')
+  expect(shortModel(null)).toBe('')
+})
+
+test('the summary says what each stage cost, by role, and the total', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['usage', { stage: 'context', role: 'main', input: 1_000, output: 2_000, cache_read: 50_000, cache_write: 0, usd: 0.4 }],
+    ['usage', { stage: 'context', role: 'explorer', input: 3_000, output: 8_000, cache_read: 300_000, cache_write: 9_000, usd: 1.1 }],
+    ['stage.entered', { stage: 'definition' }],
+    ['usage', { stage: 'definition', role: 'critic', input: 0, output: 10_000, cache_read: 1_200_000, cache_write: 0, usd: 2.05 }],
+  ])
+  const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_660)
+  const texts = view.details.map(row => row.text)
+  expect(texts.find(text => text.startsWith('✓ Contexto'))).toBe('✓ Contexto  3m · $1.50')
+  const start = texts.indexOf('Consumo por etapa (aprox.)')
+  expect(texts.slice(start + 1, start + 4)).toEqual([
+    '  Contexto    $1.50    373k tok  explorador $1.10 · orquestador $0.40',
+    '  Definición  $2.05    1.2M tok  crítico $2.05',
+    '  Total       $3.55    1.6M tok  98% de caché · 20k de salida',
+  ])
+})
+
+test('the summary says where each stage spent its time, and how long its agents ran by role', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['agent.started', { id: 'a1', role: 'explorer' }],
+    ['agent.started', { id: 'a2', role: 'explorer' }],
+    ['agent.finished', { id: 'a1' }],
+    ['agent.finished', { id: 'a2' }],
+    ['time', { stage: 'context', kind: 'work', seconds: 60 }],
+    ['time', { stage: 'context', kind: 'agents', seconds: 120 }],
+    ['stage.entered', { stage: 'definition' }],
+    ['time', { stage: 'definition', kind: 'you', seconds: 30 }],
+  ])
+  const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_720)
+  const texts = view.details.map(row => row.text)
+  const start = texts.indexOf('Tiempo por etapa')
+  expect(texts.slice(start + 1, start + 5)).toEqual([
+    '  Contexto     7m  trabajando 1m · agentes 2m · sin medir 4m',
+    '                   agentes en total: explorador 4m',
+    '  Definición   4m  te esperó 30s · sin medir 3m',
+    '  Total       11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 7m',
+  ])
 })

@@ -66,6 +66,8 @@
         "signing.deferred",
         "github.published",
         "screenshot.saved",
+        "usage",
+        "time",
         "run.finished"
       ]
     },

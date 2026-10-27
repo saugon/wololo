@@ -19,6 +19,7 @@ export type Band = {
   activity: string
   badge: string
   detail: string
+  agents: Array<{ icon: string; color: string; text: string }>
   tone: Tone
   progress: Progress
 }

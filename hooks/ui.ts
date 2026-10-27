@@ -1,12 +1,23 @@
 import type { Band, Progress, Row, Segment, Tone, ViewState } from '../types'
 import { type Entry, formatEntry, timeline } from './history'
 import {
+  type AgentEntry,
   type Run,
   type RunEvent,
   type Status,
   STAGES,
+  TIME_KINDS,
+  type TimeKind,
   activity,
+  agentChips,
+  agentScope,
+  finishedAgents,
+  roleMark,
   roleName,
+  shortModel,
+  tokenTotal,
+  tokensText,
+  usdText,
   badge,
   statusDetail,
   duration,
@@ -113,6 +124,113 @@ function stageSeconds(run: Run, id: string, now: number): number {
   return run.stages.filter(s => s.id === id).reduce((sum, s) => sum + ((s.finished_at ?? now) - s.started_at), 0)
 }
 
+const TIME_NAMES: Record<'es' | 'en', Record<TimeKind | 'unmeasured', string>> = {
+  es: { work: 'trabajando', agents: 'agentes', tests: 'tests y CI', you: 'te esperó', paused: 'pausado', unmeasured: 'sin medir' },
+  en: { work: 'working', agents: 'agents', tests: 'tests and CI', you: 'waited for you', paused: 'paused', unmeasured: 'unmeasured' },
+}
+
+function timeSection(run: Run, now: number): Row[] {
+  const lang = run.lang
+  const es = lang === 'es'
+  const names = TIME_NAMES[lang]
+  const stages = STAGES.flatMap(stage => {
+    const time = run.time?.[stage.id]
+    const wall = stageSeconds(run, stage.id, now)
+    return time && wall > 0 ? [{ id: stage.id, label: stage.label[lang], time, wall }] : []
+  })
+  if (stages.length === 0) return []
+  const labelWidth = Math.max(5, ...stages.map(stage => stage.label.length))
+  const wallTotal = stages.reduce((sum, stage) => sum + stage.wall, 0)
+  const wallWidth = Math.max(...stages.map(stage => duration(stage.wall).length), duration(wallTotal).length)
+  const parts = (time: Partial<Record<TimeKind, number>>, wall: number) => {
+    const measured = TIME_KINDS.reduce((sum, kind) => sum + (time[kind] ?? 0), 0)
+    const list = TIME_KINDS.filter(kind => (time[kind] ?? 0) >= 1).map(kind => `${names[kind]} ${duration(time[kind] ?? 0)}`)
+    if (wall - measured >= 60) list.push(`${names.unmeasured} ${duration(wall - measured)}`)
+    return list.join(' · ')
+  }
+  const indent = ' '.repeat(2 + labelWidth + 2 + wallWidth + 2)
+  const rows: Row[] = [{ text: es ? 'Tiempo por etapa' : 'Time by stage', tone: 'subtle' }]
+  const totals: Partial<Record<TimeKind, number>> = {}
+  for (const { label, time, wall } of stages) {
+    for (const kind of TIME_KINDS) totals[kind] = (totals[kind] ?? 0) + (time[kind] ?? 0)
+    rows.push({ text: `  ${label.padEnd(labelWidth)}  ${duration(wall).padStart(wallWidth)}  ${parts(time, wall)}`.trimEnd(), tone: 'text' })
+    const roles = Object.entries(time.roles)
+      .sort(([, a], [, b]) => b - a)
+      .map(([role, seconds]) => `${roleName(lang, role, 1)} ${duration(seconds)}`)
+    if (roles.length > 0) rows.push({ text: `${indent}${es ? 'agentes en total' : 'agents in all'}: ${roles.join(' · ')}`, tone: 'subtle' })
+  }
+  rows.push({ text: `  ${'Total'.padEnd(labelWidth)}  ${duration(wallTotal).padStart(wallWidth)}  ${parts(totals, wallTotal)}`.trimEnd(), tone: 'text' })
+  return rows
+}
+
+function usageSection(run: Run): Row[] {
+  const lang = run.lang
+  const es = lang === 'es'
+  const stages = STAGES.flatMap(stage => {
+    const used = run.usage?.[stage.id]
+    return used && tokenTotal(used) > 0 ? [{ label: stage.label[lang], used }] : []
+  })
+  if (stages.length === 0) return []
+  const hasUsd = stages.some(stage => stage.used.usd > 0)
+  const money = (usd: number, tokens: number) => (hasUsd ? usdText(usd) : `${tokensText(tokens)} tok`)
+  const total = stages.reduce(
+    (sum, { used }) => ({
+      usd: sum.usd + used.usd,
+      tokens: sum.tokens + tokenTotal(used),
+      cache: sum.cache + used.cache_read,
+      output: sum.output + used.output,
+    }),
+    { usd: 0, tokens: 0, cache: 0, output: 0 },
+  )
+  const labelWidth = Math.max(5, ...stages.map(stage => stage.label.length))
+  const moneyWidth = Math.max(...stages.map(({ used }) => money(used.usd, tokenTotal(used)).length), money(total.usd, total.tokens).length)
+  const rows: Row[] = [{ text: es ? 'Consumo por etapa (aprox.)' : 'Usage by stage (approx.)', tone: 'subtle' }]
+  for (const { label, used } of stages) {
+    const roles = Object.entries(used.roles)
+      .filter(([, role]) => role.tokens > 0)
+      .sort(([, a], [, b]) => (hasUsd ? b.usd - a.usd : b.tokens - a.tokens))
+      .map(([role, part]) => `${roleName(lang, role, 1)} ${money(part.usd, part.tokens)}`)
+    const tokens = hasUsd ? `  ${tokensText(tokenTotal(used)).padStart(6)} tok` : ''
+    rows.push({ text: `  ${label.padEnd(labelWidth)}  ${money(used.usd, tokenTotal(used)).padStart(moneyWidth)}${tokens}  ${roles.join(' · ')}`, tone: 'text' })
+  }
+  const cached = total.tokens > 0 ? Math.round((total.cache / total.tokens) * 100) : 0
+  const totalTokens = hasUsd ? `  ${tokensText(total.tokens).padStart(6)} tok` : ''
+  rows.push({
+    text: `  ${(es ? 'Total' : 'Total').padEnd(labelWidth)}  ${money(total.usd, total.tokens).padStart(moneyWidth)}${totalTokens}  ${cached}% ${es ? 'de caché' : 'cached'} · ${tokensText(total.output)} ${es ? 'de salida' : 'output'}`,
+    tone: 'text',
+  })
+  return rows
+}
+
+const SHOWS_AGENTS: ReadonlySet<Status> = new Set<Status>(['running', 'waiting_agents', 'waiting_tests', 'waiting_ci', 'pausing'])
+
+function agentRows(run: Run, now: number, tone: Tone): Row[] {
+  const live = liveAgents(run)
+  const finished = finishedAgents(run)
+  const all = [...live, ...finished]
+  if (all.length === 0) return []
+  const es = run.lang === 'es'
+  const roleWidth = Math.max(...all.map(a => roleName(run.lang, a.role, 1).length))
+  const modelWidth = Math.max(...all.map(a => shortModel(a.model).length))
+  const took = (agent: AgentEntry) => duration((agent.finished_at ?? now) - agent.started_at)
+  const timeWidth = Math.max(...all.map(a => took(a).length))
+  const failure: Record<string, string> = es ? { failed: 'falló', killed: 'cancelado' } : { failed: 'failed', killed: 'killed' }
+  const line = (agent: AgentEntry) => {
+    const outcome = failure[agent.status] ? ` ${failure[agent.status]}` : ''
+    const cells = [roleMark(agent.role).icon, roleName(run.lang, agent.role, 1).padEnd(roleWidth)]
+    if (modelWidth > 0) cells.push(shortModel(agent.model).padEnd(modelWidth))
+    cells.push(`${took(agent).padStart(timeWidth)}${outcome}`)
+    return `  ${cells.join(' ')}${agent.description ? `  ${agent.description}` : ''}`
+  }
+  const rows: Row[] = live.map(agent => ({ text: line(agent), tone }))
+  const scope = agentScope(run)
+  if (finished.length > 0 && scope) {
+    rows.push({ text: `  ${es ? `Terminados en ${scope.label}` : `Finished in ${scope.label}`}`, tone: 'subtle' })
+    rows.push(...finished.map(agent => ({ text: line(agent), tone: failure[agent.status] ? ('error' as const) : ('subtle' as const) })))
+  }
+  return rows
+}
+
 export function buildView(
   run: Run,
   status: Status,
@@ -124,6 +242,7 @@ export function buildView(
   const tone = toneOf(status)
   const lang = run.lang
   const done = new Set(run.stages.filter(entry => entry.finished_at !== null).map(entry => entry.id))
+  const agents = SHOWS_AGENTS.has(status) ? agentChips(run, now) : []
   const band: Band = {
     title: `wololo · ${run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title}`,
     mode: run.mode,
@@ -134,7 +253,8 @@ export function buildView(
     stage: stageLabel(run),
     activity: activity(run, status, now),
     badge: badge(lang, status),
-    detail: statusDetail(run, status, now),
+    detail: statusDetail(run, status, now, agents.length === 0),
+    agents,
     tone,
     progress: progressOf(run),
   }
@@ -150,10 +270,7 @@ export function buildView(
     summary.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
   }
   if (run.doing) summary.push({ text: `  → ${run.doing.text}`, tone: 'text' })
-  for (const agent of liveAgents(run)) {
-    const what = agent.description ? `: ${agent.description}` : ''
-    summary.push({ text: `  ⟳ ${roleName(lang, agent.role, 1)} (${duration(now - agent.started_at)})${what}`, tone: 'claude' })
-  }
+  summary.push(...agentRows(run, now, 'claude'))
   for (const task of liveTasks(run)) summary.push({ text: `  ⟳ ${task.label} (${duration(now - task.started_at)})`, tone: 'claude' })
   if (run.waiting) summary.push({ text: `  ? ${t(lang, 'waitsYou')}: ${run.waiting.question}`, tone: 'warning' })
   if (run.blocked) summary.push({ text: `  ✕ ${run.blocked.reason}`, tone: 'error' })
@@ -174,9 +291,16 @@ export function buildView(
     } else if (seconds > 0) {
       text += `  ${duration(seconds)}`
     }
+    const used = run.usage?.[stage.id]
+    if (used) text += ` · ${used.usd > 0 ? usdText(used.usd) : `${tokensText(tokenTotal(used))} tok`}`
     summary.push({ text, tone: isCurrent ? tone : done.has(stage.id) ? 'text' : 'subtle' })
   })
   gap()
+  for (const section of [timeSection(run, now), usageSection(run)]) {
+    if (section.length === 0) continue
+    summary.push(...section)
+    gap()
+  }
 
   const c = run.counts
   const where = run.project.worktree ?? run.project.path
@@ -269,7 +393,10 @@ export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last
     const ago = (at: number) => (es ? `hace ${duration(now - at)}` : `${duration(now - at)} ago`)
     const current = run.items.current && run.stage?.id === 'implement' ? `${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}` : ''
     const workers = [
-      ...liveAgents(run).map(agent => `⟳ ${roleName(run.lang, agent.role, 1)} (${duration(now - agent.started_at)})${agent.description ? `: ${agent.description}` : ''}`),
+      ...liveAgents(run).map(agent => {
+        const model = shortModel(agent.model)
+        return `${roleMark(agent.role).icon} ${roleName(run.lang, agent.role, 1)}${model ? ` (${model})` : ''} ${duration(now - agent.started_at)}${agent.description ? `: ${agent.description}` : ''}`
+      }),
       ...liveTasks(run).map(task => `⟳ ${task.label} (${duration(now - task.started_at)})`),
     ]
     const waiting = isWaitingOnPerson(status) || status === 'orphaned' ? statusDetail(run, status, now) : ''
@@ -288,6 +415,23 @@ export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last
       ago: ago(run.updated_at),
     }
   })
+}
+
+export function fitChips<T extends { icon: string; text: string }>(chips: readonly T[], width: number): Array<T & { label: string }> {
+  const fitted: Array<T & { label: string }> = []
+  let used = 0
+  for (const chip of chips) {
+    const gap = fitted.length > 0 ? 3 : 0
+    const label = `${chip.icon} ${chip.text}`
+    if (used + gap + label.length > width) {
+      const room = width - used - gap
+      if (room > 4) fitted.push({ ...chip, label: `${label.slice(0, room - 1)}…` })
+      break
+    }
+    fitted.push({ ...chip, label })
+    used += gap + label.length
+  }
+  return fitted
 }
 
 export function wrapLines(text: string, width: number, max: number): string[] {

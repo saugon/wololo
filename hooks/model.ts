@@ -87,6 +87,8 @@ export type EventType =
   | 'signing.done'
   | 'github.published'
   | 'screenshot.saved'
+  | 'usage'
+  | 'time'
   | 'run.finished'
 
 export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
@@ -159,6 +161,46 @@ export type TaskEntry = {
   status: string | null
 }
 
+export type Tokens = { input: number; output: number; cache_read: number; cache_write: number }
+
+export type StageUsage = Tokens & { usd: number; roles: Record<string, { usd: number; tokens: number }> }
+
+export type TimeKind = 'work' | 'agents' | 'tests' | 'you' | 'paused'
+
+export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'you', 'paused']
+
+export type StageTime = Partial<Record<TimeKind, number>> & { roles: Record<string, number> }
+
+export function timeKind(status: Status): TimeKind | null {
+  switch (status) {
+    case 'running':
+    case 'pausing':
+      return 'work'
+    case 'waiting_agents':
+      return 'agents'
+    case 'waiting_tests':
+    case 'waiting_ci':
+      return 'tests'
+    case 'waiting_user':
+    case 'waiting_permission':
+    case 'blocked':
+    case 'stalled':
+      return 'you'
+    case 'paused':
+      return 'paused'
+    default:
+      return null
+  }
+}
+
+function addTime(r: Run, stage: StageId, change: (was: StageTime) => StageTime) {
+  r.time = { ...(r.time ?? {}), [stage]: change(r.time?.[stage] ?? { roles: {} }) }
+}
+
+export function tokenTotal(t: Tokens): number {
+  return t.input + t.output + t.cache_read + t.cache_write
+}
+
 export type ItemEntry = { n: number; title: string; state: 'pending' | 'active' | 'failing' | 'done'; sha: string | null }
 
 export type StageEntry = {
@@ -204,7 +246,7 @@ export type Run = {
   items: {
     done: number
     total: number
-    current: { n: number; title: string } | null
+    current: { n: number; title: string; since?: number } | null
     list?: ItemEntry[]
   }
   counts: {
@@ -234,6 +276,8 @@ export type Run = {
   outcome: Outcome | null
   summary: string | null
   doing?: { text: string; since: number } | null
+  usage?: Partial<Record<StageId, StageUsage>>
+  time?: Partial<Record<StageId, StageTime>>
   pause_requested_at?: number | null
   paused?: { note: string; since: number } | null
 }
@@ -439,6 +483,8 @@ export function apply(run: Run, ev: RunEvent): Run {
       if (agent && agent.finished_at === null) {
         agent.status = (d.status as AgentEntry['status']) ?? 'completed'
         agent.finished_at = ev.ts
+        const took = ev.ts - agent.started_at
+        if (r.stage && took > 0) addTime(r, r.stage.id, was => ({ ...was, roles: { ...was.roles, [agent.role]: (was.roles[agent.role] ?? 0) + took } }))
       }
       break
     }
@@ -471,7 +517,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       }
       break
     case 'item.started':
-      r.items.current = { n: num(d.n), title: str(d.title) }
+      r.items.current = { n: num(d.n), title: str(d.title), since: ev.ts }
       setItem(r, num(d.n), str(d.title), { state: 'active' })
       r.counts.attempts += 1
       if (d.reversal === true) r.counts.reversals += 1
@@ -543,6 +589,34 @@ export function apply(run: Run, ev: RunEvent): Run {
     case 'screenshot.saved':
       r.screenshots.push({ file: str(d.file), caption: str(d.caption) })
       break
+    case 'time': {
+      const stage = d.stage as StageId
+      const kind = d.kind as TimeKind
+      const seconds = num(d.seconds)
+      if (stageIndex(stage) < 0 || !TIME_KINDS.includes(kind) || seconds <= 0) break
+      addTime(r, stage, was => ({ ...was, [kind]: (was[kind] ?? 0) + seconds }))
+      break
+    }
+    case 'usage': {
+      const stage = d.stage as StageId
+      if (stageIndex(stage) < 0) break
+      const usage = { ...(r.usage ?? {}) }
+      const was = usage[stage] ?? { input: 0, output: 0, cache_read: 0, cache_write: 0, usd: 0, roles: {} }
+      const add: Tokens = { input: num(d.input), output: num(d.output), cache_read: num(d.cache_read), cache_write: num(d.cache_write) }
+      const usd = typeof d.usd === 'number' && d.usd > 0 ? d.usd : 0
+      const role = str(d.role, 'main')
+      const roleWas = was.roles[role] ?? { usd: 0, tokens: 0 }
+      usage[stage] = {
+        input: was.input + add.input,
+        output: was.output + add.output,
+        cache_read: was.cache_read + add.cache_read,
+        cache_write: was.cache_write + add.cache_write,
+        usd: was.usd + usd,
+        roles: { ...was.roles, [role]: { usd: roleWas.usd + usd, tokens: roleWas.tokens + tokenTotal(add) } },
+      }
+      r.usage = usage
+      break
+    }
     case 'run.finished': {
       r.doing = null
       r.outcome = (d.outcome as Outcome) ?? 'done'
@@ -661,6 +735,8 @@ const ROLE_NAMES: Record<Lang, Record<string, [string, string]>> = {
     implementer: ['implementador', 'implementadores'],
     verifier: ['verificador', 'verificadores'],
     reviewer: ['revisor', 'revisores'],
+    main: ['orquestador', 'orquestadores'],
+    other: ['otro agente', 'otros agentes'],
   },
   en: {
     explorer: ['explorer', 'explorers'],
@@ -669,6 +745,8 @@ const ROLE_NAMES: Record<Lang, Record<string, [string, string]>> = {
     implementer: ['implementer', 'implementers'],
     verifier: ['verifier', 'verifiers'],
     reviewer: ['reviewer', 'reviewers'],
+    main: ['orchestrator', 'orchestrators'],
+    other: ['other agent', 'other agents'],
   },
 }
 
@@ -676,6 +754,70 @@ export function roleName(lang: Lang, role: string, count: number): string {
   const names = ROLE_NAMES[lang][role]
   if (names) return count === 1 ? names[0] : names[1]
   return count === 1 ? role : `${role} ×${count}`
+}
+
+const ROLE_MARKS: Record<string, { icon: string; color: string }> = {
+  explorer: { icon: '⌕', color: 'suggestion' },
+  architect: { icon: '◫', color: 'planMode' },
+  critic: { icon: '✗', color: 'warning' },
+  implementer: { icon: '✎', color: 'claude' },
+  verifier: { icon: '✓', color: 'success' },
+  reviewer: { icon: '◉', color: 'merged' },
+}
+
+export function roleMark(role: string): { icon: string; color: string } {
+  return ROLE_MARKS[role] ?? { icon: '•', color: 'text' }
+}
+
+export function shortModel(model: string | null): string {
+  if (!model) return ''
+  const family = /(opus|sonnet|haiku|fable)/i.exec(model)
+  return family?.[1] ? family[1].toLowerCase() : model.replace(/^claude-/, '').replace(/\[.*\]$/, '')
+}
+
+export function agentScope(run: Run): { since: number; label: string } | null {
+  const es = run.lang === 'es'
+  const item = run.items.current
+  if (item?.since !== undefined && run.stage?.id === 'implement') return { since: item.since, label: `${es ? 'el ítem' : 'item'} ${item.n}` }
+  if (!run.stage) return null
+  const stage = STAGES[run.stage.index]?.label[run.lang] ?? run.stage.id
+  return { since: run.stage.since, label: es ? `la etapa ${stage}` : `stage ${stage}` }
+}
+
+export function finishedAgents(run: Run): AgentEntry[] {
+  const scope = agentScope(run)
+  if (!scope) return []
+  return run.agents.filter(a => a.finished_at !== null && a.started_at >= scope.since)
+}
+
+export type AgentChip = { icon: string; color: string; text: string }
+
+export function agentChips(run: Run, nowSeconds: number): AgentChip[] {
+  const groups = new Map<string, AgentEntry[]>()
+  for (const agent of liveAgents(run)) groups.set(agent.role, [...(groups.get(agent.role) ?? []), agent])
+  const chips = [...groups].map(([role, agents]) => {
+    const oldest = Math.min(...agents.map(a => a.started_at))
+    const models = new Set(agents.map(a => shortModel(a.model)))
+    const model = models.size === 1 ? [...models][0] : ''
+    const count = agents.length > 1 ? `${agents.length} ` : ''
+    return { ...roleMark(role), text: `${count}${roleName(run.lang, role, agents.length)}${model ? ` (${model})` : ''} ${duration(nowSeconds - oldest)}` }
+  })
+  const finished = finishedAgents(run)
+  const failed = finished.filter(a => a.status === 'failed' || a.status === 'killed').length
+  const es = run.lang === 'es'
+  if (finished.length > failed) chips.push({ icon: '+', color: 'subtle', text: `${finished.length - failed} ${es ? (finished.length - failed === 1 ? 'listo' : 'listos') : 'done'}` })
+  if (failed > 0) chips.push({ icon: '✕', color: 'error', text: `${failed} ${es ? (failed === 1 ? 'falló' : 'fallaron') : 'failed'}` })
+  return chips
+}
+
+export function tokensText(n: number): string {
+  if (n < 1000) return String(Math.round(n))
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+
+export function usdText(usd: number): string {
+  return `$${usd.toFixed(2)}`
 }
 
 export function clip(text: string, max: number): string {
@@ -778,11 +920,11 @@ export function badge(lang: Lang, status: Status): string {
   return `${ICONS[status]} ${BADGES[lang][status]}`
 }
 
-export function statusDetail(run: Run, status: Status, nowSeconds: number): string {
+export function statusDetail(run: Run, status: Status, nowSeconds: number, withAgents = true): string {
   const lang = run.lang
   const es = lang === 'es'
   const ago = (at: number) => (es ? `hace ${duration(nowSeconds - at)}` : `${duration(nowSeconds - at)} ago`)
-  const working = [...agentsSummary(run, nowSeconds), ...tasksSummary(run, nowSeconds)].join(', ')
+  const working = [...(withAgents ? agentsSummary(run, nowSeconds) : []), ...tasksSummary(run, nowSeconds)].join(', ')
   switch (status) {
     case 'waiting_user':
       return run.waiting ? `${run.waiting.question} · ${ago(run.waiting.since)}` : ''

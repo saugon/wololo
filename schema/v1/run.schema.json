@@ -300,6 +300,14 @@
         }
       }
     },
+    "time": {
+      "type": "object",
+      "description": "Seconds per stage in each kind of wait (work, agents, tests, you, paused), and seconds each agent role ran in all."
+    },
+    "usage": {
+      "type": "object",
+      "description": "Tokens and US dollars per stage, each split by role (main is the orchestrator)."
+    },
     "counts": {
       "type": "object",
       "additionalProperties": {

@@ -62,6 +62,14 @@ export function helpSections(lang: string): HelpSection[] {
           { key: '✓ DONE · ✕ FAILED · ■ CANCELLED', text: 'finished' },
         ],
       },
+      {
+        title: 'Agents',
+        lines: [
+          { key: '⌕ explorer · ◫ architect · ✗ critic', text: 'each live agent under the badge, with its model and how long it has run' },
+          { key: '✎ implementer · ✓ verifier · ◉ reviewer', text: 'agents of the same role are grouped and counted' },
+          { key: '+ N done · ✕ N failed', text: 'the ones that finished in the current item, or stage; m lists each one' },
+        ],
+      },
     ]
   }
   return [
@@ -118,6 +126,14 @@ export function helpSections(lang: string): HelpSection[] {
         { key: '⏸ PAUSADO', text: 'pausado a pedido: podés cerrar; /wololo resume sigue' },
         { key: '○ SESIÓN CERRADA', text: 'ninguna sesión lo maneja: /wololo resume <id>' },
         { key: '✓ TERMINADO · ✕ FALLÓ · ■ CANCELADO', text: 'ya terminó' },
+      ],
+    },
+    {
+      title: 'Agentes',
+      lines: [
+        { key: '⌕ explorador · ◫ arquitecto · ✗ crítico', text: 'cada agente vivo debajo del badge, con su modelo y cuánto lleva' },
+        { key: '✎ implementador · ✓ verificador · ◉ revisor', text: 'los del mismo rol se agrupan y se cuentan' },
+        { key: '+ N listos · ✕ N fallaron', text: 'los que terminaron en el ítem en curso, o en la etapa; m lista cada uno' },
       ],
     },
   ]

@@ -409,3 +409,41 @@ test('/wololo pause asks the run to pause, and resume clears it', async ($, on) 
   expect((after.run as { paused: unknown; pause_requested_at: unknown }).paused).toBe(null)
   expect((after.run as { pause_requested_at: unknown }).pause_requested_at).toBe(null)
 })
+
+test('every model request and every second are counted in the stage they ran in', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  let usd = 1
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 200_000 }, rateLimits: [], cost: { usd } } }))
+  const usage = { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 1_000, cache_creation_input_tokens: 10, model: 'claude-opus-5-5' }
+  on('turn.step', async function* (_, e) {
+    usd += e.agentId ? 0.25 : 0.5
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn', usage }
+  })
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  const step = async (agentId?: string) => {
+    const stream = $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 1, ...(agentId ? { agentId } : {}) } as never)
+    for await (const _ of stream) void _
+    await stream.result
+  }
+  await step()
+  await step()
+  await step('agent-unknown')
+  await $.turn.complete({ turnId: 't1', reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  const context = (got.run as { usage: Record<string, { usd: number; output: number; cache_read: number; roles: Record<string, { usd: number; tokens: number }> }> }).usage.context
+  expect(context?.output).toBe(150)
+  expect(context?.cache_read).toBe(3_000)
+  expect(Math.round((context?.usd ?? 0) * 100)).toBe(125)
+  expect(context?.roles.main).toEqual({ usd: 1, tokens: 2_320 })
+  expect(Math.round((context?.roles.other?.usd ?? 0) * 100)).toBe(25)
+  const timeOf = (value: Record<string, unknown>) => (value.run as { time: Record<string, Record<string, number>> }).time.context
+  expect(timeOf(got)?.work).toBeGreaterThan(0)
+  expect(timeOf(got)?.you).toBe(undefined)
+  await $.turn.complete({ turnId: 't2', reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+  const later = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect(timeOf(later)?.you).toBeGreaterThan(0)
+})
