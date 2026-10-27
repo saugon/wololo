@@ -24,6 +24,7 @@ import {
   header,
   isTerminal,
   isWaitingOnPerson,
+  itemsText,
   liveAgents,
   liveTasks,
   shortRef,
@@ -72,10 +73,8 @@ export function stageText(run: Run): string {
   const es = run.lang === 'es'
   if (!run.stage) return es ? 'arrancando' : 'starting'
   const label = STAGES[run.stage.index]?.label[run.lang] ?? run.stage.id
-  if (run.stage.id !== 'implement' || run.items.total === 0) return label
-  const current = run.items.current
-  if (current) return `${label} · ${es ? 'ítem' : 'item'} ${current.n} ${es ? 'de' : 'of'} ${run.items.total}`
-  return `${label} · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}`
+  const items = itemsText(run)
+  return items ? `${label} · ${items}` : label
 }
 
 export function thinBar(segments: readonly Segment[], width: number): Array<{ text: string; state: Segment['state']; filled: boolean }> {
@@ -264,7 +263,7 @@ export function buildView(
   const gap = () => summary.push({ text: '', tone: 'subtle' })
 
   summary.push({ text: es ? 'Ahora' : 'Now', tone: 'subtle' })
-  const items = run.stage?.id === 'implement' && run.items.total > 0 ? ` · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}` : ''
+  const items = itemsText(run) ? ` · ${itemsText(run)}` : ''
   summary.push({ text: `▶ ${stageLabel(run)}${items}`, tone })
   if (run.items.current && run.stage?.id === 'implement') {
     summary.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
@@ -389,7 +388,7 @@ export type StatusCard = {
 export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last?: Entry }>, now: number): StatusCard[] {
   return runs.map(({ run, status, last }) => {
     const es = run.lang === 'es'
-    const items = run.stage?.id === 'implement' && run.items.total > 0 ? ` · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}` : ''
+    const items = itemsText(run) ? ` · ${itemsText(run)}` : ''
     const ago = (at: number) => (es ? `hace ${duration(now - at)}` : `${duration(now - at)} ago`)
     const current = run.items.current && run.stage?.id === 'implement' ? `${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}` : ''
     const workers = [

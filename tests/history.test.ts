@@ -108,11 +108,13 @@ test('the summary starts with what is going on now, then the stages', async () =
   const view = buildView(rebuild('r1', list), 'waiting_agents', list, 1_800_000_660)
   expect(view.details.slice(0, 4).map(row => row.text)).toEqual([
     'Ahora',
-    '▶ 5/8 Implementación · 0/6 ítems',
+    '▶ 5/8 Implementación · ítem 6 de 6',
     '  Ítem 6: Front: estado por mesa',
     '  ◉ revisor 1m  Review item 6',
   ])
   expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
+  expect(view.band.stageText).toBe('Implementación · ítem 6 de 6')
+  expect(view.header).toContain('5/8 Implementación · ítem 6 de 6')
 })
 
 test('the items tab lists the plan with what is done, in progress, failing or pending', async () => {

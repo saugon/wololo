@@ -954,9 +954,18 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number, withA
   }
 }
 
+export function itemsText(run: Run): string {
+  if (run.stage?.id !== 'implement' || run.items.total === 0) return ''
+  const es = run.lang === 'es'
+  const current = run.items.current
+  if (current) return `${es ? 'ítem' : 'item'} ${current.n} ${es ? 'de' : 'of'} ${run.items.total}`
+  return `${run.items.done}/${run.items.total} ${t(run.lang, 'items')}`
+}
+
 export function header(run: Run, status: Status, nowSeconds: number): string {
   const parts = [`wololo ${runLabel(run, 32)}`, stageLabel(run)]
-  if (run.stage?.id === 'implement' && run.items.total > 0) parts.push(`${run.items.done}/${run.items.total} ${t(run.lang, 'items')}`)
+  const items = itemsText(run)
+  if (items) parts.push(items)
   parts.push(activity(run, status, nowSeconds))
   return `[${parts.join(' · ')}]`
 }
