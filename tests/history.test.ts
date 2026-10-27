@@ -38,7 +38,7 @@ test('a question still open is listed as waiting for the answer', async () => {
 
 test('gates say who resolved them and how', async () => {
   const lines = timeline(events([['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }]]), 'es')
-  expect(lines[0]?.text).toBe('3/8 Gate A aprobado (vos)')
+  expect(lines[0]?.text).toBe('3/8 Aprobar spec: aprobado (vos)')
 })
 
 test('the card and the file list the newest event first', async () => {
@@ -89,4 +89,28 @@ test('deferred signatures are counted until the commits are signed', async () =>
     'Ítem 2 commiteado sin firma (se firma antes del push) bbb222',
     'Commits firmados: 2',
   ])
+})
+
+test('the summary starts with what is going on now, then the stages', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['stage.entered', { stage: 'definition' }],
+    ['stage.entered', { stage: 'gate_a' }],
+    ['question.answered', {}],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }],
+    ['stage.entered', { stage: 'plan' }],
+    ['plan.ready', { items: ['a', 'b', 'c', 'd', 'e', 'f'] }],
+    ['stage.entered', { stage: 'implement' }],
+    ['item.started', { n: 6, title: 'Front: estado por mesa' }],
+    ['agent.started', { id: 'a1', role: 'reviewer', description: 'Review item 6' }],
+  ])
+  const view = buildView(rebuild('r1', list), 'waiting_agents', list, 1_800_000_660)
+  expect(view.details.slice(0, 4).map(row => row.text)).toEqual([
+    'Ahora',
+    '▶ 5/8 Implementación · 0/6 ítems',
+    '  Ítem 6: Front: estado por mesa',
+    '  ⟳ revisor (1m): Review item 6',
+  ])
+  expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
 })

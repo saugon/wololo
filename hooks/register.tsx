@@ -90,6 +90,11 @@ function isRunAgent(type: unknown): boolean {
   return typeof type === 'string' && (type.startsWith('wololo:') || Object.values(config.project_agents).includes(type))
 }
 
+async function liftBlock($: Engine, by: 'answer' | 'message') {
+  if (!run?.blocked || run.outcome) return
+  await emit($, 'unblocked', { auto: true, by })
+}
+
 async function settlePermission($: Engine, toolUseId: string, outcome: 'approved' | 'denied' | 'not_run') {
   const asked = pendingPermission
   if (!asked) return
@@ -1011,6 +1016,7 @@ export const register: Register = (on, options) => {
             answer: typeof result?.answers?.[q.question] === 'string' ? result.answers[q.question] : '',
           }))
           await emit($, 'question.answered', { pairs, response: typeof result?.response === 'string' ? result.response : null })
+          if (ran && ran.deny === undefined) await liftBlock($, 'answer')
         }
       }
 
@@ -1108,6 +1114,7 @@ export const register: Register = (on, options) => {
         priorUserAt = run.last_user_at
         run.last_user_at = await nowSeconds($)
         isDirty = true
+        await liftBlock($, 'message')
       }
       const context = [contextLine(), ...(reorient ? [orientation()] : [])]
       reorient = false
@@ -1144,7 +1151,6 @@ export const register: Register = (on, options) => {
         <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
           <Text bold>{band.title}</Text>
           <Box flexDirection="row" columnGap={2}>
-            <Text color="subtle">{band.mode}</Text>
             <Button
               key="toggle"
               hotkey="m"
@@ -1169,6 +1175,10 @@ export const register: Register = (on, options) => {
               {`${mark[pill.state]} ${pill.label}`}
             </Text>
           ))}
+        </Box>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          <Text bold color={band.modeLine.color}>{`${band.modeLine.icon} ${band.modeLine.name}`}</Text>
+          <Text color="subtle">{`· ${band.modeLine.hint}`}</Text>
         </Box>
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>

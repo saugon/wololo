@@ -7,6 +7,7 @@ export type Pill = { label: string; state: 'done' | 'current' | 'pending' }
 export type Band = {
   title: string
   mode: string
+  modeLine: { icon: string; name: string; hint: string; color: string }
   stage: string
   activity: string
   badge: string

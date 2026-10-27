@@ -18,7 +18,7 @@ export const STAGES: ReadonlyArray<{
     isGate: false,
     label: { es: 'Definición', en: 'Definition' },
   },
-  { id: 'gate_a', isGate: true, label: { es: 'Gate A', en: 'Gate A' } },
+  { id: 'gate_a', isGate: true, label: { es: 'Aprobar spec', en: 'Approve spec' } },
   { id: 'plan', isGate: false, label: { es: 'Plan', en: 'Plan' } },
   {
     id: 'implement',
@@ -26,7 +26,7 @@ export const STAGES: ReadonlyArray<{
     label: { es: 'Implementación', en: 'Implementation' },
   },
   { id: 'evidence', isGate: false, label: { es: 'Evidencia', en: 'Evidence' } },
-  { id: 'gate_b', isGate: true, label: { es: 'Gate B', en: 'Gate B' } },
+  { id: 'gate_b', isGate: true, label: { es: 'Aprobar PR', en: 'Approve PR' } },
   { id: 'pr', isGate: false, label: { es: 'PR', en: 'PR' } },
 ]
 

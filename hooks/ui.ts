@@ -6,6 +6,7 @@ import {
   type Status,
   STAGES,
   activity,
+  roleName,
   badge,
   statusDetail,
   duration,
@@ -19,6 +20,23 @@ import {
   statusLine,
   t,
 } from './model'
+
+const MODE_LINES: Record<string, { icon: string; color: string; hint: Record<string, string> }> = {
+  full: { icon: '▶▶', color: 'autoAccept', hint: { es: 'no pregunta: decide solo y anota cada supuesto', en: 'never asks: decides alone and records every assumption' } },
+  checkpoints: { icon: '⏸', color: 'suggestion', hint: { es: 'frena para aprobar el spec y el PR', en: 'stops to approve the spec and the PR' } },
+  guided: { icon: '☰', color: 'planMode', hint: { es: 'pregunta en cada duda relevante', en: 'asks at every relevant doubt' } },
+}
+
+export function modeLine(mode: string, lang: string): { icon: string; name: string; hint: string; color: string } {
+  const line = MODE_LINES[mode] ?? MODE_LINES.checkpoints
+  const es = lang === 'es'
+  return {
+    icon: line?.icon ?? '',
+    name: `${es ? 'modo' : 'mode'} ${mode}`,
+    hint: `${line?.hint[es ? 'es' : 'en'] ?? ''} (/wololo config)`,
+    color: line?.color ?? 'suggestion',
+  }
+}
 
 export function toneOf(status: Status): Tone {
   if (status === 'done') return 'success'
@@ -46,6 +64,7 @@ export function buildView(
   const band: Band = {
     title: `wololo · ${run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title}`,
     mode: run.mode,
+    modeLine: modeLine(run.mode, lang),
     stage: stageLabel(run),
     activity: activity(run, status, now),
     badge: badge(lang, status),
@@ -57,46 +76,56 @@ export function buildView(
     })),
   }
 
-  const pane: Row[] = []
-  pane.push({ text: `${shortRef(run)} ${run.title}`, tone: 'text' })
-  const where = run.project.worktree ?? run.project.path
-  pane.push({ text: `${run.mode} · ${lang === 'es' ? 'riesgo' : 'risk'} ${run.risk} · ${where}`, tone: 'subtle' })
-  pane.push({ text: activity(run, status, now), tone })
-  if (runDir) pane.push({ text: `${lang === 'es' ? 'Archivos del run' : 'Run files'}: ${runDir}`, tone: 'subtle' })
-  pane.push({ text: '', tone: 'subtle' })
+  const es = lang === 'es'
+  const summary: Row[] = []
+  const gap = () => summary.push({ text: '', tone: 'subtle' })
 
+  summary.push({ text: es ? 'Ahora' : 'Now', tone: 'subtle' })
+  const items = run.stage?.id === 'implement' && run.items.total > 0 ? ` · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}` : ''
+  summary.push({ text: `▶ ${stageLabel(run)}${items}`, tone })
+  if (run.items.current && run.stage?.id === 'implement') {
+    summary.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
+  }
+  for (const agent of liveAgents(run)) {
+    const what = agent.description ? `: ${agent.description}` : ''
+    summary.push({ text: `  ⟳ ${roleName(lang, agent.role, 1)} (${duration(now - agent.started_at)})${what}`, tone: 'claude' })
+  }
+  for (const task of liveTasks(run)) summary.push({ text: `  ⟳ ${task.label} (${duration(now - task.started_at)})`, tone: 'claude' })
+  if (run.waiting) summary.push({ text: `  ? ${t(lang, 'waitsYou')}: ${run.waiting.question}`, tone: 'warning' })
+  if (run.blocked) summary.push({ text: `  ✕ ${run.blocked.reason}`, tone: 'error' })
+  gap()
+
+  summary.push({ text: es ? 'Etapas' : 'Stages', tone: 'subtle' })
+  const outcomes: Record<string, string> = es ? { approved: 'aprobado', changes: 'con ajustes', rejected: 'rechazado' } : {}
   STAGES.forEach((stage, index) => {
     const isCurrent = run.stage?.index === index && !run.outcome
     const mark = isCurrent ? '▶' : done.has(stage.id) ? '✓' : '·'
     const seconds = stageSeconds(run, stage.id, now)
     const gate = run.gates[stage.id]
-    const extra = gate?.resolved_at ? ` ${gate.outcome ?? ''} (${gate.by ?? ''})` : ''
-    const items = stage.id === 'implement' && run.items.total > 0 ? ` ${run.items.done}/${run.items.total}` : ''
-    pane.push({
-      text: `${mark} ${stage.label[lang]}${items}${seconds > 0 ? `  ${duration(seconds)}` : ''}${extra}`,
-      tone: isCurrent ? tone : done.has(stage.id) ? 'text' : 'subtle',
-    })
-    if (!isCurrent) return
-    if (run.items.current) pane.push({ text: `    item ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
-    for (const agent of liveAgents(run)) {
-      pane.push({ text: `    ├ ${agent.role} ⟳ ${duration(now - agent.started_at)} ${agent.description}`.trimEnd(), tone: 'claude' })
+    let text = `${mark} ${stage.label[lang]}`
+    if (stage.isGate && gate?.resolved_at) {
+      const outcome = outcomes[gate.outcome ?? ''] ?? gate.outcome ?? ''
+      const who = gate.by === 'auto' ? (es ? 'automático' : 'automatic') : es ? 'vos' : 'you'
+      text += `: ${outcome} (${who})${seconds > 0 ? `, ${es ? 'esperó' : 'waited'} ${duration(seconds)}` : ''}`
+    } else if (seconds > 0) {
+      text += `  ${duration(seconds)}`
     }
-    for (const task of liveTasks(run)) {
-      pane.push({ text: `    ├ ${task.label} ⏳ ${duration(now - task.started_at)}`, tone: 'claude' })
-    }
+    summary.push({ text, tone: isCurrent ? tone : done.has(stage.id) ? 'text' : 'subtle' })
   })
+  gap()
 
-  pane.push({ text: '', tone: 'subtle' })
   const c = run.counts
-  pane.push({
-    text:
-      lang === 'es'
-        ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`
-        : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}${c.unsigned ? ` · Unsigned ${c.unsigned}` : ''}`,
+  const where = run.project.worktree ?? run.project.path
+  summary.push({ text: `${run.mode} · ${es ? 'riesgo' : 'risk'} ${run.risk} · ${where}`, tone: 'subtle' })
+  summary.push({
+    text: es
+      ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`
+      : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}${c.unsigned ? ` · Unsigned ${c.unsigned}` : ''}`,
     tone: 'subtle',
   })
-  if (run.pr) pane.push({ text: `PR ${run.pr.url} · ${run.pr.state}${run.pr.ci ? ` · CI ${run.pr.ci}` : ''}`, tone: 'text' })
-  if (run.waiting) pane.push({ text: `${t(lang, 'waitsYou')}: ${run.waiting.question}`, tone: 'warning' })
+  if (run.pr) summary.push({ text: `PR ${run.pr.url} · ${run.pr.state}${run.pr.ci ? ` · CI ${run.pr.ci}` : ''}`, tone: 'text' })
+  if (runDir) summary.push({ text: `${es ? 'Archivos del run' : 'Run files'}: ${runDir}`, tone: 'subtle' })
+
   const entries = history ?? timeline(recent, lang)
   const toRow = (entry: Entry): Row => ({
     text: formatEntry(entry),
@@ -104,11 +133,14 @@ export function buildView(
   })
   const majorRows = entries.filter(entry => entry.isMajor).map(toRow).reverse()
   const allRows = entries.map(toRow).reverse()
-  const latest = entries.filter(entry => entry.isMajor)
-  if (latest.length > 0) pane.push({ text: lang === 'es' ? 'Últimos eventos (/wololo-history para todos):' : 'Latest events (/wololo-history for all):', tone: 'subtle' })
-  for (const entry of latest.slice(-8).reverse()) pane.push({ text: formatEntry(entry), tone: entry.icon === '✕' ? 'error' : entry.icon === '?' || entry.icon === '!' ? 'warning' : 'subtle' })
+  if (majorRows.length > 0) {
+    gap()
+    summary.push({ text: es ? 'Últimos eventos (h: historial completo)' : 'Latest events (h: full history)', tone: 'subtle' })
+    summary.push(...majorRows.slice(0, 5))
+  }
 
-  const details = pane.slice(1).filter((row, index) => !(index === 1 && row.text === band.activity))
+  const details = summary
+  const pane = summary
 
   return {
     runId: run.id,

@@ -11,18 +11,18 @@ A Claude Code plugin that takes an issue from definition to a pull request, and 
 ## Stages
 
 ```
-context → definition → gate A → plan → implement → evidence → gate B → pr
+context → definition → approve spec → plan → implement → evidence → approve PR → pr
 ```
 
 | Stage | What happens |
 |---|---|
 | context | Reads the issue and explores the code with parallel explorers; estimates the risk. |
 | definition | Writes the spec (outcome, scope, non-goals, acceptance scenarios, assumptions) and debates it: self-critique for low risk, an adversarial critic (Claude or an external model such as Codex) for high risk. |
-| gate A | You approve the spec. With `spec.to_github`, a short version goes into the issue body, or a summary when it is longer than GitHub accepts. |
+| approve spec (`gate_a`) | You approve the spec. With `spec.to_github`, a short version goes into the issue body, or a summary when it is longer than GitHub accepts. |
 | plan | Architects propose small, verifiable items; the plan is debated the same way. |
 | implement | Per item: implementer → the tests the run touched → reviewer → commit, with a log of every decision and correction. After the last item, the full suite (locally, or left to CI). |
 | evidence | Up to 5 screenshots of what changed. Starts the servers it needs on the run's own ports, and stops them afterwards. |
-| gate B | You approve opening the PR. |
+| approve PR (`gate_b`) | You approve opening the PR. |
 | pr | Pushes the run branch, opens a draft PR, watches CI, fixes failures within a budget, marks it ready when green. |
 
 **Autonomy** is per project, and per run with `--full`, `--checkpoints` or `--guided`:
@@ -35,7 +35,7 @@ What it decides on its own is recorded as an assumption, shown at the gates and 
 
 ## Seeing what it does
 
-- **Header** on each reply: `[wololo #4312 · ③ Plan · ⟳ 2 agents]`, or `[wololo #4312 · Gate A · ❓ WAITING FOR YOU 3m]`.
+- **Header** on each reply: `[wololo #4312 · 4/8 Plan · ⟳ agents working: 2 architects (5m)]`, or `[wololo #4312 · 3/8 Approve spec · ? waiting for you: … · 3m ago]`.
 - **Card** above the prompt, framed in the color of the state: a badge saying what the run is doing (`WORKING`, `WAITING FOR YOU`, `NEEDS PERMISSION`, `AGENTS WORKING`, `RUNNING TESTS`, `WAITING FOR CI`, `BLOCKED`, `STOPPED`, `DONE`), the stage, the detail (the question, the agents and for how long), and the stage chips. `m: ▾ more` (a click, or ctrl+x tab then `m`) or `/wololo-more` expands it in place, with two tabs: **Summary** (`r`: stage durations, live agents and tasks, counts, PR, run files, last events) and **History** (`h`: everything that happened; `d` adds agents and tasks). `p` opens the pane, which has the same tabs.
 - **Pane** beside the chat: the stages with their durations, the live agents and tasks, the items, and the last events. It opens by itself on a wide terminal; `/wololo panel` opens it otherwise.
 - **Status line**: one entry for the run.

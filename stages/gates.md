@@ -3,6 +3,8 @@
 - **gate_a**, after definition: approve the spec.
 - **gate_b**, after evidence: approve opening the PR.
 
+To the person they are **Aprobar spec** and **Aprobar PR** (in English, *Approve spec* and *Approve PR*): use those names in messages and as the AskUserQuestion header, never `gate_a`, `gate_b` or "Gate A/B".
+
 ## full mode
 
 1. `event stage.entered {stage: "gate_x"}`.

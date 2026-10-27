@@ -41,7 +41,7 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     case 'gate.resolved': {
       const outcome = str(d.outcome || 'approved')
       const words = es ? ({ approved: 'aprobado', changes: 'con ajustes', rejected: 'rechazado' }[outcome] ?? outcome) : outcome
-      return one(outcome === 'approved' ? '✓' : '✎', `${stage(lang, d.gate)} ${words} (${by(lang, d.by)})`)
+      return one(outcome === 'approved' ? '✓' : '✎', `${stage(lang, d.gate)}: ${words} (${by(lang, d.by)})`)
     }
     case 'question.answered': {
       const pairs = Array.isArray(d.pairs) ? (d.pairs as Pair[]) : []
@@ -66,8 +66,11 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     }
     case 'blocked':
       return one('✕', `${es ? 'Bloqueado' : 'Blocked'}: ${str(d.reason)}`)
-    case 'unblocked':
+    case 'unblocked': {
+      if (d.by === 'answer') return one('⟳', es ? 'Desbloqueado con tu respuesta' : 'Unblocked by your answer')
+      if (d.by === 'message') return one('⟳', es ? 'Desbloqueado con tu mensaje' : 'Unblocked by your message')
       return one('⟳', es ? 'Desbloqueado' : 'Unblocked')
+    }
     case 'stalled':
       return one('‖', es ? 'Se detuvo sin nada pendiente; se lo reactivó' : 'Stopped with nothing pending; woken up')
     case 'assumption':

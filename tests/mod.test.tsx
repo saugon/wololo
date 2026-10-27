@@ -126,7 +126,9 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   expect((await probe.find({ type: 'Text', text: /^wololo · / }))?.text).toBe('wololo · #12 Partial payments')
   expect((await probe.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
   expect((await probe.find({ type: 'Text', text: /^1\/8/ }))?.text).toBe('1/8 Contexto')
-  expect((await probe.find({ type: 'Text', text: /Gate B/ }))?.text).toBe('· Gate B')
+  expect((await probe.find({ type: 'Text', text: /Aprobar PR/ }))?.text).toBe('· Aprobar PR')
+  expect((await probe.find({ type: 'Text', text: /modo checkpoints/ }))?.text).toBe('⏸ modo checkpoints')
+  expect((await probe.find({ type: 'Text', text: /frena para aprobar/ }))?.text).toBe('· frena para aprobar el spec y el PR (/wololo config)')
   expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
   await probe.press({ key: 'toggle' })
   expect((await probe.find({ type: 'Text', text: /^Archivos del run/ }))?.text).toContain(`${DATA}/runs/`)
@@ -142,6 +144,7 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   expect((await probe.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
   await probe.unmount()
 
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'blocked', data: { reason: 'needs a signature' } } as never)
   await $.tool.call({
     tool: 'AskUserQuestion',
     questions: [{ question: 'Approve the spec?', header: 'Gate A', options: [], multiSelect: false }],
@@ -152,7 +155,9 @@ test('start writes the run, the band shows it, questions are recorded, a push to
     .trim()
     .split('\n')
     .map(line => (JSON.parse(line) as { type: string }).type)
-  expect(types.slice(-2)).toEqual(['question.asked', 'question.answered'])
+  expect(types.slice(-4)).toEqual(['blocked', 'question.asked', 'question.answered', 'unblocked'])
+  const state = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((state.run as { blocked: unknown }).blocked).toBe(null)
   const history = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'history' } as never)).result)
   expect((history.lines as string[]).some(line => line.endsWith('? Gate A: Approve the spec? → Aprobar'))).toBe(true)
   expect(host.files.get(`${DATA}/runs/${runId}/history.md`)).toContain('Gate A: Approve the spec? → Aprobar')
