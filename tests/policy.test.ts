@@ -62,3 +62,10 @@ test('GitHub writes are not allowed as raw gh commands: they go through publish'
   expect(isAllowedBash('gh pr create --title x --body-file y.md', ctx)).toBe(false)
   expect(isAllowedBash('gh pr ready 42', ctx)).toBe(true)
 })
+
+test('the deferred-signing commands are allowed, nothing looser', async () => {
+  expect(isAllowedBash('git -c commit.gpgsign=false commit -m "feat: x"', ctx)).toBe(true)
+  expect(isAllowedBash('git rebase --exec "git commit --amend --no-edit -S" origin/main', ctx)).toBe(true)
+  expect(isAllowedBash('git rebase --exec "rm -rf ." origin/main', ctx)).toBe(false)
+  expect(isAllowedBash('git rebase -i origin/main', ctx)).toBe(false)
+})

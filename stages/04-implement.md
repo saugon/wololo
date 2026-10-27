@@ -33,6 +33,11 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
 
    Record `item.reviewed {n, findings, verdict}`.
 5. **Commit.** `git add -A && git commit -m "<message in the repository's style>"`, with no trailers. Record `item.committed {n, sha, title}`.
+   - **If the commit fails because it cannot be signed** (gpg, ssh-keygen or 1Password errors: the person is away or the key is locked), never stop the run and never retry in a loop:
+     1. Commit the same thing unsigned: `git -c commit.gpgsign=false commit -m "<the same message>"`.
+     2. Record `item.committed {n, sha, title}`, then `signing.deferred {n, sha}`.
+     3. Keep going. The commits get signed before the push (`stages/06-pr.md`).
+   - Any other commit failure (a pre-commit hook, a conflict) is a real failure: fix it through the implement loop.
 6. **Log.** Append to `log.md`:
 
    ```

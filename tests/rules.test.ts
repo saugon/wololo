@@ -60,3 +60,10 @@ test('stage files map back to stages, the shared gates file does not', async () 
   expect(stageForFile('03-plan.md')).toBe('plan')
   expect(stageForFile('gates.md')).toBe(null)
 })
+
+test('a deferred signature names the item and the commit', async () => {
+  const run = runAt('checkpoints')
+  expect(checkEvent(run, 'signing.deferred', { n: 1 })).toMatch(/sha/)
+  expect(checkEvent(run, 'signing.deferred', { n: 1, sha: 'abc123' })).toBe(null)
+  expect(checkEvent(run, 'signing.done', { count: 3 })).toBe(null)
+})

@@ -9,6 +9,8 @@ export type PolicyContext = {
 const SAFE_SEGMENTS: readonly RegExp[] = [
   /^git (status|diff|log|show|add|commit|rev-parse|fetch|ls-files|merge-base)\b/,
   /^git branch( --show-current)?$/,
+  /^git -c commit\.gpgsign=false commit\b/,
+  /^git rebase (-f |--force-rebase )?--exec (["'])git commit --amend --no-edit -S\2 [\w./-]+$/,
   /^git worktree (add|list)\b/,
   /^gh pr (ready|view|checks|diff)\b/,
   /^gh issue view\b/,

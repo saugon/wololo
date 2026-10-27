@@ -92,6 +92,7 @@ Record `blocked {reason}`, then ask with AskUserQuestion. Record `unblocked` onc
 - Work only on the run's branch.
 - One commit per plan item, in the repository's own commit style (`git log --oneline -20`).
 - Never add attribution trailers or "generated with" lines.
+- A commit that fails only because it cannot be signed is made unsigned and recorded as `signing.deferred`; the commits are signed in one pass before the push (`stages/06-pr.md`). A missing signature never stops the run before then.
 - Push only as `git push -u origin <branch>`; the mod refuses anything else.
 - Write to GitHub (an issue body or comment, a new issue, a new PR) only through `mcp__wololo__publish`. It checks GitHub's length limit and switches to a summary when the text does not fit, so length never stops the run.
 

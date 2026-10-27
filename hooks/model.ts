@@ -77,6 +77,8 @@ export type EventType =
   | 'ci.updated'
   | 'pr.opened'
   | 'pr.ready'
+  | 'signing.deferred'
+  | 'signing.done'
   | 'github.published'
   | 'screenshot.saved'
   | 'run.finished'
@@ -101,6 +103,8 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'ci.updated',
   'pr.opened',
   'pr.ready',
+  'signing.deferred',
+  'signing.done',
   'screenshot.saved',
   'run.finished',
 ])
@@ -200,6 +204,7 @@ export type Run = {
     attempts: number
     reversals: number
     nudges: number
+    unsigned: number
   }
   pr: {
     url: string
@@ -271,6 +276,7 @@ export function emptyRun(id: string, ts: number): Run {
       attempts: 0,
       reversals: 0,
       nudges: 0,
+      unsigned: 0,
     },
     pr: null,
     screenshots: [],
@@ -452,6 +458,12 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'corrected':
       r.counts.corrections += 1
+      break
+    case 'signing.deferred':
+      r.counts.unsigned = (r.counts.unsigned ?? 0) + 1
+      break
+    case 'signing.done':
+      r.counts.unsigned = 0
       break
     case 'blocked':
       r.blocked = { reason: str(d.reason), since: ev.ts }

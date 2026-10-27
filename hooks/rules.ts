@@ -86,6 +86,10 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       return text(data.reason) ? null : 'data.reason is required.'
     case 'debate.turn':
       return text(data.role) ? null : 'data.role is required.'
+    case 'signing.deferred':
+      return typeof data.n === 'number' && text(data.sha) ? null : 'data.n (the item) and data.sha (the unsigned commit) are required.'
+    case 'signing.done':
+      return typeof data.count === 'number' ? null : 'data.count (how many commits were signed) is required.'
     case 'pr.opened':
       return text(data.url) ? null : 'data.url is required.'
     case 'ci.updated':

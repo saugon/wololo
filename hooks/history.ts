@@ -115,6 +115,10 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one(d.status === 'failed' ? '✕' : '✓', `${str(d.label || d.id)} (${str(d.status)})`, false)
     case 'ci.updated':
       return one(d.state === 'failing' ? '✕' : d.state === 'passing' ? '✓' : '⧗', `CI ${str(d.state)}`, d.state !== 'pending')
+    case 'signing.deferred':
+      return one('·', `${es ? 'Ítem' : 'Item'} ${str(d.n)} ${es ? 'commiteado sin firma (se firma antes del push)' : 'committed unsigned (signed before the push)'} ${str(d.sha).slice(0, 9)}`)
+    case 'signing.done':
+      return one('✓', `${es ? 'Commits firmados' : 'Commits signed'}: ${str(d.count)}`)
     case 'pr.opened':
       return one('✓', `PR ${es ? 'abierto' : 'opened'}: ${str(d.url)}`)
     case 'pr.ready':

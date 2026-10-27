@@ -75,3 +75,18 @@ test('a permission says what it was for and how it ended', async () => {
     '✕ Permiso denegado: Bash · rm -rf tmp',
   ])
 })
+
+test('deferred signatures are counted until the commits are signed', async () => {
+  const list = events([
+    ['signing.deferred', { n: 1, sha: 'aaa111' }],
+    ['signing.deferred', { n: 2, sha: 'bbb222' }],
+  ])
+  expect(rebuild('r1', list).counts.unsigned).toBe(2)
+  const signed = [...list, ...events([['signing.done', { count: 2 }]]).map(e => ({ ...e, seq: 3 }))]
+  expect(rebuild('r1', signed).counts.unsigned).toBe(0)
+  expect(timeline(signed, 'es').map(entry => entry.text)).toEqual([
+    'Ítem 1 commiteado sin firma (se firma antes del push) aaa111',
+    'Ítem 2 commiteado sin firma (se firma antes del push) bbb222',
+    'Commits firmados: 2',
+  ])
+})

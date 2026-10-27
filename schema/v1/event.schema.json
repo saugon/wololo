@@ -59,6 +59,8 @@
         "ci.updated",
         "pr.opened",
         "pr.ready",
+        "signing.done",
+        "signing.deferred",
         "github.published",
         "screenshot.saved",
         "run.finished"

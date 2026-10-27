@@ -91,8 +91,8 @@ export function buildView(
   pane.push({
     text:
       lang === 'es'
-        ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}`
-        : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}`,
+        ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`
+        : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}${c.unsigned ? ` · Unsigned ${c.unsigned}` : ''}`,
     tone: 'subtle',
   })
   if (run.pr) pane.push({ text: `PR ${run.pr.url} · ${run.pr.state}${run.pr.ci ? ` · CI ${run.pr.ci}` : ''}`, tone: 'text' })

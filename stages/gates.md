@@ -29,7 +29,8 @@ At gate_a the issue is updated as in "After approval" below.
      - the verification commands and their results;
      - the screenshot paths, with captions;
      - the assumptions and decisions;
-     - the branch and the PR title it will open.
+     - the branch and the PR title it will open;
+     - how many commits are unsigned, if any: they are signed right after approval, so the person should have their signing key unlocked when they approve.
 3. **Ask** with AskUserQuestion, with the context block before it. Options:
    - **Aprobar (Recomendado)**;
    - **Ajustar**: the person says what to change;
