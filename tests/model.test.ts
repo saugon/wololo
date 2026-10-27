@@ -103,3 +103,11 @@ test('a text run is named by its title, never by its id', async () => {
   ])
   expect(statusLine(text, 'running', 120)).toBe('Salones: más estado de mesa y vista 3D… · etapa 1/8 Contexto · ⟳ trabajando')
 })
+
+test('doing says what is being done until the stage changes or it is replaced', async () => {
+  let run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 130, run: 'r1', type: 'agent.started', data: { id: 'a1', role: 'implementer' } })
+  run = apply(run, { v: 1, seq: 4, ts: 140, run: 'r1', type: 'doing', data: { text: 'Investigando por qué falla el e2e de mesas rotadas' } })
+  expect(header(run, 'waiting_agents', 200)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ agentes trabajando: Investigando por qué falla el e2e de mesas rotadas · implementador (1m)]')
+  run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'stage.entered', data: { stage: 'definition' } })
+  expect(run.doing).toBe(null)
+})

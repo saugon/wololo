@@ -40,7 +40,7 @@ What it decides on its own is recorded as an assumption, shown at the gates and 
 - **Pane** beside the chat: the stages with their durations, the live agents and tasks, the items, and the last events. It opens by itself on a wide terminal; `/wololo panel` opens it otherwise.
 - **Status line**: one entry for the run.
 - **Notification** when the run starts waiting for you, gets blocked, or finishes.
-- `/wololo status` lists the runs of every project. `/wololo` with no arguments summarizes what happened since your last message.
+- `/wololo status` (or `/wololo-status`) shows the runs of every project as a card, one block per run with its badge, stage and what it is doing, without a model turn (`all` adds finished ones). `/wololo` with no arguments summarizes what happened since your last message.
 - **History**: what happened, in order and in words: blocks and their reason, every question with the answer given, gates, decisions, assumptions, corrections, commits, the PR. The last events show in the expanded card; `/wololo-history` prints it all (`all` adds agents and tasks), and every run keeps it in `history.md`.
 
 The state is derived from what the session does, not from what the model says:

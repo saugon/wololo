@@ -73,6 +73,8 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     }
     case 'stalled':
       return one('‖', es ? 'Se detuvo sin nada pendiente; se lo reactivó' : 'Stopped with nothing pending; woken up')
+    case 'doing':
+      return one('→', str(d.text))
     case 'assumption':
       return one('·', `${es ? 'Supuesto' : 'Assumption'}: ${str(d.text)}`)
     case 'decision':

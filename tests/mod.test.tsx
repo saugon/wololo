@@ -249,3 +249,39 @@ test('a run whose snapshot predates the items list is rebuilt from its events on
   expect((await ui.find({ type: 'Text', text: / i: Ítems / }))?.text).toBe(' i: Ítems ')
   await ui.unmount()
 })
+
+test('/wololo-status draws every active run as a card', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'assumption', data: { text: 'solo mesas', stage: 'context' } } as never)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'Leyendo cómo se cobra una mesa hoy' } } as never)
+  const ran = await $.command.run({ command: 'wololo-status', args: '' } as never)
+  expect(ran.text).toContain('#12')
+  const ui = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'CommandOutput',
+    props: { command: 'wololo-status', args: '', text: ran.text ?? '', isErrored: false },
+  })
+  expect((await ui.find({ type: 'Text', text: /^shop · / }))?.text).toBe('shop · #12 Partial payments')
+  expect((await ui.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
+  expect((await ui.find({ type: 'Text', text: /^1\/8/ }))?.text).toBe('1/8 Contexto')
+  expect((await ui.find({ type: 'Text', text: /Leyendo/ }))?.text).toBe('  → Leyendo cómo se cobra una mesa hoy')
+  expect((await ui.find({ type: 'Text', text: /Último/ }))?.text).toMatch(/^  Último: · Supuesto: solo mesas · hace /)
+  expect((await ui.find({ type: 'Text', text: new RegExp(String(started.run_id)) }))?.text).toBe(`  ${String(started.run_id)}`)
+  await ui.unmount()
+  const viaSkill = await $.command.run({ command: 'wololo', args: 'status' } as never)
+  expect(viaSkill.text).toContain('#12')
+  const again = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'CommandOutput',
+    props: { command: 'wololo', args: 'status', text: `wololo: ${viaSkill.text ?? ''}`, isErrored: false },
+  })
+  expect((await again.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
+  await again.unmount()
+})

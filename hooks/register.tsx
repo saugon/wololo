@@ -41,7 +41,7 @@ import {
   writeJson,
 } from './store'
 import type { Row, ViewState } from '../types'
-import { buildView, statusTable } from './ui'
+import { type StatusCard, buildView, statusCards, statusTable } from './ui'
 
 type Engine = EngineInterface
 
@@ -79,6 +79,7 @@ let reorient = false
 let historyCache: Entry[] | undefined
 let pendingPermission: { toolUseId: string; tool: string; what: string } | null = null
 const headers = new Map<string, string>()
+const statusRenders = new Map<string, StatusCard[]>()
 
 function describeCall(tool: string, input: Record<string, unknown>): string {
   if (tool === 'Bash' && typeof input.command === 'string') return clip(input.command.replace(/\s+/g, ' '), 80)
@@ -305,6 +306,28 @@ async function reviveRun($: Engine, id: string): Promise<Run | undefined> {
     last_user_at: snapshot.last_user_at,
     owner: { ...rebuilt.owner, heartbeat_at: Math.max(rebuilt.owner.heartbeat_at, snapshot.owner.heartbeat_at) },
   }
+}
+
+function statusStamp(ts: number, lang: string): string {
+  const date = new Date(ts * 1000)
+  const time = [date.getHours(), date.getMinutes(), date.getSeconds()].map(n => String(n).padStart(2, '0')).join(':')
+  return lang === 'es' ? `estado a las ${time}` : `status at ${time}`
+}
+
+async function statusOutput($: Engine, args: string): Promise<{ text: string }> {
+  if (!paths) return { text: 'wololo is not ready yet.' }
+  await flush($)
+  const ts = await nowSeconds($)
+  const isAll = /\ball\b/.test(args)
+  const listed = (await listRuns($, paths)).map(r => ({ run: r, status: effectiveStatus(r, ts) })).filter(x => isAll || !isTerminal(x.status))
+  const runs = []
+  for (const item of listed) {
+    const entries = timeline(await readEvents($, runDir(paths, item.run.id)), item.run.lang).filter(entry => entry.isMajor && entry.icon !== '→')
+    runs.push({ ...item, last: entries[entries.length - 1] })
+  }
+  const stamp = statusStamp(ts, run?.lang ?? config.languages.chat)
+  statusRenders.set(stamp, statusCards(runs, ts))
+  return { text: [statusTable(runs, ts), '', stamp].join('\n') }
 }
 
 async function writePointer($: Engine) {
@@ -642,7 +665,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, pr.opened {url, number, draft}, pr.ready {}, screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, pr.opened {url, number, draft}, pr.ready {}, screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -911,6 +934,9 @@ export const register: Register = (on, options) => {
       for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: false })
       await $.command
         .register({ name: 'wololo-more', description: 'Expands or collapses the wololo card above the prompt' })
+        .catch(() => undefined)
+      await $.command
+        .register({ name: 'wololo-status', description: 'Shows every wololo run across projects (add "all" for finished ones)' })
         .catch(() => undefined)
       await $.command
         .register({
@@ -1275,6 +1301,54 @@ export const register: Register = (on, options) => {
           </Box>
         </Box>
         {drawn}
+      </Box>
+    )
+  }).catch(($, e, next) => next(e))
+
+  on('command.run', { command: 'wololo-status' }, async ($, e) => statusOutput($, String(e.args ?? '')))
+
+  on('command.run', { command: 'wololo' }, async ($, e, next) => {
+    const status = /^status\b\s*(.*)$/.exec(String(e.args ?? '').trim())
+    return status ? statusOutput($, status[1] ?? '') : next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
+    const stamp = /(?:estado a las|status at) \d{2}:\d{2}:\d{2}\s*$/.exec(e.props.text)?.[0].trim()
+    const cards = stamp ? statusRenders.get(stamp) : undefined
+    if (!cards) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+    const es = (run?.lang ?? config.languages.chat) === 'es'
+    return (
+      <Box flexDirection="column">
+        <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
+          <Text bold color="subtle">wololo · runs</Text>
+          {cards.length === 0 && <Text color="subtle">{es ? 'No hay runs activos.' : 'No active runs.'}</Text>}
+          {cards.map((card, index) => (
+            <Box flexDirection="column" marginTop={index === 0 ? 0 : 1}>
+              <Text bold>{`${card.project} · ${card.title}`}</Text>
+              <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+                <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+                  <Text inverse bold color={paint(card.tone)}>{` ${card.badge} `}</Text>
+                  <Text bold>{card.stage}</Text>
+                </Box>
+                <Text color="subtle">{card.ago}</Text>
+              </Box>
+              {card.current !== '' && <Text>{`  ${card.current}`}</Text>}
+              {card.doing !== '' && <Text color={paint(card.tone)}>{`  → ${card.doing}`}</Text>}
+              {card.workers.map(line => (
+                <Text color={paint(card.tone)}>{`  ${line}`}</Text>
+              ))}
+              {card.waiting !== '' && <Text color={paint(card.tone)}>{`  ${card.waiting}`}</Text>}
+              {card.last !== '' && <Text color="subtle">{`  ${card.last}`}</Text>}
+              <Text color="subtle">{`  ${card.id}`}</Text>
+            </Box>
+          ))}
+        </Box>
+        <Text color="subtle">
+          {es
+            ? '  /wololo resume <id> retoma un run cuya sesión se cerró · /wololo-status all incluye los terminados'
+            : '  /wololo resume <id> takes over a run whose session closed · /wololo-status all adds finished ones'}
+        </Text>
       </Box>
     )
   }).catch(($, e, next) => next(e))

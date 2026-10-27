@@ -71,6 +71,7 @@ export type EventType =
   | 'assumption'
   | 'decision'
   | 'corrected'
+  | 'doing'
   | 'blocked'
   | 'unblocked'
   | 'stalled'
@@ -98,6 +99,7 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'assumption',
   'decision',
   'corrected',
+  'doing',
   'blocked',
   'unblocked',
   'ci.updated',
@@ -225,6 +227,7 @@ export type Run = {
   finished_at: number | null
   outcome: Outcome | null
   summary: string | null
+  doing?: { text: string; since: number } | null
 }
 
 export type Live = {
@@ -292,6 +295,7 @@ export function emptyRun(id: string, ts: number): Run {
     finished_at: null,
     outcome: null,
     summary: null,
+    doing: null,
   }
 }
 
@@ -349,6 +353,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       const open = r.stages.find(s => s.finished_at === null && s.id !== id)
       if (open) open.finished_at = ev.ts
       r.stage = { id, index, total: STAGES.length, since: ev.ts }
+      r.doing = null
       r.stages.push({ id, started_at: ev.ts, finished_at: null })
       if (STAGES[index]?.isGate && !r.gates[id])
         r.gates[id] = {
@@ -478,6 +483,9 @@ export function apply(run: Run, ev: RunEvent): Run {
     case 'decision':
       r.counts.decisions += 1
       break
+    case 'doing':
+      r.doing = typeof d.text === 'string' && d.text.trim() ? { text: d.text.trim(), since: ev.ts } : null
+      break
     case 'corrected':
       r.counts.corrections += 1
       break
@@ -514,6 +522,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.screenshots.push({ file: str(d.file), caption: str(d.caption) })
       break
     case 'run.finished': {
+      r.doing = null
       r.outcome = (d.outcome as Outcome) ?? 'done'
       r.summary = typeof d.summary === 'string' ? d.summary : null
       r.finished_at = ev.ts
@@ -758,7 +767,7 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number): stri
     case 'waiting_tests':
     case 'waiting_agents':
     case 'running':
-      return working
+      return [run.doing?.text, working].filter(Boolean).join(' · ')
     case 'done':
     case 'failed':
     case 'cancelled':

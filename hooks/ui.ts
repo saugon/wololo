@@ -86,6 +86,7 @@ export function buildView(
   if (run.items.current && run.stage?.id === 'implement') {
     summary.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
   }
+  if (run.doing) summary.push({ text: `  → ${run.doing.text}`, tone: 'text' })
   for (const agent of liveAgents(run)) {
     const what = agent.description ? `: ${agent.description}` : ''
     summary.push({ text: `  ⟳ ${roleName(lang, agent.role, 1)} (${duration(now - agent.started_at)})${what}`, tone: 'claude' })
@@ -181,4 +182,47 @@ export function statusTable(runs: ReadonlyArray<{ run: Run; status: Status }>, n
       .join('  ')
       .trimEnd()
   return [line(head), ...rows.map(line)].join('\n')
+}
+
+export type StatusCard = {
+  id: string
+  project: string
+  title: string
+  badge: string
+  tone: Tone
+  stage: string
+  current: string
+  doing: string
+  workers: string[]
+  waiting: string
+  last: string
+  ago: string
+}
+
+export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last?: Entry }>, now: number): StatusCard[] {
+  return runs.map(({ run, status, last }) => {
+    const es = run.lang === 'es'
+    const items = run.stage?.id === 'implement' && run.items.total > 0 ? ` · ${run.items.done}/${run.items.total} ${es ? 'ítems' : 'items'}` : ''
+    const ago = (at: number) => (es ? `hace ${duration(now - at)}` : `${duration(now - at)} ago`)
+    const current = run.items.current && run.stage?.id === 'implement' ? `${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}` : ''
+    const workers = [
+      ...liveAgents(run).map(agent => `⟳ ${roleName(run.lang, agent.role, 1)} (${duration(now - agent.started_at)})${agent.description ? `: ${agent.description}` : ''}`),
+      ...liveTasks(run).map(task => `⟳ ${task.label} (${duration(now - task.started_at)})`),
+    ]
+    const waiting = isWaitingOnPerson(status) || status === 'orphaned' ? statusDetail(run, status, now) : ''
+    return {
+      id: run.id,
+      project: run.project.key.split('__').slice(-1)[0] ?? run.project.key,
+      title: run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title,
+      badge: badge(run.lang, status),
+      tone: toneOf(status),
+      stage: `${run.stage ? stageLabel(run) : es ? 'arrancando' : 'starting'}${items}`,
+      current,
+      doing: run.doing?.text ?? '',
+      workers,
+      waiting,
+      last: last ? `${es ? 'Último' : 'Last'}: ${last.icon} ${last.text} · ${ago(last.ts)}` : '',
+      ago: ago(run.updated_at),
+    }
+  })
 }

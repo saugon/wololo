@@ -21,7 +21,7 @@ Take the text after `/wololo`:
 | Text | Do |
 |---|---|
 | empty | If this session has an active run (`get` scope `run` succeeds): `get` scope `since_last_seen`, show the lines under a heading "Mientras no estabas" (or "Since you last looked" in English), say what the run waits on, and carry on if it is not waiting on the person. Otherwise `get` scope `all` and show the table, then one line on how to start a run. |
-| `status` | `get` scope `all`; print `table` verbatim in a code block; under it, one line per run that waits on the person. Add `include_finished: true` if they ask for finished runs. |
+| `status` | The mod answers it before you see it, as `/wololo-status`: a card of every active run. If it reaches you anyway, `get` scope `all` and print `table` verbatim in a code block, with one line under it per run that waits on the person. |
 | `history` | `get` scope `history`; print `lines` verbatim in a code block, and the path of `history.md`. With `all`, add `include_minor: true`. `/wololo-history` shows the same without a model turn. |
 | `resume <run>` | `resume` with that run id, then follow `stages/resume.md`. |
 | `panel` | `panel` (open). `panel off` closes it. |
@@ -56,6 +56,7 @@ Take the text after `/wololo`:
 **Record the run as it happens.**
 - Enter each stage with `event stage.entered` **before** working on it, then read its file. Close it with `stage.completed`.
 - No stage is skipped. A stage that does not apply is entered and completed with a `note`.
+- Whenever you start something that takes a while (delegating to a subagent, a long test run, an investigation), record `doing {text}`: one plain sentence, in `config.languages.chat`, on what is being done and why. For example: "Investigando por qué falla el e2e de mesas rotadas: al editar, la pantalla queda en otro salón." The person reads it on the card when they come back.
 - Every decision you take without asking is an `assumption {text, stage}`.
 - Every answer the person gives is a `decision {text, by: "person"}`.
 - The mod refuses out-of-order events. When it does, fix the order instead of working around it.

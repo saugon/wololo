@@ -78,6 +78,8 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
     case 'item.reviewed':
     case 'item.committed':
       return typeof data.n === 'number' ? null : 'data.n (the item number) is required.'
+    case 'doing':
+      return text(data.text) ? null : 'data.text is required: one plain sentence on what is being done and why.'
     case 'assumption':
     case 'decision':
     case 'corrected':
