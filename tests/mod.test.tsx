@@ -117,16 +117,26 @@ test('start writes the run, the band shows it, questions are recorded, a push to
     (await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)).result,
   )
   expect(entered.header).toBe('[wololo #12 · 1/8 Contexto · ⟳ trabajando]')
-  const probe = await $.ui.mount({
+  const short = await $.ui.mount({
     plugin: 'wololo',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { hasSurvey: false, isWorking: true, maxRows: 4, bodyColumns: 140, scroll: { offset: 0, bodyRows: 4 }, view: {} },
   })
+  expect((await short.find({ type: 'Text', text: /%$/ }))?.text).toBe('6%')
+  expect(await short.find({ type: 'Text', text: /modo checkpoints/ })).toBeUndefined()
+  await short.unmount()
+  const probe = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 12, bodyColumns: 140, scroll: { offset: 0, bodyRows: 12 }, view: {} },
+  })
   expect((await probe.find({ type: 'Text', text: /^wololo · / }))?.text).toBe('wololo · #12 Partial payments')
   expect((await probe.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
   expect((await probe.find({ type: 'Text', text: /^1\/8/ }))?.text).toBe('1/8 Contexto')
-  expect((await probe.find({ type: 'Text', text: /Aprobar PR/ }))?.text).toBe('· Aprobar PR')
+  expect((await probe.find({ type: 'Text', text: /^Rev$/ }))?.text).toBe('Rev')
+  expect((await probe.find({ type: 'Text', text: /%$/ }))?.text).toBe('6%')
   expect((await probe.find({ type: 'Text', text: /modo checkpoints/ }))?.text).toBe('⏸ modo checkpoints')
   expect((await probe.find({ type: 'Text', text: /frena para aprobar/ }))?.text).toBe('· frena para aprobar el spec y el PR (/wololo config)')
   expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()

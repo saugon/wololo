@@ -4,6 +4,10 @@ export type Row = { text: string; tone: Tone }
 
 export type Pill = { label: string; state: 'done' | 'current' | 'pending' }
 
+export type Segment = { short: string; state: 'done' | 'current' | 'pending'; filled: string; empty: string }
+
+export type Progress = { segments: Segment[]; percent: number }
+
 export type Band = {
   title: string
   mode: string
@@ -13,7 +17,7 @@ export type Band = {
   badge: string
   detail: string
   tone: Tone
-  pills: Pill[]
+  progress: Progress
 }
 
 export type ViewState = {

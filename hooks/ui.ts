@@ -1,4 +1,4 @@
-import type { Band, Row, Tone, ViewState } from '../types'
+import type { Band, Progress, Row, Segment, Tone, ViewState } from '../types'
 import { type Entry, formatEntry, timeline } from './history'
 import {
   type Run,
@@ -38,6 +38,42 @@ export function modeLine(mode: string, lang: string): { icon: string; name: stri
   }
 }
 
+const SHORT: Record<string, Record<'es' | 'en', string>> = {
+  context: { es: 'Con', en: 'Ctx' },
+  definition: { es: 'Def', en: 'Def' },
+  gate_a: { es: 'Spc', en: 'Spc' },
+  plan: { es: 'Pla', en: 'Pln' },
+  implement: { es: 'Imp', en: 'Imp' },
+  evidence: { es: 'Evi', en: 'Evd' },
+  gate_b: { es: 'Rev', en: 'Rev' },
+  pr: { es: 'PR', en: 'PR' },
+}
+
+const BAR_CELLS = 4
+
+function bar(fraction: number): { filled: string; empty: string } {
+  const halves = Math.round(Math.min(1, Math.max(0, fraction)) * BAR_CELLS * 2)
+  const filled = '█'.repeat(Math.floor(halves / 2)) + (halves % 2 ? '▌' : '')
+  return { filled, empty: '░'.repeat(BAR_CELLS - Math.ceil(halves / 2)) }
+}
+
+export function progressOf(run: Run): Progress {
+  const lang = run.lang
+  const done = new Set(run.stages.filter(stage => stage.finished_at !== null).map(stage => stage.id))
+  const currentIndex = run.outcome ? -1 : (run.stage?.index ?? -1)
+  let total = 0
+  const segments: Segment[] = STAGES.map((stage, index) => {
+    const isDone = run.outcome === 'done' || (index !== currentIndex && done.has(stage.id)) || (currentIndex >= 0 && index < currentIndex)
+    const isCurrent = index === currentIndex
+    const within =
+      stage.id === 'implement' && run.items.total > 0 ? Math.min(1, run.items.done / run.items.total) : 0.5
+    const fraction = isDone ? 1 : isCurrent ? within : 0
+    total += fraction
+    return { short: SHORT[stage.id]?.[lang] ?? stage.id, state: isDone ? 'done' : isCurrent ? 'current' : 'pending', ...bar(fraction) }
+  })
+  return { segments, percent: run.outcome === 'done' ? 100 : Math.round((total / STAGES.length) * 100) }
+}
+
 export function toneOf(status: Status): Tone {
   if (status === 'done') return 'success'
   if (status === 'failed' || status === 'blocked') return 'error'
@@ -70,10 +106,7 @@ export function buildView(
     badge: badge(lang, status),
     detail: statusDetail(run, status, now),
     tone,
-    pills: STAGES.map((stage, index) => ({
-      label: stage.label[lang],
-      state: run.stage?.index === index && !run.outcome ? 'current' : done.has(stage.id) ? 'done' : 'pending',
-    })),
+    progress: progressOf(run),
   }
 
   const es = lang === 'es'

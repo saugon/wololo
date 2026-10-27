@@ -128,13 +128,13 @@ function detailLabel(lang: string, withDetail: boolean): string {
 }
 
 function tabRows(view: ViewState, tab: 'summary' | 'items' | 'history', withDetail: boolean, lang: string): Row[] {
-  if (tab === 'summary') return view.details
+  if (tab === 'summary') return view.details ?? []
   if (tab === 'items') {
-    return view.items.length > 0
-      ? view.items
+    return (view.items ?? []).length > 0
+      ? (view.items ?? [])
       : [{ text: lang === 'es' ? 'El plan todavía no tiene ítems.' : 'The plan has no items yet.', tone: 'subtle' }]
   }
-  const rows = withDetail ? view.historyAll : view.history
+  const rows = (withDetail ? view.historyAll : view.history) ?? []
   return rows.length > 0 ? rows : [{ text: lang === 'es' ? 'Todavía no pasó nada que contar.' : 'Nothing to tell yet.', tone: 'subtle' }]
 }
 
@@ -1359,7 +1359,6 @@ export const register: Register = (on, options) => {
     const tab = await read($, tabAtom)
     const withDetail = await read($, detailAtom)
     const lang = run?.lang ?? 'es'
-    const mark = { done: '✓', current: '▶', pending: '·' } as const
     return (
       <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={1}>
         <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
@@ -1375,25 +1374,48 @@ export const register: Register = (on, options) => {
             />
           </Box>
         </Box>
-        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-          <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
-          <Text bold>{band.stage}</Text>
-          {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
+        {band.progress && (
+        <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+          <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+            {band.progress.segments.map(segment => {
+              const color = segment.state === 'done' ? paint('success') : segment.state === 'current' ? paint(band.tone) : 'subtle'
+              return (
+                <Box flexDirection="row" columnGap={1}>
+                  <Text color={color} bold={segment.state === 'current'}>
+                    {segment.short}
+                  </Text>
+                  <Box flexDirection="row">
+                    <Text color={color}>{segment.filled}</Text>
+                    <Text color="subtle">{segment.empty}</Text>
+                  </Box>
+                </Box>
+              )
+            })}
+          </Box>
+          <Text bold>{`${band.progress.percent}%`}</Text>
         </Box>
-        <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-          {band.pills.map(pill => (
-            <Text
-              color={pill.state === 'current' ? paint(band.tone) : pill.state === 'done' ? paint('success') : 'subtle'}
-              bold={pill.state === 'current'}
-            >
-              {`${mark[pill.state]} ${pill.label}`}
+        )}
+        <Box flexDirection="row" columnGap={1}>
+          <Box flexShrink={0}>
+            <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
+          </Box>
+          <Box flexShrink={0}>
+            <Text bold>{band.stage}</Text>
+          </Box>
+          {band.detail !== '' && (
+            <Text color={paint(band.tone)} wrap="truncate-end">
+              {`· ${band.detail}`}
             </Text>
-          ))}
+          )}
         </Box>
-        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-          <Text bold color={band.modeLine.color}>{`${band.modeLine.icon} ${band.modeLine.name}`}</Text>
-          <Text color="subtle">{`· ${band.modeLine.hint}`}</Text>
-        </Box>
+        {(isExpanded || e.props.maxRows >= 7) && (
+          <Box flexDirection="row" columnGap={1}>
+            <Box flexShrink={0}>
+              <Text bold color={band.modeLine.color}>{`${band.modeLine.icon} ${band.modeLine.name}`}</Text>
+            </Box>
+            <Text color="subtle" wrap="truncate-end">{`· ${band.modeLine.hint}`}</Text>
+          </Box>
+        )}
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>
             <Box flexDirection="row" columnGap={3}>
@@ -1439,7 +1461,7 @@ export const register: Register = (on, options) => {
         )}
       </Box>
     )
-  })
+  }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AskUserQuestion' }, async ($, e, next) => {
     const drawn = await next(e)

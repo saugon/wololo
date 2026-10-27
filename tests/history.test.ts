@@ -2,7 +2,7 @@ import { expect, test } from 'claude-code/testing'
 
 import { historyMarkdown, timeline } from '../hooks/history'
 import { type RunEvent, rebuild } from '../hooks/model'
-import { buildView } from '../hooks/ui'
+import { buildView, progressOf } from '../hooks/ui'
 
 function events(list: Array<[RunEvent['type'], Record<string, unknown>]>): RunEvent[] {
   return list.map(([type, data], i) => ({ v: 1, seq: i + 1, ts: 1_800_000_000 + i * 60, run: 'r1', type, data }))
@@ -132,4 +132,34 @@ test('the items tab lists the plan with what is done, in progress, failing or pe
     '▶ 3. Front: tipos',
     '· 4. Front: capas',
   ])
+})
+
+test('the progress bar fills done stages, the current one by its items, and says the percent', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['stage.entered', { stage: 'definition' }],
+    ['stage.entered', { stage: 'gate_a' }],
+    ['question.answered', {}],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }],
+    ['stage.entered', { stage: 'plan' }],
+    ['plan.ready', { items: Array.from({ length: 15 }, (_, i) => `item ${i + 1}`) }],
+    ['stage.entered', { stage: 'implement' }],
+    ...Array.from({ length: 10 }, (_, i): [RunEvent['type'], Record<string, unknown>] => ['item.committed', { n: i + 1, sha: `s${i}` }]),
+  ])
+  const progress = progressOf(rebuild('r1', list))
+  expect(progress.segments.map(segment => `${segment.short}:${segment.state}:${segment.filled}${segment.empty}`)).toEqual([
+    'Con:done:████',
+    'Def:done:████',
+    'Spc:done:████',
+    'Pla:done:████',
+    'Imp:current:██▌░',
+    'Evi:pending:░░░░',
+    'Rev:pending:░░░░',
+    'PR:pending:░░░░',
+  ])
+  expect(progress.percent).toBe(58)
+  const finished = rebuild('r1', [...list, ...events([['run.finished', { outcome: 'done' }]]).map(e => ({ ...e, seq: 99 }))])
+  expect(progressOf(finished).percent).toBe(100)
+  expect(progressOf(finished).segments.every(segment => segment.state === 'done' && segment.filled === '████')).toBe(true)
 })
