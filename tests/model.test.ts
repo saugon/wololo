@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen } from '../hooks/model'
+import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusLine } from '../hooks/model'
 
 const IDLE: Live = { isTurnRunning: false, question: null, permission: null }
 
@@ -61,9 +61,9 @@ test('a stale heartbeat reads as orphaned, a finished run never does', async () 
 
 test('the header names the issue, the stage and what it waits on', async () => {
   const run = rebuild('r1', started)
-  expect(header(run, 'running', 120)).toBe('[wololo #4312 · ① Contexto · ⟳ trabajando]')
+  expect(header(run, 'running', 120)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ trabajando]')
   const asked = apply(run, { v: 1, seq: 3, ts: 120, run: 'r1', type: 'question.asked', data: { question: 'Gate A' } })
-  expect(header(asked, 'waiting_user', 300)).toBe('[wololo #4312 · ① Contexto · ❓ TE ESPERA hace 3m]')
+  expect(header(asked, 'waiting_user', 300)).toBe('[wololo #4312 · 1/8 Contexto · ? te espera: Gate A · hace 3m]')
 })
 
 test('since_last_seen lists what happened after the given time only', async () => {
@@ -84,5 +84,22 @@ test('a gate answer is remembered for the gate check', async () => {
 test('a running test suite reads as waiting_tests, and the header says so', async () => {
   const run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 120, run: 'r1', type: 'task.started', data: { id: 't1', label: 'make test', kind: 'tests' } })
   expect(deriveStatus(run, IDLE)).toBe('waiting_tests')
-  expect(header(run, 'waiting_tests', 300)).toBe('[wololo #4312 · ① Contexto · 🧪 corriendo tests 3m]')
+  expect(header(run, 'waiting_tests', 300)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ corriendo tests: make test (3m)]')
+})
+
+test('live agents are named by role and counted, tasks by what they do', async () => {
+  let run = rebuild('r1', started)
+  for (const [i, id] of ['a1', 'a2', 'a3'].entries()) {
+    run = apply(run, { v: 1, seq: 3 + i, ts: 120, run: 'r1', type: 'agent.started', data: { id, role: 'explorer' } })
+  }
+  run = apply(run, { v: 1, seq: 6, ts: 150, run: 'r1', type: 'task.started', data: { id: 't1', label: 'Instalar dependencias del worktree', kind: 'other' } })
+  expect(header(run, 'waiting_agents', 240)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ agentes trabajando: 3 exploradores (2m), Instalar dependencias del worktree (1m)]')
+})
+
+test('a text run is named by its title, never by its id', async () => {
+  const text = rebuild('r1', [
+    { v: 1, seq: 1, ts: 100, run: 'r1', type: 'run.started', data: { title: 'Salones: más estado de mesa y vista 3D opcional', source: { kind: 'text', ref: 'x', url: null } } },
+    { v: 1, seq: 2, ts: 110, run: 'r1', type: 'stage.entered', data: { stage: 'context' } },
+  ])
+  expect(statusLine(text, 'running', 120)).toBe('Salones: más estado de mesa y vista 3D… · etapa 1/8 Contexto · ⟳ trabajando')
 })

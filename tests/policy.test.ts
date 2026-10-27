@@ -56,3 +56,9 @@ test('templates split into plain commands and file patterns', async () => {
   expect(rules.commands).toEqual(['cd frontend', 'make test'])
   expect(rules.patterns[0]?.test('pnpm vitest run src/a.test.ts')).toBe(true)
 })
+
+test('GitHub writes are not allowed as raw gh commands: they go through publish', async () => {
+  expect(isAllowedBash('gh issue edit 12 --body-file x.md', ctx)).toBe(false)
+  expect(isAllowedBash('gh pr create --title x --body-file y.md', ctx)).toBe(false)
+  expect(isAllowedBash('gh pr ready 42', ctx)).toBe(true)
+})

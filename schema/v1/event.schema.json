@@ -4,24 +4,68 @@
   "title": "wololo event (one line of runs/<id>/events.jsonl)",
   "description": "Append-only; the source of truth of a run. `seq` increases by one per run. Rotated files events.1.jsonl, events.2.jsonl, … hold older lines, oldest first.",
   "type": "object",
-  "required": ["v", "seq", "ts", "run", "type", "data"],
+  "required": [
+    "v",
+    "seq",
+    "ts",
+    "run",
+    "type",
+    "data"
+  ],
   "properties": {
-    "v": { "const": 1 },
-    "seq": { "type": "integer", "minimum": 1 },
-    "ts": { "type": "number", "description": "Seconds since the Unix epoch." },
-    "run": { "type": "string" },
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "ts": {
+      "type": "number",
+      "description": "Seconds since the Unix epoch."
+    },
+    "run": {
+      "type": "string"
+    },
     "type": {
       "enum": [
-        "run.started", "owner.changed", "risk.set",
-        "stage.entered", "stage.completed", "gate.requested", "gate.resolved",
-        "question.asked", "question.answered", "permission.asked", "permission.resolved",
-        "agent.started", "agent.finished", "task.started", "task.finished",
-        "plan.ready", "item.started", "item.verified", "item.reviewed", "item.committed",
-        "debate.turn", "assumption", "decision", "corrected",
-        "blocked", "unblocked", "stalled",
-        "ci.updated", "pr.opened", "pr.ready", "screenshot.saved", "run.finished"
+        "run.started",
+        "owner.changed",
+        "risk.set",
+        "stage.entered",
+        "stage.completed",
+        "gate.requested",
+        "gate.resolved",
+        "question.asked",
+        "question.answered",
+        "permission.asked",
+        "permission.resolved",
+        "agent.started",
+        "agent.finished",
+        "task.started",
+        "task.finished",
+        "plan.ready",
+        "item.started",
+        "item.verified",
+        "item.reviewed",
+        "item.committed",
+        "debate.turn",
+        "assumption",
+        "decision",
+        "corrected",
+        "blocked",
+        "unblocked",
+        "stalled",
+        "ci.updated",
+        "pr.opened",
+        "pr.ready",
+        "github.published",
+        "screenshot.saved",
+        "run.finished"
       ]
     },
-    "data": { "type": "object" }
+    "data": {
+      "type": "object"
+    }
   }
 }

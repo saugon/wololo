@@ -167,11 +167,12 @@
     "spec": {
       "type": "object",
       "properties": {
-        "update_issue": {
-          "type": "boolean"
-        },
         "create_issue_from_text": {
           "type": "boolean"
+        },
+        "to_github": {
+          "type": "boolean",
+          "description": "Publish a short version of the spec in the issue. False keeps it in the run's files only."
         }
       }
     },
@@ -263,6 +264,24 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "colors": {
+          "type": "object",
+          "description": "Colors per group of states, as a Claude Code theme key (claude, warning, error, success, subtle, permission, ...) or a hex color.",
+          "properties": {
+            "working": {
+              "type": "string"
+            },
+            "waiting": {
+              "type": "string"
+            },
+            "blocked": {
+              "type": "string"
+            },
+            "done": {
+              "type": "string"
+            }
           }
         }
       }

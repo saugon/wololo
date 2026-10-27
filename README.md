@@ -18,7 +18,7 @@ context → definition → gate A → plan → implement → evidence → gate B
 |---|---|
 | context | Reads the issue and explores the code with parallel explorers; estimates the risk. |
 | definition | Writes the spec (outcome, scope, non-goals, acceptance scenarios, assumptions) and debates it: self-critique for low risk, an adversarial critic (Claude or an external model such as Codex) for high risk. |
-| gate A | You approve the spec; the issue body is updated with it. |
+| gate A | You approve the spec. With `spec.to_github`, a short version goes into the issue body, or a summary when it is longer than GitHub accepts. |
 | plan | Architects propose small, verifiable items; the plan is debated the same way. |
 | implement | Per item: implementer → the tests the run touched → reviewer → commit, with a log of every decision and correction. After the last item, the full suite (locally, or left to CI). |
 | evidence | Up to 5 screenshots of what changed. Starts the servers it needs on the run's own ports, and stops them afterwards. |
@@ -36,11 +36,12 @@ What it decides on its own is recorded as an assumption, shown at the gates and 
 ## Seeing what it does
 
 - **Header** on each reply: `[wololo #4312 · ③ Plan · ⟳ 2 agents]`, or `[wololo #4312 · Gate A · ❓ WAITING FOR YOU 3m]`.
-- **Band** above the prompt: the stage, what is running and for how long, and the stage pills.
+- **Card** above the prompt, framed in the color of the state: a badge saying what the run is doing (`WORKING`, `WAITING FOR YOU`, `NEEDS PERMISSION`, `AGENTS WORKING`, `RUNNING TESTS`, `WAITING FOR CI`, `BLOCKED`, `STOPPED`, `DONE`), the stage, the detail (the question, the agents and for how long), and the stage chips. `m: ▾ more` (a click, or ctrl+x tab then `m`) or `/wololo-more` expands it in place, with two tabs: **Summary** (`r`: stage durations, live agents and tasks, counts, PR, run files, last events) and **History** (`h`: everything that happened; `d` adds agents and tasks). `p` opens the pane, which has the same tabs.
 - **Pane** beside the chat: the stages with their durations, the live agents and tasks, the items, and the last events. It opens by itself on a wide terminal; `/wololo panel` opens it otherwise.
 - **Status line**: one entry for the run.
 - **Notification** when the run starts waiting for you, gets blocked, or finishes.
 - `/wololo status` lists the runs of every project. `/wololo` with no arguments summarizes what happened since your last message.
+- **History**: what happened, in order and in words: blocks and their reason, every question with the answer given, gates, decisions, assumptions, corrections, commits, the PR. The last events show in the expanded card; `/wololo-history` prints it all (`all` adds agents and tasks), and every run keeps it in `history.md`.
 
 The state is derived from what the session does, not from what the model says:
 
@@ -82,11 +83,13 @@ Nothing is written into your repositories. All configuration and run data live i
 | `tests.follow`, `tests.rules_from` | `project` makes the project's own testing rules (in those files) win over wololo's |
 | `tests.background` | long suites run in the background; the run shows "running tests" |
 | `commands.start`, `commands.app_url`, `commands.login` | how to run the app for screenshots; `{slot}` gives each parallel run its own ports |
+| `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only |
 | `pr.*` | open a PR, as a draft, wait for CI, and the base branch |
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
-| `view.*` | header, band, pane, status line, which states notify |
+| `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |
+| `view.colors` | the card's colors per group of states (`working`, `waiting`, `blocked`, `done`): a theme key such as `claude` or `warning`, or a hex color. Changes show within 15 s |
 
 ## The store, for dashboards
 

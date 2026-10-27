@@ -1,7 +1,7 @@
 ---
 name: wololo
 description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | status | resume <run> | panel | init | config | cancel
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | status | history | resume <run> | panel | init | config | cancel
 ---
 
 # wololo
@@ -12,7 +12,7 @@ wololo carries one issue to a PR in eight stages:
 
 The wololo mod shows the person the run's stage and what it is waiting on, in a band above the prompt, a pane, the status line and a header on each of your replies. It also writes the run to disk for dashboards. **It only knows what you record**, so recording the run truthfully is part of the work, not overhead.
 
-Tools: `mcp__wololo__start`, `event`, `get`, `tests`, `resume`, `external_turn`, `panel`. Files of this skill: the directory holding this SKILL.md (`skill_root` in the tools' answers).
+Tools: `mcp__wololo__start`, `event`, `get`, `tests`, `publish`, `resume`, `external_turn`, `panel`. Files of this skill: the directory holding this SKILL.md (`skill_root` in the tools' answers).
 
 ## Route the request
 
@@ -22,6 +22,7 @@ Take the text after `/wololo`:
 |---|---|
 | empty | If this session has an active run (`get` scope `run` succeeds): `get` scope `since_last_seen`, show the lines under a heading "Mientras no estabas" (or "Since you last looked" in English), say what the run waits on, and carry on if it is not waiting on the person. Otherwise `get` scope `all` and show the table, then one line on how to start a run. |
 | `status` | `get` scope `all`; print `table` verbatim in a code block; under it, one line per run that waits on the person. Add `include_finished: true` if they ask for finished runs. |
+| `history` | `get` scope `history`; print `lines` verbatim in a code block, and the path of `history.md`. With `all`, add `include_minor: true`. `/wololo-history` shows the same without a model turn. |
 | `resume <run>` | `resume` with that run id, then follow `stages/resume.md`. |
 | `panel` | `panel` (open). `panel off` closes it. |
 | `init` | Follow `stages/init.md`. |
@@ -92,6 +93,7 @@ Record `blocked {reason}`, then ask with AskUserQuestion. Record `unblocked` onc
 - One commit per plan item, in the repository's own commit style (`git log --oneline -20`).
 - Never add attribution trailers or "generated with" lines.
 - Push only as `git push -u origin <branch>`; the mod refuses anything else.
+- Write to GitHub (an issue body or comment, a new issue, a new PR) only through `mcp__wololo__publish`. It checks GitHub's length limit and switches to a summary when the text does not fit, so length never stops the run.
 
 **Where the work happens.**
 - Every file path you or a subagent reads or writes is absolute, under the work tree.

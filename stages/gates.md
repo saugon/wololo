@@ -14,26 +14,26 @@ At gate_a the issue is updated as in "After approval" below.
 ## checkpoints and guided
 
 1. `event stage.entered {stage: "gate_x"}`. The mod records the request.
-2. **Summarize what is being approved.**
-   - **gate_a**: in at most 10 lines,
-     - the outcome;
-     - the scope;
-     - how many non-goals and acceptance scenarios there are;
-     - **every assumption, one line each**;
-     - the risk;
-     - how the debate ended;
-     - and the path to `spec.md`.
+2. **Show what is being approved, in the chat, before asking.** The person decides from what is on screen, so a count ("44 scenarios") or a one-paragraph summary is not enough. Nothing gets cut for length.
+   - **gate_a**, from `spec.md`, as markdown:
+     - **Outcome**, verbatim;
+     - **Scope** and **Non-goals**, verbatim, as bullets;
+     - **Acceptance scenarios**: one line per scenario, numbered, all of them. Group them under short headings when there are many;
+     - **Assumptions**: every one, one line each, saying which ones you took on your own;
+     - **Open items**: what the debate left open, if anything;
+     - **Risk** and how the debate ended, in one line;
+     - the path to `spec.md`, for the full text.
    - **gate_b**:
-     - the items done and their commits;
-     - `git diff --stat origin/<base>...HEAD`, summarized;
+     - the items done, with their commits;
+     - `git diff --stat origin/<base>...HEAD`, file by file;
      - the verification commands and their results;
      - the screenshot paths, with captions;
      - the assumptions and decisions;
-     - and the branch and the PR title it will open.
+     - the branch and the PR title it will open.
 3. **Ask** with AskUserQuestion, with the context block before it. Options:
    - **Aprobar (Recomendado)**;
    - **Ajustar**: the person says what to change;
-   - **Ver completo**: you print the spec, or the diff summary per file, and ask again;
+   - **Ver completo**: you print `spec.md` whole (at gate_b, the diff of each file), and ask again;
    - **Cancelar el run**.
 4. **Apply the answer.**
    - **Aprobar**: `event gate.resolved {gate, outcome: "approved", by: "user"}`, then "After approval".
@@ -44,9 +44,30 @@ At gate_a the issue is updated as in "After approval" below.
 ## After approval
 
 **At gate_a:**
-- **GitHub issue source**, with `config.spec.update_issue`:
-  1. Write `run_dir/issue-body.md`: the spec, followed by `<details><summary>Original issue</summary>` with the original body. This keeps the original.
-  2. `gh issue edit <n> --body-file run_dir/issue-body.md`.
-- **Text source**, with `config.spec.create_issue_from_text`: create the issue with `gh issue create`, in `config.languages.issue`, and keep its number for `Closes #n`.
+
+When `config.spec.to_github` is false, nothing goes to GitHub: the spec stays in `run_dir/spec.md` only, and this step ends here.
+
+Otherwise, publish the minimum someone needs to understand and check the change, in `config.languages.issue`:
+
+1. Write `run_dir/issue-body.md`:
+
+   ```
+   ## Outcome            1-3 lines
+   ## Scope              bullets
+   ## Non-goals          bullets
+   ## Acceptance         one line per scenario
+   ## Decisions          only the person's, one line each
+   <details><summary>Original issue</summary>   the original body, untouched
+   ```
+
+   Leave out the context, the debate, the risks, the assumptions and every internal note: those stay in the run's files.
+2. Publish it with `mcp__wololo__publish`:
+   - **GitHub issue source**: `{kind: "issue_body", number, body_file}`;
+   - **text source with `config.spec.create_issue_from_text`**: `{kind: "issue_create", title, body_file}`. Keep the issue number for `Closes #n`.
+3. When `publish` answers that the text does not fit:
+   1. Write `run_dir/issue-summary.md`: the outcome, the scope bullets, the scenario titles, a line saying the full spec is kept in wololo run `<run id>`, and the original body.
+   2. Call `publish` again with `summary_file`.
+
+   Never cut the spec itself to make it fit.
 
 **At gate_b:** go to `stages/06-pr.md`.

@@ -17,7 +17,7 @@ Goal: `run_dir/spec.md`, a definition a reviewer can approve and an implementer 
    ## Risks
    ```
 
-   Keep it under about 9,000 characters and 12 scenarios. If it does not fit, the issue is too big: propose a split, asking in `checkpoints`/`guided`, or `blocked` in `full`.
+   `spec.md` has no length limit, and its length never stops the run. What goes to GitHub is a short version, written at gate_a.
 3. **Resolve every `[NEEDS CLARIFICATION]`** by mode:
    - **guided**: ask them all, batched (see the question rules in SKILL.md).
    - **checkpoints**: resolve the minor ones yourself, with the reading most consistent with the code and the least risky, and move them to Assumptions (`assumption` event each). Ask only the ones that change the scope or carry risk.

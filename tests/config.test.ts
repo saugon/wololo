@@ -67,3 +67,10 @@ test('touched test files are grouped into the configured commands, the rest repo
   ])
   expect(plan.unmatched).toEqual(['e2e/z.spec.ts'])
 })
+
+test('view colors take theme keys or hex values, and keep the others when only one changes', async () => {
+  const { config, errors } = resolve({}, { view: { colors: { working: '#7aa2f7' } } })
+  expect(errors).toEqual([])
+  expect(config.view.colors).toEqual({ working: '#7aa2f7', waiting: 'warning', blocked: 'error', done: 'success' })
+  expect(validate({ view: { colors: { workin: 'red' } } })).toEqual(['view.colors.workin: unknown key'])
+})

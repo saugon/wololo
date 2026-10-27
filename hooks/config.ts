@@ -47,7 +47,7 @@ export type Config = {
   }
   screenshots: { enabled: boolean; max: number }
   pr: { enabled: boolean; draft: boolean; wait_ci: boolean; base: string }
-  spec: { update_issue: boolean; create_issue_from_text: boolean }
+  spec: { to_github: boolean; create_issue_from_text: boolean }
   languages: { chat: Lang; spec: string; issue: string; pr: string }
   models: Partial<Record<RoleName, { model?: string; effort?: string }>>
   project_agents: Partial<Record<RoleName, string>>
@@ -64,6 +64,7 @@ export type Config = {
     pane: 'auto' | 'command' | 'off'
     statusline: boolean
     notify: string[]
+    colors: { working: string; waiting: string; blocked: string; done: string }
   }
 }
 
@@ -100,7 +101,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   screenshots: { enabled: true, max: 5 },
   pr: { enabled: true, draft: true, wait_ci: true, base: 'main' },
-  spec: { update_issue: true, create_issue_from_text: false },
+  spec: { to_github: true, create_issue_from_text: false },
   languages: { chat: 'es', spec: 'es', issue: 'es', pr: 'en' },
   models: {},
   project_agents: {},
@@ -115,8 +116,9 @@ export const DEFAULT_CONFIG: Config = {
     header: true,
     band: true,
     pane: 'auto',
-    statusline: true,
+    statusline: false,
     notify: ['waiting_user', 'waiting_permission', 'blocked', 'stalled', 'done', 'failed'],
+    colors: { working: 'claude', waiting: 'warning', blocked: 'error', done: 'success' },
   },
 }
 

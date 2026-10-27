@@ -10,6 +10,7 @@ import {
   type Source,
   STAGES,
   apply,
+  clip,
   deriveStatus,
   effectiveStatus,
   emptyRun,
@@ -18,7 +19,9 @@ import {
   nextSeq,
   sinceLastSeen,
 } from './model'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
+import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { checkEvent, hintFor, stageForFile } from './rules'
 import {
   type Paths,
@@ -33,8 +36,10 @@ import {
   readText,
   rotateIfLarge,
   runDir,
+  writeAtomic,
   writeJson,
 } from './store'
+import type { Row, ViewState } from '../types'
 import { buildView, statusTable } from './ui'
 
 type Engine = EngineInterface
@@ -51,6 +56,9 @@ const HEADER_WINDOW_SECONDS = 15
 const FINISHED = /^(completed|failed|killed|stopped|cancelled|error)/i
 
 const viewAtom = atom({ plugin: 'wololo', key: 'view' } as const, null)
+const expandedAtom = atom({ plugin: 'wololo', key: 'expanded' } as const, false)
+const tabAtom = atom({ plugin: 'wololo', key: 'tab' } as const, 'summary')
+const detailAtom = atom({ plugin: 'wololo', key: 'detail' } as const, false)
 
 let paths: Paths | undefined
 let root = ''
@@ -67,7 +75,54 @@ let live: Live = { isTurnRunning: false, question: null, permission: null }
 let priorUserAt: number | null = null
 let lastTurnEndAt = 0
 let reorient = false
+let historyCache: Entry[] | undefined
+let pendingPermission: { toolUseId: string; tool: string; what: string } | null = null
 const headers = new Map<string, string>()
+
+function describeCall(tool: string, input: Record<string, unknown>): string {
+  if (tool === 'Bash' && typeof input.command === 'string') return clip(input.command.replace(/\s+/g, ' '), 80)
+  if (tool === 'Agent') return [input.subagent_type, input.description].filter(part => typeof part === 'string' && part).join(': ')
+  for (const key of ['file_path', 'notebook_path', 'path', 'url']) if (typeof input[key] === 'string') return clip(String(input[key]), 80)
+  return ''
+}
+
+function isRunAgent(type: unknown): boolean {
+  return typeof type === 'string' && (type.startsWith('wololo:') || Object.values(config.project_agents).includes(type))
+}
+
+async function settlePermission($: Engine, toolUseId: string, outcome: 'approved' | 'denied' | 'not_run') {
+  const asked = pendingPermission
+  if (!asked) return
+  if (outcome !== 'not_run' && asked.toolUseId !== toolUseId) return
+  pendingPermission = null
+  live.permission = null
+  await emit($, 'permission.resolved', { tool: asked.tool, what: asked.what, outcome })
+}
+
+function tabLabel(lang: string, which: 'summary' | 'history', active: string): string {
+  const names = lang === 'es' ? { summary: 'Resumen', history: 'Historial' } : { summary: 'Summary', history: 'History' }
+  return `${which === active ? '● ' : '○ '}${names[which]}`
+}
+
+function detailLabel(lang: string, withDetail: boolean): string {
+  if (lang === 'es') return withDetail ? 'sin detalle' : 'con detalle'
+  return withDetail ? 'less detail' : 'more detail'
+}
+
+function tabRows(view: ViewState, tab: 'summary' | 'history', withDetail: boolean, lang: string): Row[] {
+  if (tab === 'summary') return view.details
+  const rows = withDetail ? view.historyAll : view.history
+  return rows.length > 0 ? rows : [{ text: lang === 'es' ? 'Todavía no pasó nada que contar.' : 'Nothing to tell yet.', tone: 'subtle' }]
+}
+
+function paint(tone: string): string {
+  const colors = config.view.colors
+  if (tone === 'claude') return colors.working
+  if (tone === 'warning') return colors.waiting
+  if (tone === 'error') return colors.blocked
+  if (tone === 'success') return colors.done
+  return tone
+}
 
 async function quietly(work: () => Promise<void> | void) {
   try {
@@ -171,9 +226,10 @@ async function refresh($: Engine, ts?: number) {
   const status = deriveStatus(run, live)
   const previous = run.status
   run.status = status
-  const view = buildView(run, status, recent, at)
+  const history = historyCache && pending.length === 0 ? historyCache : undefined
+  const view = buildView(run, status, recent, at, paths ? runDir(paths, run.id) : undefined, history)
   await update($, viewAtom, () => view)
-  if (config.view.statusline) $.ui.status(view.statusLine)
+  $.ui.status(config.view.statusline ? view.statusLine : undefined)
   if (status !== previous && config.view.notify.includes(status)) {
     void $.ui.notify(`${view.header}${run.waiting ? ` ${run.waiting.question}` : ''}`, { title: 'wololo' }).catch(() => undefined)
   }
@@ -203,11 +259,19 @@ async function flush($: Engine) {
       batch.map(ev => JSON.stringify(ev)),
     )
     if (!ok) pending = [...batch, ...pending]
+    else await writeHistory($, dir)
   }
   if (isDirty) {
     isDirty = false
     await writeJson($, `${dir}/run.json`, run)
   }
+}
+
+async function writeHistory($: Engine, dir: string) {
+  if (!run) return
+  const entries = timeline(await readEvents($, dir), run.lang)
+  historyCache = entries
+  await writeAtomic($, `${dir}/history.md`, historyMarkdown(`wololo · ${run.title}`, entries))
 }
 
 async function writePointer($: Engine) {
@@ -239,6 +303,7 @@ async function heartbeat($: Engine) {
   if (!run || !paths || run.outcome) return
   const ts = await nowSeconds($)
   run.owner.heartbeat_at = ts
+  config = (await loadConfig($, run.project.key)).config
   await reconcileAgents($, ts)
   await writeJson($, `${runDir(paths, run.id)}/owner.json`, run.owner)
   await writePointer($)
@@ -319,6 +384,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const risk = ['low', 'high', 'unknown'].includes(String(input.risk)) ? String(input.risk) : 'unknown'
 
   run = emptyRun(id, ts)
+  historyCache = undefined
   recent = []
   pending = []
   live = { isTurnRunning: true, question: null, permission: null }
@@ -400,6 +466,14 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
       defaults: DEFAULT_CONFIG,
     })
   }
+  if (scope === 'history') {
+    const target = typeof input.run_id === 'string' ? await loadRun($, paths, input.run_id) : run
+    if (!target) return fail('No run to show: pass run_id, or start or resume one in this session.')
+    if (target === run) await flush($)
+    const entries = timeline(await readEvents($, runDir(paths, target.id)), target.lang)
+    const shown = input.include_minor === true ? entries : entries.filter(entry => entry.isMajor)
+    return ok({ run_id: target.id, lines: [...shown].reverse().map(formatEntry), file: `${runDir(paths, target.id)}/history.md` })
+  }
   if (!run) return fail('No active run in this session. Use scope "all" to list runs, or /wololo resume <run>.')
   await flush($)
   const dir = runDir(paths, run.id)
@@ -426,6 +500,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   const dir = runDir(paths, id)
   const events = await readEvents($, dir)
   run = target
+  historyCache = undefined
   recent = events.slice(-RECENT)
   pending = []
   config = (await loadConfig($, target.project.key)).config
@@ -547,7 +622,9 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
     inputSchema: {
       type: 'object',
       properties: {
-        scope: { type: 'string', enum: ['run', 'since_last_seen', 'all', 'config'] },
+        scope: { type: 'string', enum: ['run', 'since_last_seen', 'all', 'config', 'history'] },
+        run_id: { type: 'string', description: 'For scope "history": another run than this session\'s.' },
+        include_minor: { type: 'boolean', description: 'For scope "history": also agents, tasks and stage moves.' },
         include_finished: { type: 'boolean' },
         limit: { type: 'number' },
       },
@@ -586,7 +663,61 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
       'Says which tests to run now, from the config\'s tests block. scope "touched": the test files this run created or changed (committed or not) against its base, grouped into ready-to-run commands, plus the ones no configured command matches. scope "suite": the full-suite and e2e commands, and whether they run locally or are left to CI. Run every command it returns exactly as written, from the work tree.',
     inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['touched', 'suite'] } }, required: ['scope'] },
   },
+  {
+    name: 'publish',
+    description:
+      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue or a new pull request. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create'] },
+        body_file: { type: 'string' },
+        summary_file: { type: 'string', description: 'A short version, for when body_file does not fit.' },
+        number: { type: 'number', description: 'Issue number, for issue_body and issue_comment.' },
+        title: { type: 'string', description: 'For issue_create and pr_create.' },
+        base: { type: 'string' },
+        head: { type: 'string' },
+        draft: { type: 'boolean' },
+      },
+      required: ['kind', 'body_file'],
+    },
+  },
 ]
+
+async function publish($: Engine, input: Record<string, unknown>): Promise<string> {
+  if (!run) return fail('No active run in this session.')
+  const kind = String(input.kind) as PublishKind
+  if (kind !== 'pr_create' && !config.spec.to_github) {
+    return ok({ published: false, reason: 'spec.to_github is false: the text stays in its file only.', file: input.body_file })
+  }
+  const bodyFile = String(input.body_file ?? '')
+  const body = await readText($, bodyFile)
+  if (body === undefined) return fail(`Cannot read body_file ${bodyFile}.`)
+  const summaryFile = typeof input.summary_file === 'string' ? input.summary_file : null
+  const summary = summaryFile ? await readText($, summaryFile) : undefined
+  const decision = decide(body.length, summary === undefined ? null : summary.length)
+  if (decision.send === 'nothing') return ok({ published: false, reason: decision.reason, length: body.length, limit: GITHUB_BODY_LIMIT })
+  const file = decision.send === 'summary' && summaryFile ? summaryFile : bodyFile
+  const args = ghArgs(
+    {
+      kind,
+      number: typeof input.number === 'number' ? input.number : undefined,
+      title: typeof input.title === 'string' ? input.title : undefined,
+      base: typeof input.base === 'string' ? input.base : undefined,
+      head: typeof input.head === 'string' ? input.head : undefined,
+      draft: input.draft === true,
+    },
+    file,
+  )
+  if (typeof args === 'string') return fail(args)
+  const ran = await $.process
+    .run(['gh', ...args], { cwd: workdir(), timeoutMs: 60_000 })
+    .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
+  if (ran.exitCode !== 0) return fail(`gh ${args.slice(0, 2).join(' ')} failed: ${ran.stderr.trim().slice(-1_000)}`)
+  const url = urlIn(`${ran.stdout}\n${ran.stderr}`)
+  await emit($, 'github.published', { kind, mode: decision.send, url, file, length: body.length })
+  return ok({ published: true, mode: decision.send, url, full_text: bodyFile, length: body.length })
+}
 
 async function changedFiles($: Engine, dir: string, base: string): Promise<string[]> {
   const ref = (await git($, dir, ['rev-parse', '--verify', '--quiet', `origin/${base}`])) ? `origin/${base}` : base
@@ -648,6 +779,8 @@ async function handleOwnTool($: Engine, name: string, input: Record<string, unkn
       return togglePane($, input)
     case 'tests':
       return testsToRun($, input)
+    case 'publish':
+      return publish($, input)
     default:
       return fail(`Unknown wololo tool ${name}.`)
   }
@@ -739,6 +872,15 @@ export const register: Register = (on, options) => {
       sessionId = await $.session.id()
 
       for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: false })
+      await $.command
+        .register({ name: 'wololo-more', description: 'Expands or collapses the wololo card above the prompt' })
+        .catch(() => undefined)
+      await $.command
+        .register({
+          name: 'wololo-history',
+          description: 'Shows what happened in this session\'s wololo run (add "all" for agents and tasks too)',
+        })
+        .catch(() => undefined)
 
       const cwd = e.cwd || (await $.session.cwd())
       const info = await projectInfo($, cwd)
@@ -801,10 +943,14 @@ export const register: Register = (on, options) => {
       }
       if (isWrite && path && isAllowedPath(path, ctx)) return { decision: 'allow' as const, reason: "wololo: inside the run's worktree" }
       if (isReadInside(e.tool, input, ctx)) return { decision: 'allow' as const, reason: "wololo: a read inside the run's worktree" }
+      if (e.tool === 'Agent' && isRunAgent(input.subagent_type))
+        return { decision: 'allow' as const, reason: "wololo: one of the run's own agents" }
     }
     if (!e.agentId && e.approver === 'person' && e.tool_use_id) {
-      live.permission = e.tool
-      await quietly(() => emit($, 'permission.asked', { tool: e.tool }))
+      const what = describeCall(e.tool, input)
+      live.permission = what ? `${e.tool} · ${what}` : e.tool
+      pendingPermission = { toolUseId: e.tool_use_id, tool: e.tool, what }
+      await quietly(() => emit($, 'permission.asked', { tool: e.tool, what }))
     }
     return verdict
   }).catch(($, e, next) => next(e))
@@ -838,38 +984,47 @@ export const register: Register = (on, options) => {
     }
     if (!run || run.outcome) return next(e)
 
-    const clearPermission = async () => {
-      if (live.permission === null) return
-      live.permission = null
-      await emit($, 'permission.resolved', {})
-    }
+    if (pendingPermission && pendingPermission.toolUseId !== e.tool_use_id)
+      await quietly(() => settlePermission($, e.tool_use_id, 'not_run'))
+    await quietly(() => settlePermission($, e.tool_use_id, 'approved'))
 
-    try {
+    let ran: Awaited<ReturnType<typeof next>> | undefined
+    const handle = async (): Promise<Awaited<ReturnType<typeof next>>> => {
       if (e.tool === 'AskUserQuestion' && !e.agentId) {
-        await clearPermission()
         const first = e.questions[0]
         const question = first ? `${first.header}: ${first.question}` : 'question'
         live.question = question
-        await emit($, 'question.asked', { question, count: e.questions.length })
+        const asked = e.questions.map(q => ({ header: q.header, question: q.question }))
+        await emit($, 'question.asked', { question, count: e.questions.length, questions: asked })
+        let ran: Awaited<ReturnType<typeof next>> | undefined
         try {
-          return await next(e)
+          ran = await next(e)
+          return ran
         } finally {
           live.question = null
-          await emit($, 'question.answered', {})
+          const result =
+            ran && ran.deny === undefined
+              ? (ran.result as { answers?: Record<string, unknown>; response?: unknown } | undefined)
+              : undefined
+          const pairs = asked.map(q => ({
+            ...q,
+            answer: typeof result?.answers?.[q.question] === 'string' ? result.answers[q.question] : '',
+          }))
+          await emit($, 'question.answered', { pairs, response: typeof result?.response === 'string' ? result.response : null })
         }
       }
 
       if (e.tool === 'Read' && !e.agentId && e.file_path.startsWith(`${root}/stages/`)) {
         const ran = await next(e)
         const hinted = stageForFile(e.file_path.slice(`${root}/stages/`.length))
-        if (!hinted || hinted === run.stage?.id || ran.deny !== undefined) return ran
-        const note = `wololo: these are the instructions for ${hinted}, but the run is in ${run.stage?.id ?? 'no stage yet'}. Record stage.entered {stage: "${hinted}"} with ${TOOL_PREFIX}event before working on it.`
+        const current = run?.stage?.id
+        if (!hinted || hinted === current || ran.deny !== undefined) return ran
+        const note = `wololo: these are the instructions for ${hinted}, but the run is in ${current ?? 'no stage yet'}. Record stage.entered {stage: "${hinted}"} with ${TOOL_PREFIX}event before working on it.`
         return { ...ran, context: [...(ran.context ?? []), note] }
       }
 
       if (e.tool === 'Bash' && e.run_in_background) {
         const ran = await next(e)
-        await clearPermission()
         const taskId =
           ran.deny === undefined && !ran.isError ? (ran.result as { backgroundTaskId?: string } | undefined)?.backgroundTaskId : undefined
         if (taskId)
@@ -878,8 +1033,13 @@ export const register: Register = (on, options) => {
       }
 
       return await next(e)
+    }
+    try {
+      ran = await handle()
+      return ran
     } finally {
-      await quietly(clearPermission)
+      const outcome = ran === undefined || ran.deny !== undefined ? 'denied' : 'approved'
+      await quietly(() => settlePermission($, e.tool_use_id, outcome))
     }
   }).catch(($, e, next) => next(e))
 
@@ -919,6 +1079,7 @@ export const register: Register = (on, options) => {
         return
       }
       live.isTurnRunning = false
+      await settlePermission($, '', 'not_run')
       live.permission = null
       lastTurnEndAt = await nowSeconds($)
       await refresh($)
@@ -971,26 +1132,177 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
     if (!view || !config.view.band || e.props.hasSurvey) return next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const band = view.band
+    const isExpanded = await read($, expandedAtom)
+    const tab = await read($, tabAtom)
+    const withDetail = await read($, detailAtom)
+    const lang = run?.lang ?? 'es'
+    const mark = { done: '✓', current: '▶', pending: '·' } as const
     return (
-      <Box flexDirection="column">
-        {view.band.map(row => (
-          <Text color={row.tone}>{row.text}</Text>
-        ))}
+      <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+          <Text bold>{band.title}</Text>
+          <Box flexDirection="row" columnGap={2}>
+            <Text color="subtle">{band.mode}</Text>
+            <Button
+              key="toggle"
+              hotkey="m"
+              plain
+              dimColor
+              label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
+              onPress={() => update($, expandedAtom, value => !value)}
+            />
+          </Box>
+        </Box>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
+          <Text bold>{band.stage}</Text>
+          {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
+        </Box>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+          {band.pills.map(pill => (
+            <Text
+              color={pill.state === 'current' ? paint(band.tone) : pill.state === 'done' ? paint('success') : 'subtle'}
+              bold={pill.state === 'current'}
+            >
+              {`${mark[pill.state]} ${pill.label}`}
+            </Text>
+          ))}
+        </Box>
+        {isExpanded && (
+          <Box flexDirection="column" marginTop={1}>
+            <Box flexDirection="row" columnGap={3}>
+              <Button
+                key="tab-summary"
+                hotkey="r"
+                plain
+                dimColor={tab !== 'summary'}
+                label={tabLabel(lang, 'summary', tab)}
+                onPress={() => update($, tabAtom, () => 'summary' as const)}
+              />
+              <Button
+                key="tab-history"
+                hotkey="h"
+                plain
+                dimColor={tab !== 'history'}
+                label={tabLabel(lang, 'history', tab)}
+                onPress={() => update($, tabAtom, () => 'history' as const)}
+              />
+              {tab === 'history' && (
+                <Button
+                  key="detail"
+                  hotkey="d"
+                  plain
+                  dimColor
+                  label={detailLabel(lang, withDetail)}
+                  onPress={() => update($, detailAtom, value => !value)}
+                />
+              )}
+              <Button
+                key="pane"
+                hotkey="p"
+                plain
+                dimColor
+                label={lang === 'es' ? 'abrir panel' : 'open pane'}
+                onPress={() => void $.ui.open({ id: PANE, title: view.title }).catch(() => undefined)}
+              />
+            </Box>
+            <Box flexDirection="column" marginTop={1}>
+              {tabRows(view, tab, withDetail, lang).map(row => (
+                <Text color={paint(row.tone)}>{row.text || ' '}</Text>
+              ))}
+            </Box>
+          </Box>
+        )}
       </Box>
     )
   })
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  on('ui.render', { component: 'AskUserQuestion' }, async ($, e, next) => {
+    const drawn = await next(e)
     const view = await read($, viewAtom)
+    if (!view || !config.view.band) return drawn
     const { Box, Text } = $.ui.resolve(e)
-    if (!view) return <Text dimColor>No active wololo run in this session.</Text>
-    const room = Math.max(1, (e.viewport?.rows ?? 40) - 2)
+    const band = view.band
     return (
       <Box flexDirection="column">
-        {view.pane.slice(0, room).map(row => (
-          <Text color={row.tone}>{row.text || ' '}</Text>
-        ))}
+        <Box flexDirection="column" borderStyle="round" borderColor={paint(band.tone)} paddingX={1}>
+          <Text bold>{clip(band.title, 36)}</Text>
+          <Box flexDirection="row" columnGap={1}>
+            <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
+            <Text bold>{band.stage}</Text>
+          </Box>
+        </Box>
+        {drawn}
+      </Box>
+    )
+  }).catch(($, e, next) => next(e))
+
+  on('command.run', { command: 'wololo-history' }, async ($, e) => {
+    if (!run || !paths) return { text: 'wololo: no run in this session. /wololo status lists them.' }
+    await flush($)
+    const entries = timeline(await readEvents($, runDir(paths, run.id)), run.lang)
+    const isAll = /\ball\b/.test(String(e.args ?? ''))
+    const shown = isAll ? entries : entries.filter(entry => entry.isMajor)
+    const head = `wololo · ${run.title}`
+    return { text: [head, '', ...[...shown].reverse().map(formatEntry), '', `${runDir(paths, run.id)}/history.md`].join('\n') }
+  })
+
+  on('command.run', { command: 'wololo-more' }, async $ => {
+    const isExpanded = await update($, expandedAtom, value => !value)
+    return { text: isExpanded ? 'wololo: card expanded.' : 'wololo: card collapsed.' }
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const view = await read($, viewAtom)
+    const { Box, Button, Text } = $.ui.resolve(e)
+    if (!view) return <Text dimColor>No active wololo run in this session.</Text>
+    const tab = await read($, tabAtom)
+    const withDetail = await read($, detailAtom)
+    const lang = run?.lang ?? 'es'
+    const band = view.band
+    return (
+      <Box flexDirection="column">
+        <Text bold>{band.title}</Text>
+        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
+          <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
+          <Text bold>{band.stage}</Text>
+          {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
+        </Box>
+        <Box flexDirection="row" columnGap={3} marginTop={1}>
+          <Button
+            key="tab-summary"
+            hotkey="r"
+            plain
+            dimColor={tab !== 'summary'}
+            label={tabLabel(lang, 'summary', tab)}
+            onPress={() => update($, tabAtom, () => 'summary' as const)}
+          />
+          <Button
+            key="tab-history"
+            hotkey="h"
+            plain
+            dimColor={tab !== 'history'}
+            label={tabLabel(lang, 'history', tab)}
+            onPress={() => update($, tabAtom, () => 'history' as const)}
+          />
+          {tab === 'history' && (
+            <Button
+              key="detail"
+              hotkey="d"
+              plain
+              dimColor
+              label={detailLabel(lang, withDetail)}
+              onPress={() => update($, detailAtom, value => !value)}
+            />
+          )}
+        </Box>
+        <Box flexDirection="column" marginTop={1}>
+          {tabRows(view, tab, withDetail, lang).map(row => (
+            <Text color={paint(row.tone)}>{row.text || ' '}</Text>
+          ))}
+        </Box>
       </Box>
     )
   })

@@ -77,6 +77,7 @@ export type EventType =
   | 'ci.updated'
   | 'pr.opened'
   | 'pr.ready'
+  | 'github.published'
   | 'screenshot.saved'
   | 'run.finished'
 
@@ -536,7 +537,6 @@ export function duration(seconds: number): string {
   return `${h}h${String(m % 60).padStart(2, '0')}`
 }
 
-const CIRCLED = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧']
 
 const TEXT: Record<Lang, Record<string, string>> = {
   es: {
@@ -557,6 +557,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     working: 'trabajando',
     items: 'ítems',
     noStage: 'arrancando',
+    stage: 'etapa',
   },
   en: {
     waitsYou: 'WAITING FOR YOU',
@@ -576,11 +577,64 @@ const TEXT: Record<Lang, Record<string, string>> = {
     working: 'working',
     items: 'items',
     noStage: 'starting',
+    stage: 'stage',
   },
 }
 
 export function t(lang: Lang, key: string): string {
   return TEXT[lang][key] ?? key
+}
+
+const ROLE_NAMES: Record<Lang, Record<string, [string, string]>> = {
+  es: {
+    explorer: ['explorador', 'exploradores'],
+    architect: ['arquitecto', 'arquitectos'],
+    critic: ['crítico', 'críticos'],
+    implementer: ['implementador', 'implementadores'],
+    verifier: ['verificador', 'verificadores'],
+    reviewer: ['revisor', 'revisores'],
+  },
+  en: {
+    explorer: ['explorer', 'explorers'],
+    architect: ['architect', 'architects'],
+    critic: ['critic', 'critics'],
+    implementer: ['implementer', 'implementers'],
+    verifier: ['verifier', 'verifiers'],
+    reviewer: ['reviewer', 'reviewers'],
+  },
+}
+
+export function roleName(lang: Lang, role: string, count: number): string {
+  const names = ROLE_NAMES[lang][role]
+  if (names) return count === 1 ? names[0] : names[1]
+  return count === 1 ? role : `${role} ×${count}`
+}
+
+export function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+}
+
+function agentsSummary(run: Run, nowSeconds: number): string[] {
+  const groups = new Map<string, AgentEntry[]>()
+  for (const agent of liveAgents(run)) groups.set(agent.role, [...(groups.get(agent.role) ?? []), agent])
+  return [...groups].map(([role, agents]) => {
+    const oldest = Math.min(...agents.map(a => a.started_at))
+    const count = agents.length > 1 ? `${agents.length} ` : ''
+    return `${count}${roleName(run.lang, role, agents.length)} (${duration(nowSeconds - oldest)})`
+  })
+}
+
+function tasksSummary(run: Run, nowSeconds: number): string[] {
+  const tasks = liveTasks(run)
+  const first = tasks[0]
+  if (!first) return []
+  const more = tasks.length > 1 ? ` (+${tasks.length - 1})` : ''
+  return [`${clip(first.label, 40)} (${duration(nowSeconds - first.started_at)})${more}`]
+}
+
+export function runLabel(run: Run, max = 40): string {
+  if (run.source.kind === 'github_issue') return shortRef(run)
+  return clip(run.title || shortRef(run), max)
 }
 
 export function shortRef(run: Run): string {
@@ -590,75 +644,104 @@ export function shortRef(run: Run): string {
 
 export function stageLabel(run: Run): string {
   if (!run.stage) return t(run.lang, 'noStage')
-  const def = STAGES[run.stage.index]
-  const label = def?.label[run.lang] ?? run.stage.id
-  return def?.isGate ? label : `${CIRCLED[run.stage.index] ?? ''} ${label}`.trim()
+  const label = STAGES[run.stage.index]?.label[run.lang] ?? run.stage.id
+  return `${run.stage.index + 1}/${STAGES.length} ${label}`
 }
 
 export function activity(run: Run, status: Status, nowSeconds: number): string {
+  const name = badge(run.lang, status).toLowerCase()
+  const detail = statusDetail(run, status, nowSeconds)
+  return detail ? `${name}: ${detail}` : name
+}
+
+const BADGES: Record<Lang, Record<Status, string>> = {
+  es: {
+    running: 'TRABAJANDO',
+    waiting_user: 'TE ESPERA',
+    waiting_permission: 'PIDE PERMISO',
+    waiting_agents: 'AGENTES TRABAJANDO',
+    waiting_ci: 'ESPERANDO CI',
+    waiting_tests: 'CORRIENDO TESTS',
+    blocked: 'BLOQUEADO',
+    stalled: 'DETENIDO',
+    orphaned: 'SESIÓN CERRADA',
+    done: 'TERMINADO',
+    failed: 'FALLÓ',
+    cancelled: 'CANCELADO',
+  },
+  en: {
+    running: 'WORKING',
+    waiting_user: 'WAITING FOR YOU',
+    waiting_permission: 'NEEDS PERMISSION',
+    waiting_agents: 'AGENTS WORKING',
+    waiting_ci: 'WAITING FOR CI',
+    waiting_tests: 'RUNNING TESTS',
+    blocked: 'BLOCKED',
+    stalled: 'STOPPED',
+    orphaned: 'SESSION CLOSED',
+    done: 'DONE',
+    failed: 'FAILED',
+    cancelled: 'CANCELLED',
+  },
+}
+
+const ICONS: Record<Status, string> = {
+  running: '⟳',
+  waiting_agents: '⟳',
+  waiting_tests: '⟳',
+  waiting_ci: '⧗',
+  waiting_user: '?',
+  waiting_permission: '!',
+  stalled: '‖',
+  orphaned: '○',
+  blocked: '✕',
+  failed: '✕',
+  done: '✓',
+  cancelled: '■',
+}
+
+export function badge(lang: Lang, status: Status): string {
+  return `${ICONS[status]} ${BADGES[lang][status]}`
+}
+
+export function statusDetail(run: Run, status: Status, nowSeconds: number): string {
   const lang = run.lang
-  const since = (at: number) => `${t(lang, 'ago')} ${duration(nowSeconds - at)}`.trim()
+  const es = lang === 'es'
+  const ago = (at: number) => (es ? `hace ${duration(nowSeconds - at)}` : `${duration(nowSeconds - at)} ago`)
+  const working = [...agentsSummary(run, nowSeconds), ...tasksSummary(run, nowSeconds)].join(', ')
   switch (status) {
     case 'waiting_user':
-      return `❓ ${t(lang, 'waitsYou')} ${run.waiting ? since(run.waiting.since) : ''}`.trim()
+      return run.waiting ? `${run.waiting.question} · ${ago(run.waiting.since)}` : ''
     case 'waiting_permission':
-      return `🔐 ${t(lang, 'permission')}: ${run.waiting?.question ?? ''}`.trim()
+      return run.waiting ? `${run.waiting.question} · ${ago(run.waiting.since)}` : ''
     case 'blocked':
-      return `⛔ ${t(lang, 'blocked')}: ${run.blocked?.reason ?? ''}`.trim()
+      return run.blocked ? `${run.blocked.reason} · ${ago(run.blocked.since)}` : ''
     case 'stalled':
-      return `⚠ ${t(lang, 'stalled')}`
+      return es ? 'terminó el turno sin nada pendiente' : 'the turn ended with nothing pending'
     case 'orphaned':
-      return `💤 ${t(lang, 'orphaned')}`
+      return '/wololo resume'
     case 'waiting_ci':
-      return `⏳ ${t(lang, 'ci')}`
-    case 'waiting_tests': {
-      const running = liveTasks(run).find(task => task.kind === 'tests')
-      return `🧪 ${t(lang, 'tests')}${running ? ` ${duration(nowSeconds - running.started_at)}` : ''}`
-    }
+    case 'waiting_tests':
+    case 'waiting_agents':
+    case 'running':
+      return working
     case 'done':
-      return `✓ ${t(lang, 'done')}`
     case 'failed':
-      return `✗ ${t(lang, 'failed')}`
     case 'cancelled':
-      return `■ ${t(lang, 'cancelled')}`
-    default: {
-      const agents = liveAgents(run)
-      const tasks = liveTasks(run)
-      const parts: string[] = []
-      if (agents.length === 1 && agents[0]) parts.push(`⟳ ${agents[0].role} ${duration(nowSeconds - agents[0].started_at)}`)
-      else if (agents.length > 1) parts.push(`⟳ ${agents.length} ${t(lang, 'agents')}`)
-      if (tasks.length > 0) parts.push(`⏳ ${tasks.length} ${t(lang, 'tasks')}`)
-      if (parts.length === 0) parts.push(`⟳ ${t(lang, 'working')}`)
-      return parts.join(' · ')
-    }
+      return run.summary ?? ''
   }
 }
 
 export function header(run: Run, status: Status, nowSeconds: number): string {
-  const parts = [`wololo ${shortRef(run)}`, stageLabel(run)]
+  const parts = [`wololo ${runLabel(run, 32)}`, stageLabel(run)]
   if (run.stage?.id === 'implement' && run.items.total > 0) parts.push(`${run.items.done}/${run.items.total} ${t(run.lang, 'items')}`)
   parts.push(activity(run, status, nowSeconds))
   return `[${parts.join(' · ')}]`
 }
 
 export function statusLine(run: Run, status: Status, nowSeconds: number): string {
-  const index = run.stage ? (CIRCLED[run.stage.index] ?? '') : ''
-  const def = run.stage ? STAGES[run.stage.index] : undefined
-  const where = def?.isGate ? def.label[run.lang] : index
-  if (isWaitingOnPerson(status) || isTerminal(status) || status === 'orphaned')
-    return `wololo ${shortRef(run)} ${where} ${activity(run, status, nowSeconds)}`
-  const n = liveAgents(run).length + liveTasks(run).length
-  return `wololo ${shortRef(run)} ${where} ⟳${n > 0 ? n : ''}`.trim()
-}
-
-export function pills(run: Run): string {
-  const done = new Set(run.stages.filter(s => s.finished_at !== null).map(s => s.id))
-  return STAGES.map((s, i) => {
-    const label = s.label[run.lang]
-    if (run.stage?.index === i && !run.outcome) return `▶${label}`
-    if (done.has(s.id)) return `✓${label}`
-    return `·${label}`
-  }).join(' ')
+  const stage = run.stage ? `${t(run.lang, 'stage')} ${stageLabel(run)}` : t(run.lang, 'noStage')
+  return `${runLabel(run)} · ${stage} · ${activity(run, status, nowSeconds)}`
 }
 
 const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
@@ -676,6 +759,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'ci.updated',
   'run.finished',
   'stalled',
+  'github.published',
 ])
 
 export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSeconds: number | null): string[] {
@@ -698,6 +782,8 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `CI: ${String(d.state)}`
         case 'pr.opened':
           return `PR: ${String(d.url)}`
+        case 'github.published':
+          return `GitHub ${String(d.kind)}${d.mode === 'summary' ? ' (resumen)' : ''}: ${String(d.url ?? '')}`.trim()
         case 'blocked':
           return `⛔ ${String(d.reason)}`
         default:

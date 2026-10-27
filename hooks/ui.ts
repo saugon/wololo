@@ -1,17 +1,19 @@
-import type { Row, Tone, ViewState } from '../types'
+import type { Band, Row, Tone, ViewState } from '../types'
+import { type Entry, formatEntry, timeline } from './history'
 import {
   type Run,
   type RunEvent,
   type Status,
   STAGES,
   activity,
+  badge,
+  statusDetail,
   duration,
   header,
   isTerminal,
   isWaitingOnPerson,
   liveAgents,
   liveTasks,
-  pills,
   shortRef,
   stageLabel,
   statusLine,
@@ -30,69 +32,39 @@ function stageSeconds(run: Run, id: string, now: number): number {
   return run.stages.filter(s => s.id === id).reduce((sum, s) => sum + ((s.finished_at ?? now) - s.started_at), 0)
 }
 
-function describeEvent(ev: RunEvent): string {
-  const d = ev.data
-  const text = typeof d.text === 'string' ? d.text : ''
-  switch (ev.type) {
-    case 'stage.entered':
-      return `→ ${String(d.stage)}`
-    case 'gate.resolved':
-      return `${String(d.gate)}: ${String(d.outcome ?? 'approved')}`
-    case 'question.asked':
-      return `❓ ${String(d.question ?? '')}`
-    case 'question.answered':
-      return '✓ respuesta'
-    case 'agent.started':
-      return `⟳ ${String(d.role ?? 'agent')} ${String(d.description ?? '')}`.trim()
-    case 'agent.finished':
-      return `✓ ${String(d.role ?? 'agent')} ${String(d.status ?? '')}`.trim()
-    case 'task.started':
-      return `⏳ ${String(d.label ?? '')}`
-    case 'task.finished':
-      return `✓ ${String(d.label ?? d.id ?? '')} ${String(d.status ?? '')}`.trim()
-    case 'item.started':
-      return `item ${String(d.n)}: ${String(d.title ?? '')}`
-    case 'item.committed':
-      return `✓ item ${String(d.n)} ${String(d.sha ?? '').slice(0, 9)}`.trim()
-    case 'item.verified':
-      return `item ${String(d.n)} gates ${String(d.result ?? '')}`
-    case 'debate.turn':
-      return `debate ${String(d.role ?? '')} r${String(d.round ?? '')} ${String(d.verdict ?? '')}`.trim()
-    case 'blocked':
-      return `⛔ ${String(d.reason ?? '')}`
-    case 'pr.opened':
-      return `PR ${String(d.url ?? '')}`
-    case 'ci.updated':
-      return `CI ${String(d.state ?? '')}`
-    default:
-      return `${ev.type}${text ? `: ${text}` : ''}`
-  }
-}
-
-function clock(ts: number): string {
-  const date = new Date(ts * 1000)
-  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-export function buildView(run: Run, status: Status, recent: readonly RunEvent[], now: number): ViewState {
+export function buildView(
+  run: Run,
+  status: Status,
+  recent: readonly RunEvent[],
+  now: number,
+  runDir?: string,
+  history?: readonly Entry[],
+): ViewState {
   const tone = toneOf(status)
   const lang = run.lang
-  const first = [`wololo ${shortRef(run)} ${run.title}`.trim(), '─', stageLabel(run), '·', activity(run, status, now), '·', run.mode].join(
-    ' ',
-  )
-  const band: Row[] = [
-    { text: first, tone },
-    { text: pills(run), tone: 'subtle' },
-  ]
+  const done = new Set(run.stages.filter(entry => entry.finished_at !== null).map(entry => entry.id))
+  const band: Band = {
+    title: `wololo · ${run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title}`,
+    mode: run.mode,
+    stage: stageLabel(run),
+    activity: activity(run, status, now),
+    badge: badge(lang, status),
+    detail: statusDetail(run, status, now),
+    tone,
+    pills: STAGES.map((stage, index) => ({
+      label: stage.label[lang],
+      state: run.stage?.index === index && !run.outcome ? 'current' : done.has(stage.id) ? 'done' : 'pending',
+    })),
+  }
 
   const pane: Row[] = []
   pane.push({ text: `${shortRef(run)} ${run.title}`, tone: 'text' })
   const where = run.project.worktree ?? run.project.path
   pane.push({ text: `${run.mode} · ${lang === 'es' ? 'riesgo' : 'risk'} ${run.risk} · ${where}`, tone: 'subtle' })
   pane.push({ text: activity(run, status, now), tone })
+  if (runDir) pane.push({ text: `${lang === 'es' ? 'Archivos del run' : 'Run files'}: ${runDir}`, tone: 'subtle' })
   pane.push({ text: '', tone: 'subtle' })
 
-  const done = new Set(run.stages.filter(s => s.finished_at !== null).map(s => s.id))
   STAGES.forEach((stage, index) => {
     const isCurrent = run.stage?.index === index && !run.outcome
     const mark = isCurrent ? '▶' : done.has(stage.id) ? '✓' : '·'
@@ -125,13 +97,27 @@ export function buildView(run: Run, status: Status, recent: readonly RunEvent[],
   })
   if (run.pr) pane.push({ text: `PR ${run.pr.url} · ${run.pr.state}${run.pr.ci ? ` · CI ${run.pr.ci}` : ''}`, tone: 'text' })
   if (run.waiting) pane.push({ text: `${t(lang, 'waitsYou')}: ${run.waiting.question}`, tone: 'warning' })
-  for (const ev of recent.slice(-8).reverse()) pane.push({ text: `${clock(ev.ts)} ${describeEvent(ev)}`, tone: 'subtle' })
+  const entries = history ?? timeline(recent, lang)
+  const toRow = (entry: Entry): Row => ({
+    text: formatEntry(entry),
+    tone: entry.icon === '✕' ? 'error' : entry.icon === '?' || entry.icon === '!' ? 'warning' : entry.isMajor ? 'text' : 'subtle',
+  })
+  const majorRows = entries.filter(entry => entry.isMajor).map(toRow).reverse()
+  const allRows = entries.map(toRow).reverse()
+  const latest = entries.filter(entry => entry.isMajor)
+  if (latest.length > 0) pane.push({ text: lang === 'es' ? 'Últimos eventos (/wololo-history para todos):' : 'Latest events (/wololo-history for all):', tone: 'subtle' })
+  for (const entry of latest.slice(-8).reverse()) pane.push({ text: formatEntry(entry), tone: entry.icon === '✕' ? 'error' : entry.icon === '?' || entry.icon === '!' ? 'warning' : 'subtle' })
+
+  const details = pane.slice(1).filter((row, index) => !(index === 1 && row.text === band.activity))
 
   return {
     runId: run.id,
     header: header(run, status, now),
     statusLine: statusLine(run, status, now),
     band,
+    details,
+    history: majorRows,
+    historyAll: allRows,
     pane,
     title: `wololo · ${shortRef(run)}`,
   }
