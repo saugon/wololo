@@ -151,6 +151,8 @@ export type TaskEntry = {
   status: string | null
 }
 
+export type ItemEntry = { n: number; title: string; state: 'pending' | 'active' | 'failing' | 'done'; sha: string | null }
+
 export type StageEntry = {
   id: StageId
   started_at: number
@@ -195,6 +197,7 @@ export type Run = {
     done: number
     total: number
     current: { n: number; title: string } | null
+    list?: ItemEntry[]
   }
   counts: {
     assumptions: number
@@ -267,7 +270,7 @@ export function emptyRun(id: string, ts: number): Run {
     blocked: null,
     agents: [],
     tasks: [],
-    items: { done: 0, total: 0, current: null },
+    items: { done: 0, total: 0, current: null, list: [] },
     counts: {
       assumptions: 0,
       decisions: 0,
@@ -290,6 +293,17 @@ export function emptyRun(id: string, ts: number): Run {
     outcome: null,
     summary: null,
   }
+}
+
+function setItem(run: Run, n: number, title: string, change: Partial<ItemEntry>) {
+  if (n <= 0) return
+  const list = run.items.list ?? []
+  const found = list.find(item => item.n === n)
+  const known = title || (run.items.current?.n === n ? run.items.current.title : '')
+  if (found) Object.assign(found, change, found.title ? {} : { title: known })
+  else list.push({ n, title: known, state: 'pending', sha: null, ...change })
+  list.sort((a, b) => a.n - b.n)
+  run.items.list = list
 }
 
 export function apply(run: Run, ev: RunEvent): Run {
@@ -437,15 +451,23 @@ export function apply(run: Run, ev: RunEvent): Run {
     }
     case 'plan.ready':
       r.items.total = Array.isArray(d.items) ? d.items.length : num(d.total, r.items.total)
+      if (Array.isArray(d.items)) {
+        r.items.list = d.items.map((title, index) => ({ n: index + 1, title: str(title, String(title)), state: 'pending', sha: null }))
+      }
       break
     case 'item.started':
       r.items.current = { n: num(d.n), title: str(d.title) }
+      setItem(r, num(d.n), str(d.title), { state: 'active' })
       r.counts.attempts += 1
       if (d.reversal === true) r.counts.reversals += 1
+      break
+    case 'item.verified':
+      if (d.result === 'fail') setItem(r, num(d.n), '', { state: 'failing' })
       break
     case 'item.committed':
       r.items.done = Math.min(Math.max(r.items.done, num(d.n)), Math.max(r.items.total, num(d.n)))
       if (r.items.current?.n === num(d.n)) r.items.current = null
+      setItem(r, num(d.n), str(d.title), { state: 'done', sha: typeof d.sha === 'string' ? d.sha : null })
       break
     case 'debate.turn':
       r.counts.debate_turns += 1

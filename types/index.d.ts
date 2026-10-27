@@ -23,6 +23,7 @@ export type ViewState = {
   band: Band
   details: Row[]
   history: Row[]
+  items: Row[]
   historyAll: Row[]
   pane: Row[]
   title: string
@@ -30,6 +31,6 @@ export type ViewState = {
 
 declare module 'claude-code' {
   interface PluginState {
-    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'history'; detail: boolean }
+    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean }
   }
 }

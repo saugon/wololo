@@ -11,6 +11,7 @@ import {
   STAGES,
   apply,
   clip,
+  rebuild,
   deriveStatus,
   effectiveStatus,
   emptyRun,
@@ -104,9 +105,16 @@ async function settlePermission($: Engine, toolUseId: string, outcome: 'approved
   await emit($, 'permission.resolved', { tool: asked.tool, what: asked.what, outcome })
 }
 
-function tabLabel(lang: string, which: 'summary' | 'history', active: string): string {
-  const names = lang === 'es' ? { summary: 'Resumen', history: 'Historial' } : { summary: 'Summary', history: 'History' }
-  return `${which === active ? '● ' : '○ '}${names[which]}`
+const TABS = [
+  { id: 'summary', key: 'r' },
+  { id: 'items', key: 'i' },
+  { id: 'history', key: 'h' },
+] as const
+
+function tabName(lang: string, which: 'summary' | 'items' | 'history'): string {
+  const names =
+    lang === 'es' ? { summary: 'Resumen', items: 'Ítems', history: 'Historial' } : { summary: 'Summary', items: 'Items', history: 'History' }
+  return names[which]
 }
 
 function detailLabel(lang: string, withDetail: boolean): string {
@@ -114,8 +122,13 @@ function detailLabel(lang: string, withDetail: boolean): string {
   return withDetail ? 'less detail' : 'more detail'
 }
 
-function tabRows(view: ViewState, tab: 'summary' | 'history', withDetail: boolean, lang: string): Row[] {
+function tabRows(view: ViewState, tab: 'summary' | 'items' | 'history', withDetail: boolean, lang: string): Row[] {
   if (tab === 'summary') return view.details
+  if (tab === 'items') {
+    return view.items.length > 0
+      ? view.items
+      : [{ text: lang === 'es' ? 'El plan todavía no tiene ítems.' : 'The plan has no items yet.', tone: 'subtle' }]
+  }
   const rows = withDetail ? view.historyAll : view.history
   return rows.length > 0 ? rows : [{ text: lang === 'es' ? 'Todavía no pasó nada que contar.' : 'Nothing to tell yet.', tone: 'subtle' }]
 }
@@ -279,6 +292,21 @@ async function writeHistory($: Engine, dir: string) {
   await writeAtomic($, `${dir}/history.md`, historyMarkdown(`wololo · ${run.title}`, entries))
 }
 
+async function reviveRun($: Engine, id: string): Promise<Run | undefined> {
+  if (!paths) return undefined
+  const snapshot = await loadRun($, paths, id)
+  const events = await readEvents($, runDir(paths, id))
+  if (events.length === 0) return snapshot
+  const rebuilt = rebuild(id, events)
+  if (!snapshot) return rebuilt
+  return {
+    ...rebuilt,
+    status: snapshot.status,
+    last_user_at: snapshot.last_user_at,
+    owner: { ...rebuilt.owner, heartbeat_at: Math.max(rebuilt.owner.heartbeat_at, snapshot.owner.heartbeat_at) },
+  }
+}
+
 async function writePointer($: Engine) {
   if (!run || !paths || !sessionId) return
   await writeJson($, `${paths.sessions}/${sessionId}.json`, {
@@ -309,6 +337,10 @@ async function heartbeat($: Engine) {
   const ts = await nowSeconds($)
   run.owner.heartbeat_at = ts
   config = (await loadConfig($, run.project.key)).config
+  if (run.items.total > 0 && (run.items.list ?? []).length < run.items.total && pending.length === 0) {
+    const revived = await reviveRun($, run.id)
+    if (revived) run = { ...revived, owner: run.owner, status: run.status, last_user_at: run.last_user_at }
+  }
   await reconcileAgents($, ts)
   await writeJson($, `${runDir(paths, run.id)}/owner.json`, run.owner)
   await writePointer($)
@@ -494,7 +526,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   const id = String(input.run_id ?? '')
   if (run && !run.outcome && run.id !== id)
     return fail(`Run ${run.id} is active in this session; finish or cancel it before resuming another.`)
-  const target = await loadRun($, paths, id)
+  const target = await reviveRun($, id)
   if (!target) return fail(`No run ${id} in ${paths.runs}.`)
   const ts = await nowSeconds($)
   const status = effectiveStatus(target, ts)
@@ -894,7 +926,7 @@ export const register: Register = (on, options) => {
 
       const pointer = await readJson<{ run_id?: string }>($, `${paths.sessions}/${sessionId}.json`)
       if (pointer?.run_id) {
-        const loaded = await loadRun($, paths, pointer.run_id)
+        const loaded = await reviveRun($, pointer.run_id)
         if (loaded && !loaded.outcome && loaded.owner.session_id === sessionId) {
           run = loaded
           recent = (await readEvents($, runDir(paths, loaded.id))).slice(-RECENT)
@@ -1183,22 +1215,20 @@ export const register: Register = (on, options) => {
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>
             <Box flexDirection="row" columnGap={3}>
-              <Button
-                key="tab-summary"
-                hotkey="r"
-                plain
-                dimColor={tab !== 'summary'}
-                label={tabLabel(lang, 'summary', tab)}
-                onPress={() => update($, tabAtom, () => 'summary' as const)}
-              />
-              <Button
-                key="tab-history"
-                hotkey="h"
-                plain
-                dimColor={tab !== 'history'}
-                label={tabLabel(lang, 'history', tab)}
-                onPress={() => update($, tabAtom, () => 'history' as const)}
-              />
+              {TABS.map(item =>
+                item.id === tab ? (
+                  <Text inverse bold color="suggestion">{` ${item.key}: ${tabName(lang, item.id)} `}</Text>
+                ) : (
+                  <Button
+                    key={`tab-${item.id}`}
+                    hotkey={item.key}
+                    plain
+                    dimColor
+                    label={tabName(lang, item.id)}
+                    onPress={() => update($, tabAtom, () => item.id)}
+                  />
+                ),
+              )}
               {tab === 'history' && (
                 <Button
                   key="detail"
@@ -1281,22 +1311,20 @@ export const register: Register = (on, options) => {
           {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
         </Box>
         <Box flexDirection="row" columnGap={3} marginTop={1}>
-          <Button
-            key="tab-summary"
-            hotkey="r"
-            plain
-            dimColor={tab !== 'summary'}
-            label={tabLabel(lang, 'summary', tab)}
-            onPress={() => update($, tabAtom, () => 'summary' as const)}
-          />
-          <Button
-            key="tab-history"
-            hotkey="h"
-            plain
-            dimColor={tab !== 'history'}
-            label={tabLabel(lang, 'history', tab)}
-            onPress={() => update($, tabAtom, () => 'history' as const)}
-          />
+          {TABS.map(item =>
+                item.id === tab ? (
+                  <Text inverse bold color="suggestion">{` ${item.key}: ${tabName(lang, item.id)} `}</Text>
+                ) : (
+                  <Button
+                    key={`tab-${item.id}`}
+                    hotkey={item.key}
+                    plain
+                    dimColor
+                    label={tabName(lang, item.id)}
+                    onPress={() => update($, tabAtom, () => item.id)}
+                  />
+                ),
+              )}
           {tab === 'history' && (
             <Button
               key="detail"

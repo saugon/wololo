@@ -139,6 +139,13 @@ export function buildView(
     summary.push(...majorRows.slice(0, 5))
   }
 
+  const itemRows: Row[] = (run.items.list ?? []).map(item => {
+    const mark = { done: '✓', active: '▶', failing: '✕', pending: '·' }[item.state]
+    const sha = item.sha ? `  ${item.sha.slice(0, 9)}` : ''
+    const itemTone: Tone = item.state === 'done' ? 'text' : item.state === 'active' ? tone : item.state === 'failing' ? 'warning' : 'subtle'
+    return { text: `${mark} ${item.n}. ${item.title}${sha}`, tone: itemTone }
+  })
+
   const details = summary
   const pane = summary
 
@@ -149,6 +156,7 @@ export function buildView(
     band,
     details,
     history: majorRows,
+    items: itemRows,
     historyAll: allRows,
     pane,
     title: `wololo · ${shortRef(run)}`,

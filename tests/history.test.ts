@@ -114,3 +114,22 @@ test('the summary starts with what is going on now, then the stages', async () =
   ])
   expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
 })
+
+test('the items tab lists the plan with what is done, in progress, failing or pending', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['plan.ready', { items: ['Back: migración', 'Back: API', 'Front: tipos', 'Front: capas'] }],
+    ['item.started', { n: 1, title: 'Back: migración' }],
+    ['item.committed', { n: 1, sha: '084cc5051abc', title: 'Back: migración' }],
+    ['item.started', { n: 2, title: 'Back: API' }],
+    ['item.verified', { n: 2, result: 'fail' }],
+    ['item.started', { n: 3, title: 'Front: tipos' }],
+  ])
+  const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_500)
+  expect(view.items.map(row => row.text)).toEqual([
+    '✓ 1. Back: migración  084cc5051',
+    '✕ 2. Back: API',
+    '▶ 3. Front: tipos',
+    '· 4. Front: capas',
+  ])
+})

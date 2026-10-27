@@ -132,6 +132,8 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
   await probe.press({ key: 'toggle' })
   expect((await probe.find({ type: 'Text', text: /^Archivos del run/ }))?.text).toContain(`${DATA}/runs/`)
+  await probe.press({ key: 'tab-items' })
+  expect((await probe.find({ type: 'Text', text: /todavía no tiene ítems/ }))?.text).toBe('El plan todavía no tiene ítems.')
   await probe.press({ key: 'tab-history' })
   expect((await probe.find({ type: 'Text', text: /Run iniciado/ }))?.text).toContain('▶ Run iniciado: Partial payments')
   expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
@@ -203,3 +205,47 @@ test('with spec.to_github off, issue writes stay in files', async ($, on) => {
   expect(host.gh).toEqual([])
 })
 
+
+test('a run whose snapshot predates the items list is rebuilt from its events on load', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const dir = `${DATA}/runs/repo-txt-abc123`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: 'repo-txt-abc123', type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', { title: 'Salones', source: { kind: 'text', ref: 'x', url: null }, mode: 'checkpoints', session_id: 's1', cwd: REPO }),
+      ev(2, 'stage.entered', { stage: 'context' }),
+      ev(3, 'plan.ready', { items: ['Back: migración', 'Back: API', 'Front: tipos'] }),
+      ev(4, 'item.started', { n: 1, title: 'Back: migración' }),
+      ev(5, 'item.committed', { n: 1, sha: '084cc5051abc', title: 'Back: migración' }),
+      ev(6, 'item.started', { n: 2, title: 'Back: API' }),
+    ].join('\n') + '\n',
+  )
+  host.files.set(
+    `${dir}/run.json`,
+    JSON.stringify({
+      id: 'repo-txt-abc123',
+      status: 'running',
+      last_user_at: null,
+      outcome: null,
+      items: { done: 1, total: 3, current: { n: 2, title: 'Back: API' } },
+      owner: { session_id: 's1', cwd: REPO, heartbeat_at: 1_800_000_100 },
+    }),
+  )
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: 'repo-txt-abc123', heartbeat_at: 1_800_000_100 }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { hasSurvey: false, isWorking: true, maxRows: 40, bodyColumns: 140, scroll: { offset: 0, bodyRows: 40 }, view: {} },
+  })
+  await ui.press({ key: 'toggle' })
+  await ui.press({ key: 'tab-items' })
+  expect((await ui.find({ type: 'Text', text: /^✓ 1\./ }))?.text).toBe('✓ 1. Back: migración  084cc5051')
+  expect((await ui.find({ type: 'Text', text: /^▶ 2\./ }))?.text).toBe('▶ 2. Back: API')
+  expect((await ui.find({ type: 'Text', text: /^· 3\./ }))?.text).toBe('· 3. Front: tipos')
+  expect((await ui.find({ type: 'Text', text: / i: Ítems / }))?.text).toBe(' i: Ítems ')
+  await ui.unmount()
+})
