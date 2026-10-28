@@ -122,3 +122,11 @@ test('a pause requested while work runs reads as pausing, and as paused once not
   run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'resumed', data: {} })
   expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('running')
 })
+
+test('a background task cannot outlive the session that started it', async () => {
+  let run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 120, run: 'r1', type: 'task.started', data: { id: 't1', label: 'make backend.run', kind: 'server' } })
+  run = apply(run, { v: 1, seq: 4, ts: 9_000, run: 'r1', type: 'owner.changed', data: { session_id: 's1', cwd: '/repo' } })
+  expect(run.tasks[0]?.finished_at).toBe(9_000)
+  expect(run.tasks[0]?.status).toBe('gone')
+  expect(deriveStatus(run, IDLE)).toBe('stalled')
+})

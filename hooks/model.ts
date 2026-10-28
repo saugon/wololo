@@ -396,6 +396,11 @@ export function apply(run: Run, ev: RunEvent): Run {
       }
       if (typeof d.worktree === 'string') r.project.worktree = d.worktree
       if (typeof d.branch === 'string') r.project.branch = d.branch
+      for (const task of r.tasks) {
+        if (task.finished_at !== null) continue
+        task.finished_at = ev.ts
+        task.status = 'gone'
+      }
       break
     case 'risk.set':
       r.risk = (d.risk as Risk) ?? r.risk

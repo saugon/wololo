@@ -47,7 +47,7 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type StatusCard, barLabels, buildView, fitChips, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
+import { type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
 
 type Engine = EngineInterface
 
@@ -90,6 +90,8 @@ let reorient = false
 let historyCache: Entry[] | undefined
 let pendingPermission: { toolUseId: string; tool: string; what: string } | null = null
 let asks = new Map<string, { tool: string; what: string; key: string }>()
+let worktreeInfo: WorktreeInfo | null = null
+let homeDir = ''
 let pendingUsage = new Map<string, { stage: StageId; role: string; input: number; output: number; cache_read: number; cache_write: number; usd: number }>()
 let lastUsd: number | null = null
 let timeMark: { stage: StageId; kind: TimeKind; since: number } | null = null
@@ -295,7 +297,7 @@ async function refresh($: Engine, ts?: number) {
   run.status = status
   noteTime(at)
   const history = historyCache && pending.length === 0 ? historyCache : undefined
-  const view = buildView(run, status, recent, at, paths ? runDir(paths, run.id) : undefined, history)
+  const view = buildView(run, status, recent, at, paths ? runDir(paths, run.id) : undefined, history, worktreeInfo ?? undefined, homeDir || undefined)
   await update($, viewAtom, () => view)
   $.ui.status(config.view.statusline ? view.statusLine : undefined)
   if (status !== previous && config.view.notify.includes(status)) {
@@ -608,6 +610,39 @@ async function reconcileAgents($: Engine, ts: number) {
   }
 }
 
+async function listening($: Engine, port: number): Promise<boolean | null> {
+  const ran = await $.process.run(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { timeoutMs: 5_000 }).catch(() => undefined)
+  if (!ran) return null
+  return ran.exitCode === 0 && ran.stdout.trim().length > 0
+}
+
+async function inspectWorktree($: Engine) {
+  if (!run || run.outcome) {
+    worktreeInfo = null
+    return
+  }
+  const dir = run.project.worktree ?? run.project.path
+  if (!dir) return
+  const base = run.project.base ?? config.pr.base
+  const upstream = base.startsWith('origin/') ? base : `origin/${base}`
+  const [head, counts, status] = await Promise.all([
+    git($, dir, ['log', '-1', '--format=%h%x00%s']),
+    git($, dir, ['rev-list', '--left-right', '--count', `${upstream}...HEAD`]),
+    git($, dir, ['status', '--porcelain']),
+  ])
+  const [sha, subject] = head ? head.split('\u0000') : [null, null]
+  const [behind, ahead] = counts ? counts.split(/\s+/).map(Number) : [NaN, NaN]
+  const started = ports(config, run.slot).flatMap(p => (p.port === null ? [] : [{ name: p.name, port: p.port }]))
+  worktreeInfo = {
+    head: sha ?? null,
+    subject: subject ?? null,
+    ahead: Number.isFinite(ahead) ? (ahead as number) : null,
+    behind: Number.isFinite(behind) ? (behind as number) : null,
+    dirty: status === null ? null : status.split('\n').filter(Boolean).length,
+    ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port) }))),
+  }
+}
+
 async function heartbeat($: Engine) {
   if (!run || !paths || run.outcome) return
   const ts = await nowSeconds($)
@@ -619,6 +654,7 @@ async function heartbeat($: Engine) {
   }
   await reconcileAgents($, ts)
   await flushMeasures($)
+  await inspectWorktree($)
   await writeJson($, `${runDir(paths, run.id)}/owner.json`, run.owner)
   await writePointer($)
   isDirty = true
@@ -1209,6 +1245,7 @@ export const register: Register = (on, options) => {
     await quietly(async () => {
       root = $.plugin.root
       const home = (await $.env.get('HOME')) ?? ''
+      homeDir = home
       paths = pathsFor(dataRoot(options, home))
       sessionId = await $.session.id()
       await costDelta($)
@@ -1249,6 +1286,7 @@ export const register: Register = (on, options) => {
           recent = (await readEvents($, runDir(paths, loaded.id))).slice(-RECENT)
           config = (await loadConfig($, loaded.project.key)).config
           await settlePermission($, '', 'not_run')
+          await inspectWorktree($)
           await refresh($)
           if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}` }).catch(() => undefined)
         }
@@ -1537,11 +1575,11 @@ export const register: Register = (on, options) => {
     const roomy = isExpanded
       ? e.props.maxRows - bandRows(true, roomyDetail) - tabRowsFixed >= 13
       : e.props.maxRows >= bandRows(true, roomyDetail)
-    const detailRoom = Math.max(1, e.props.maxRows - bandRows(roomy, 0) - (isExpanded ? tabRowsFixed + 3 : 0))
+    const detailRoom = Math.max(1, e.props.maxRows - bandRows(roomy, 0) - (isExpanded ? tabRowsFixed + 1 : 0))
     const detailLines = band.detail ? wrapLines(clip(band.detail, 220), detailWidth(roomy), Math.min(3, detailRoom)) : []
     const fixedRows = bandRows(roomy, detailLines.length) + tabRowsFixed
     const page = isExpanded
-      ? pageOf(tabRows(view, tab, withDetail, lang), Math.max(3, e.props.maxRows - fixedRows), await read($, pageAtom), tab === 'items' ? (view.items ?? []).findIndex(row => row.text.startsWith('▶')) : -1)
+      ? pageOf(tabRows(view, tab, withDetail, lang), Math.max(1, e.props.maxRows - fixedRows), await read($, pageAtom), tab === 'items' ? (view.items ?? []).findIndex(row => row.text.startsWith('▶')) : -1)
       : { rows: [], start: 0, size: 0, total: 0 }
     const barWidth = Math.max(24, e.props.bodyColumns - (roomy ? 4 : 2) - 2 - 7)
     const chips = fitChips(band.agents ?? [], detailWidth(roomy))
@@ -1612,16 +1650,6 @@ export const register: Register = (on, options) => {
             </Box>
           </Box>
         )}
-        <Box position="absolute" bottom={0} right={0}>
-          <Button
-            key="toggle"
-            hotkey="m"
-            plain
-            dimColor
-            label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
-            onPress={() => update($, expandedAtom, value => !value)}
-          />
-        </Box>
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>
             <Box flexDirection="row" columnGap={3}>
@@ -1689,6 +1717,16 @@ export const register: Register = (on, options) => {
             </Box>
           </Box>
         )}
+        <Box position="absolute" bottom={0} right={0}>
+          <Button
+            key="toggle"
+            hotkey="m"
+            plain
+            dimColor
+            label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
+            onPress={() => update($, expandedAtom, value => !value)}
+          />
+        </Box>
       </Box>
     )
   }).catch(($, e, next) => next(e))
@@ -2029,6 +2067,35 @@ export const register: Register = (on, options) => {
           <Text bold>{band.stage}</Text>
           {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
         </Box>
+        {(band.agents ?? []).length > 0 && (
+          <Box flexDirection="row">
+            {fitChips(band.agents ?? [], Math.max(20, e.props.bodyColumns)).flatMap((chip, index) => [
+              ...(index > 0 ? [<Text color="subtle">{' · '}</Text>] : []),
+              <Text color={paint(chip.color)}>{chip.label}</Text>,
+            ])}
+          </Box>
+        )}
+        {band.progress && (
+          <Box flexDirection="column" marginTop={1}>
+            <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+              <Box flexDirection="row">
+                {thinBar(band.progress.segments, Math.max(24, e.props.bodyColumns - 7)).map(part => (
+                  <Text color={!part.filled ? 'subtle' : part.state === 'done' ? paint('success') : paint(band.tone)}>{part.text}</Text>
+                ))}
+              </Box>
+              <Box flexShrink={0}>
+                <Text bold>{`${band.progress.percent}%`}</Text>
+              </Box>
+            </Box>
+            <Box flexDirection="row">
+              {barLabels(band.progress.segments, Math.max(24, e.props.bodyColumns - 7)).map(label => (
+                <Text color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'} bold={label.state === 'current'}>
+                  {label.text}
+                </Text>
+              ))}
+            </Box>
+          </Box>
+        )}
         <Box flexDirection="row" columnGap={3} marginTop={1}>
           {TABS.map(item => (
                 <Button

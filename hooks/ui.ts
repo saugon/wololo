@@ -99,7 +99,7 @@ export function progressOf(run: Run): Progress {
   const currentIndex = run.outcome ? -1 : (run.stage?.index ?? -1)
   let total = 0
   const segments: Segment[] = STAGES.map((stage, index) => {
-    const isDone = run.outcome === 'done' || (index !== currentIndex && done.has(stage.id)) || (currentIndex >= 0 && index < currentIndex)
+    const isDone = run.outcome === 'done' || (currentIndex >= 0 ? index < currentIndex : done.has(stage.id))
     const isCurrent = index === currentIndex
     const within =
       stage.id === 'implement' && run.items.total > 0 ? Math.min(1, run.items.done / run.items.total) : 0.5
@@ -126,6 +126,42 @@ function stageSeconds(run: Run, id: string, now: number): number {
 const TIME_NAMES: Record<'es' | 'en', Record<TimeKind | 'unmeasured', string>> = {
   es: { work: 'trabajando', agents: 'agentes', tests: 'tests y CI', you: 'te esperó', paused: 'pausado', unmeasured: 'sin medir' },
   en: { work: 'working', agents: 'agents', tests: 'tests and CI', you: 'waited for you', paused: 'paused', unmeasured: 'unmeasured' },
+}
+
+export type WorktreeInfo = {
+  head: string | null
+  subject: string | null
+  ahead: number | null
+  behind: number | null
+  dirty: number | null
+  ports: Array<{ name: string; port: number; listening: boolean | null }>
+}
+
+function home(path: string, homeDir: string | undefined): string {
+  return homeDir && path.startsWith(`${homeDir}/`) ? `~${path.slice(homeDir.length)}` : path
+}
+
+function worktreeSection(run: Run, info: WorktreeInfo | undefined, homeDir: string | undefined): Row[] {
+  const es = run.lang === 'es'
+  const dir = run.project.worktree ?? run.project.path
+  if (!dir) return []
+  const rows: Row[] = [{ text: run.project.worktree ? 'Worktree' : es ? 'Directorio' : 'Directory', tone: 'subtle' }]
+  rows.push({ text: `  ${home(dir, homeDir)}`, tone: 'text' })
+  const branch: string[] = []
+  if (run.project.branch) branch.push(`${es ? 'rama' : 'branch'} ${run.project.branch}`)
+  if (run.project.base) branch.push(`base ${run.project.base}`)
+  if (info?.ahead !== null && info?.ahead !== undefined) branch.push(es ? `${info.ahead} adelante` : `${info.ahead} ahead`)
+  if (info?.behind) branch.push(es ? `${info.behind} atrás` : `${info.behind} behind`)
+  if (branch.length > 0) rows.push({ text: `  ${branch.join(' · ')}`, tone: 'text' })
+  if (info?.head) {
+    const dirty = info.dirty ? ` · ${info.dirty} ${es ? (info.dirty === 1 ? 'archivo sin commitear' : 'archivos sin commitear') : info.dirty === 1 ? 'uncommitted file' : 'uncommitted files'}` : ''
+    rows.push({ text: `  HEAD ${info.head}${info.subject ? ` ${info.subject}` : ''}${dirty}`, tone: info.dirty ? 'warning' : 'text' })
+  }
+  if (info && info.ports.length > 0) {
+    const state = (listening: boolean | null) => (listening === null ? '' : listening ? (es ? ' escuchando' : ' listening') : es ? ' libre' : ' free')
+    rows.push({ text: `  ${es ? 'Puertos' : 'Ports'} (slot ${run.slot}): ${info.ports.map(p => `${p.name} ${p.port}${state(p.listening)}`).join(' · ')}`, tone: 'text' })
+  }
+  return rows
 }
 
 function timeSection(run: Run, now: number): Row[] {
@@ -237,6 +273,8 @@ export function buildView(
   now: number,
   runDir?: string,
   history?: readonly Entry[],
+  worktree?: WorktreeInfo,
+  homeDir?: string,
 ): ViewState {
   const tone = toneOf(status)
   const lang = run.lang
@@ -262,27 +300,34 @@ export function buildView(
   const summary: Row[] = []
   const gap = () => summary.push({ text: '', tone: 'subtle' })
 
-  summary.push({ text: es ? 'Ahora' : 'Now', tone: 'subtle' })
-  const items = itemsText(run) ? ` · ${itemsText(run)}` : ''
-  summary.push({ text: `▶ ${stageLabel(run)}${items}`, tone })
+  const nowRows: Row[] = []
   if (run.items.current && run.stage?.id === 'implement') {
-    summary.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
+    nowRows.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
   }
-  if (run.doing) summary.push({ text: `  → ${run.doing.text}`, tone: 'text' })
-  summary.push(...agentRows(run, now, 'claude'))
+  nowRows.push(...agentRows(run, now, 'claude'))
+  summary.push(...nowRows)
   for (const task of liveTasks(run)) summary.push({ text: `  ⟳ ${task.label} (${duration(now - task.started_at)})`, tone: 'claude' })
   if (run.waiting) {
     const label = run.waiting.on === 'permission' ? `! ${es ? 'PIDE PERMISO' : 'NEEDS PERMISSION'}` : `? ${t(lang, 'waitsYou')}`
     summary.push({ text: `  ${label}: ${run.waiting.question}`, tone: 'warning' })
   }
   if (run.blocked) summary.push({ text: `  ✕ ${run.blocked.reason}`, tone: 'error' })
-  gap()
+  if (summary.length > 0) {
+    summary.unshift({ text: es ? 'Ahora' : 'Now', tone: 'subtle' })
+    gap()
+  }
+  const worktreeRows = worktreeSection(run, worktree, homeDir)
+  if (worktreeRows.length > 0) {
+    summary.push(...worktreeRows)
+    gap()
+  }
 
   summary.push({ text: es ? 'Etapas' : 'Stages', tone: 'subtle' })
   const outcomes: Record<string, string> = es ? { approved: 'aprobado', changes: 'con ajustes', rejected: 'rechazado' } : {}
   STAGES.forEach((stage, index) => {
     const isCurrent = run.stage?.index === index && !run.outcome
-    const mark = isCurrent ? '▶' : done.has(stage.id) ? '✓' : '·'
+    const isAhead = !run.outcome && run.stage !== null && index > run.stage.index
+    const mark = isCurrent ? '▶' : done.has(stage.id) ? (isAhead ? '↺' : '✓') : '·'
     const seconds = stageSeconds(run, stage.id, now)
     const gate = run.gates[stage.id]
     let text = `${mark} ${stage.label[lang]}`
@@ -295,7 +340,7 @@ export function buildView(
     }
     const used = run.usage?.[stage.id]
     if (used) text += ` · ${used.usd > 0 ? usdText(used.usd) : `${tokensText(tokenTotal(used))} tok`}`
-    summary.push({ text, tone: isCurrent ? tone : done.has(stage.id) ? 'text' : 'subtle' })
+    summary.push({ text, tone: isCurrent ? tone : done.has(stage.id) && !isAhead ? 'text' : 'subtle' })
   })
   gap()
   for (const section of [timeSection(run, now), usageSection(run)]) {
@@ -305,8 +350,7 @@ export function buildView(
   }
 
   const c = run.counts
-  const where = run.project.worktree ?? run.project.path
-  summary.push({ text: `${run.mode} · ${es ? 'riesgo' : 'risk'} ${run.risk} · ${where}`, tone: 'subtle' })
+  summary.push({ text: `${run.mode} · ${es ? 'riesgo' : 'risk'} ${run.risk}`, tone: 'subtle' })
   summary.push({
     text: es
       ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`

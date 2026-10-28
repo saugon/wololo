@@ -106,12 +106,7 @@ test('the summary starts with what is going on now, then the stages', async () =
     ['agent.started', { id: 'a1', role: 'reviewer', description: 'Review item 6' }],
   ])
   const view = buildView(rebuild('r1', list), 'waiting_agents', list, 1_800_000_660)
-  expect(view.details.slice(0, 4).map(row => row.text)).toEqual([
-    'Ahora',
-    '▶ 5/8 Implementación · ítem 6 de 6',
-    '  Ítem 6: Front: estado por mesa',
-    '  ◉ revisor 1m  Review item 6',
-  ])
+  expect(view.details.slice(0, 3).map(row => row.text)).toEqual(['Ahora', '  Ítem 6: Front: estado por mesa', '  ◉ revisor 1m  Review item 6'])
   expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
   expect(view.band.stageText).toBe('Implementación · ítem 6 de 6')
   expect(view.header).toContain('5/8 Implementación · ítem 6 de 6')
@@ -210,7 +205,7 @@ test('the card names the live agents by role and model, and counts the ones that
   expect(view.band.agents.map(chip => `${chip.icon} ${chip.text}`)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exploradores (haiku) 2m', '+ 1 listo', '✕ 1 falló'])
   expect(view.band.detail).toBe('')
   expect(view.header).toContain('revisor (3m), 2 exploradores (2m)')
-  expect(view.details.slice(3, 9).map(row => row.text)).toEqual([
+  expect(view.details.slice(2, 8).map(row => row.text)).toEqual([
     '  ◉ revisor       opus   3m  Review item 2',
     '  ⌕ explorador    haiku  2m',
     '  ⌕ explorador    haiku  1m',
@@ -218,7 +213,7 @@ test('the card names the live agents by role and model, and counts the ones that
     '  ✎ implementador sonnet 1m  Item 2',
     '  ✓ verificador   sonnet 1m falló',
   ])
-  expect(view.details[8]?.tone).toBe('error')
+  expect(view.details[7]?.tone).toBe('error')
   expect(buildView(run, 'waiting_user', list, 1_800_000_780).band.agents).toEqual([])
 })
 
@@ -283,4 +278,51 @@ test('the summary says where each stage spent its time, and how long its agents 
     '  Definición   4m  te esperó 30s · sin medir 3m',
     '  Total       11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 7m',
   ])
+})
+
+test('the summary names the worktree, its branch against the base, its HEAD and the run ports', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 1, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/.claude/worktrees/wololo-r1', branch: 'wololo/txt-salones', base: 'main' } }],
+    ['stage.entered', { stage: 'evidence' }],
+  ])
+  const info = {
+    head: '09d8f8a',
+    subject: 'Front: toggle Plana/3D',
+    ahead: 14,
+    behind: 2,
+    dirty: 1,
+    ports: [
+      { name: 'backend', port: 4110, listening: true },
+      { name: 'foods', port: 3111, listening: false },
+    ],
+  }
+  const texts = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').details.map(row => row.text)
+  const start = texts.indexOf('Worktree')
+  expect(texts.slice(start + 1, start + 5)).toEqual([
+    '  ~/shop/.claude/worktrees/wololo-r1',
+    '  rama wololo/txt-salones · base main · 14 adelante · 2 atrás',
+    '  HEAD 09d8f8a Front: toggle Plana/3D · 1 archivo sin commitear',
+    '  Puertos (slot 1): backend 4110 escuchando · foods 3111 libre',
+  ])
+})
+
+test('going back to an earlier stage leaves the later ones to do again, on the bar and in the summary', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['stage.entered', { stage: 'definition' }],
+    ['stage.entered', { stage: 'gate_a' }],
+    ['question.answered', {}],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }],
+    ['stage.entered', { stage: 'plan' }],
+    ['stage.entered', { stage: 'implement' }],
+    ['stage.entered', { stage: 'evidence' }],
+    ['stage.entered', { stage: 'gate_b' }],
+    ['stage.entered', { stage: 'implement', reason: 'the review asked for changes' }],
+  ])
+  const run = rebuild('r1', list)
+  expect(progressOf(run).segments.map(segment => segment.state)).toEqual(['done', 'done', 'done', 'done', 'current', 'pending', 'pending', 'pending'])
+  const texts = buildView(run, 'running', list, 1_800_000_700).details.map(row => row.text)
+  expect(texts.find(text => text.includes('Evidencia'))?.startsWith('↺ Evidencia')).toBe(true)
+  expect(texts.find(text => text.includes('Plan'))?.startsWith('✓ Plan')).toBe(true)
 })
