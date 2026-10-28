@@ -129,7 +129,13 @@ async function notePermission($: Engine, tool: string, input: Record<string, unk
 
 async function settlePermission($: Engine, toolUseId: string, outcome: 'approved' | 'denied' | 'not_run') {
   const asked = pendingPermission
-  if (!asked) return
+  if (!asked) {
+    if (outcome === 'not_run' && run?.waiting?.on === 'permission') {
+      live.permission = null
+      await emit($, 'permission.resolved', { tool: run.waiting.question, what: '', outcome })
+    }
+    return
+  }
   if (outcome !== 'not_run' && asked.toolUseId !== toolUseId) return
   pendingPermission = null
   live.permission = null
@@ -1166,6 +1172,14 @@ async function noteNotifications($: Engine, text: string) {
   }
 }
 
+async function reconcileTasks($: Engine, alive: ReadonlyArray<{ id: string }> | undefined) {
+  if (!run || run.outcome || !alive) return
+  const ids = new Set(alive.map(task => task.id))
+  for (const task of run.tasks.filter(t => t.finished_at === null && t.kind !== 'external' && !ids.has(t.id))) {
+    await emit($, 'task.finished', { id: task.id, label: task.label, status: 'gone' })
+  }
+}
+
 function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' | 'other' {
   if (/\bgh\s+(pr\s+checks|run\s+watch)\b/.test(command)) return 'ci'
   if (/\bcodex\b/.test(command)) return 'external'
@@ -1234,6 +1248,7 @@ export const register: Register = (on, options) => {
           run = loaded
           recent = (await readEvents($, runDir(paths, loaded.id))).slice(-RECENT)
           config = (await loadConfig($, loaded.project.key)).config
+          await settlePermission($, '', 'not_run')
           await refresh($)
           if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}` }).catch(() => undefined)
         }
@@ -1295,6 +1310,11 @@ export const register: Register = (on, options) => {
     return verdict
   }).catch(($, e, next) => next(e))
 
+  on('classic.Stop', async ($, e, next) => {
+    await quietly(() => reconcileTasks($, e.background_tasks))
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
   on('classic.PermissionRequest', async ($, e, next) => {
     const ctx = policyContext()
     const input = isObject(e.tool_input) ? e.tool_input : {}
@@ -1331,7 +1351,7 @@ export const register: Register = (on, options) => {
     asks.delete(e.tool_use_id)
     if (!run || run.outcome) return next(e)
 
-    if (pendingPermission && pendingPermission.toolUseId !== e.tool_use_id)
+    if (!e.agentId && (pendingPermission ? pendingPermission.toolUseId !== e.tool_use_id : run.waiting?.on === 'permission'))
       await quietly(() => settlePermission($, e.tool_use_id, 'not_run'))
     await quietly(() => settlePermission($, e.tool_use_id, 'approved'))
 

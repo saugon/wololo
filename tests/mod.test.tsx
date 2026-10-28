@@ -471,3 +471,46 @@ test('a permission counts as waiting only when its dialog opens, and an ask a ho
   expect(lines.some(line => line.includes('make slow'))).toBe(false)
   expect((await run()).waiting).toBe(null)
 })
+
+test('a background task the session no longer runs is closed at the end of the turn', async ($, on) => {
+  fakeHost(on)
+  let next = 0
+  on('tool.call', (_, e) => (e.tool === 'Bash' ? { result: { backgroundTaskId: `t${++next}` } } : { result: {} }))
+  on('classic.Stop', () => ({}))
+  on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' as const } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  await $.tool.call({ tool: 'Bash', command: 'make backend.run', run_in_background: true, description: 'Backend' } as never)
+  await $.tool.call({ tool: 'Bash', command: 'make frontend.run', run_in_background: true, description: 'Frontend' } as never)
+  const open = async () =>
+    ((parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { tasks: Array<{ id: string; finished_at: number | null }> }).tasks)
+      .filter(task => task.finished_at === null)
+      .map(task => task.id)
+  expect(await open()).toEqual(['t1', 't2'])
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ id: 't2', type: 'shell', status: 'running', description: 'Frontend' }] } as never)
+  expect(await open()).toEqual(['t2'])
+  await $.classic.Stop({ stop_hook_active: false } as never)
+  expect(await open()).toEqual(['t2'])
+})
+
+test('a permission wait left by an earlier load of the mod is cleared when the session takes the run back', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const dir = `${DATA}/runs/repo-txt-perm01`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: 'repo-txt-perm01', type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', { title: 'Salones', source: { kind: 'text', ref: 'x', url: null }, mode: 'checkpoints', session_id: 's1', cwd: REPO }),
+      ev(2, 'stage.entered', { stage: 'evidence' }),
+      ev(3, 'permission.asked', { tool: 'Bash', what: 'for i in $(seq 240)' }),
+    ].join('\n') + '\n',
+  )
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id: 'repo-txt-perm01', status: 'waiting_permission', outcome: null, owner: { session_id: 's1', cwd: REPO, heartbeat_at: 1_800_000_100 } }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: 'repo-txt-perm01', heartbeat_at: 1_800_000_100 }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { status: string; waiting: unknown }
+  expect(got.waiting).toBe(null)
+  expect(got.status).not.toBe('waiting_permission')
+})
