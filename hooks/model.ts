@@ -458,7 +458,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.last_answer_at = ev.ts
       break
     case 'permission.asked':
-      if (r.waiting?.on !== 'user') r.waiting = { on: 'permission', question: str(d.tool), since: ev.ts }
+      if (r.waiting?.on !== 'user') r.waiting = { on: 'permission', question: [str(d.tool), str(d.what)].filter(Boolean).join(' · '), since: ev.ts }
       break
     case 'permission.resolved':
       if (r.waiting?.on === 'permission') r.waiting = null

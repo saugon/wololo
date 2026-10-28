@@ -447,3 +447,27 @@ test('every model request and every second are counted in the stage they ran in'
   const later = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
   expect(timeOf(later)?.you).toBeGreaterThan(0)
 })
+
+test('a permission counts as waiting only when its dialog opens, and an ask a hook answers is never one', async ($, on) => {
+  fakeHost(on)
+  let answer: 'allow' | 'none' = 'allow'
+  const seen: string[] = []
+  const run = async () => parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { status: string; waiting: unknown }
+  on('classic.PermissionRequest', () => (answer === 'allow' ? { decision: { behavior: 'allow' as const } } : {}))
+  on('tool.call', async () => {
+    seen.push(`running:${(await run()).status}`)
+    return { result: {} }
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  await $.tool.call({ tool: 'Bash', command: 'make slow' } as never)
+  expect(seen).toHaveLength(1)
+  expect(seen[0]).not.toBe('running:waiting_permission')
+  answer = 'none'
+  await $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/x' } as never)
+  const lines = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'history', include_minor: true } as never)).result).lines as string[]
+  expect(lines.filter(line => /permiso|permission/i.test(line)).length).toBeGreaterThan(0)
+  expect(lines.some(line => line.includes('make slow'))).toBe(false)
+  expect((await run()).waiting).toBe(null)
+})

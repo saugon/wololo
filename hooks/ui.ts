@@ -271,7 +271,10 @@ export function buildView(
   if (run.doing) summary.push({ text: `  → ${run.doing.text}`, tone: 'text' })
   summary.push(...agentRows(run, now, 'claude'))
   for (const task of liveTasks(run)) summary.push({ text: `  ⟳ ${task.label} (${duration(now - task.started_at)})`, tone: 'claude' })
-  if (run.waiting) summary.push({ text: `  ? ${t(lang, 'waitsYou')}: ${run.waiting.question}`, tone: 'warning' })
+  if (run.waiting) {
+    const label = run.waiting.on === 'permission' ? `! ${es ? 'PIDE PERMISO' : 'NEEDS PERMISSION'}` : `? ${t(lang, 'waitsYou')}`
+    summary.push({ text: `  ${label}: ${run.waiting.question}`, tone: 'warning' })
+  }
   if (run.blocked) summary.push({ text: `  ✕ ${run.blocked.reason}`, tone: 'error' })
   gap()
 

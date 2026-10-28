@@ -89,6 +89,7 @@ let lastTurnEndAt = 0
 let reorient = false
 let historyCache: Entry[] | undefined
 let pendingPermission: { toolUseId: string; tool: string; what: string } | null = null
+let asks = new Map<string, { tool: string; what: string; key: string }>()
 let pendingUsage = new Map<string, { stage: StageId; role: string; input: number; output: number; cache_read: number; cache_write: number; usd: number }>()
 let lastUsd: number | null = null
 let timeMark: { stage: StageId; kind: TimeKind; since: number } | null = null
@@ -110,6 +111,20 @@ function isRunAgent(type: unknown): boolean {
 async function liftBlock($: Engine, by: 'answer' | 'message') {
   if (!run?.blocked || run.outcome) return
   await emit($, 'unblocked', { auto: true, by })
+}
+
+function askKey(tool: string, input: unknown): string {
+  return `${tool}\u0000${JSON.stringify(input ?? null)}`
+}
+
+async function notePermission($: Engine, tool: string, input: Record<string, unknown>) {
+  const key = askKey(tool, input)
+  const found = [...asks].reverse().find(([, ask]) => ask.key === key) ?? [...asks].reverse().find(([, ask]) => ask.tool === tool)
+  const toolUseId = found?.[0] ?? ''
+  const what = found?.[1].what ?? describeCall(tool, input)
+  live.permission = what ? `${tool} · ${what}` : tool
+  pendingPermission = { toolUseId, tool, what }
+  await emit($, 'permission.asked', { tool, what })
 }
 
 async function settlePermission($: Engine, toolUseId: string, outcome: 'approved' | 'denied' | 'not_run') {
@@ -1276,31 +1291,31 @@ export const register: Register = (on, options) => {
       if (e.tool === 'Agent' && isRunAgent(input.subagent_type))
         return { decision: 'allow' as const, reason: "wololo: one of the run's own agents" }
     }
-    if (!e.agentId && e.approver === 'person' && e.tool_use_id) {
-      const what = describeCall(e.tool, input)
-      live.permission = what ? `${e.tool} · ${what}` : e.tool
-      pendingPermission = { toolUseId: e.tool_use_id, tool: e.tool, what }
-      await quietly(() => emit($, 'permission.asked', { tool: e.tool, what }))
-    }
+    if (!e.agentId && e.tool_use_id) asks.set(e.tool_use_id, { tool: e.tool, what: describeCall(e.tool, input), key: askKey(e.tool, input) })
     return verdict
   }).catch(($, e, next) => next(e))
 
   on('classic.PermissionRequest', async ($, e, next) => {
     const ctx = policyContext()
     const input = isObject(e.tool_input) ? e.tool_input : {}
-    if (!ctx || !config.permissions.auto_allow) return next(e)
     const path = typeof input.file_path === 'string' ? input.file_path : null
     const isPolicyAllowed =
-      (e.tool_name === 'Bash' && typeof input.command === 'string' && isAllowedBash(input.command, ctx)) ||
-      (path !== null && isAllowedPath(path, ctx)) ||
-      isReadInside(e.tool_name, input, ctx)
-    if (!isPolicyAllowed) return next(e)
-    return {
-      decision: {
-        behavior: 'allow' as const,
-        updatedPermissions: [{ type: 'addDirectories' as const, directories: [ctx.workdir, ctx.runDir], destination: 'session' as const }],
-      },
+      ctx !== null &&
+      config.permissions.auto_allow &&
+      ((e.tool_name === 'Bash' && typeof input.command === 'string' && isAllowedBash(input.command, ctx)) ||
+        (path !== null && isAllowedPath(path, ctx)) ||
+        isReadInside(e.tool_name, input, ctx))
+    if (isPolicyAllowed && ctx) {
+      return {
+        decision: {
+          behavior: 'allow' as const,
+          updatedPermissions: [{ type: 'addDirectories' as const, directories: [ctx.workdir, ctx.runDir], destination: 'session' as const }],
+        },
+      }
     }
+    const answered = await next(e)
+    if (run && !run.outcome && !e.agent_id && !answered?.decision) await quietly(() => notePermission($, e.tool_name, input))
+    return answered
   }).catch(($, e, next) => next(e))
 
   on('tool.call', async ($, e, next) => {
@@ -1313,6 +1328,7 @@ export const register: Register = (on, options) => {
       if (reorient && run) reorient = false
       return notes.length > 0 ? { result: text, context: notes } : { result: text }
     }
+    asks.delete(e.tool_use_id)
     if (!run || run.outcome) return next(e)
 
     if (pendingPermission && pendingPermission.toolUseId !== e.tool_use_id)
@@ -1379,6 +1395,7 @@ export const register: Register = (on, options) => {
     const spawned = await next(e)
     await quietly(async () => {
       if (!run || run.outcome || !('agentId' in spawned) || typeof spawned.agentId !== 'string') return
+      if (pendingPermission?.tool === 'Agent') await settlePermission($, pendingPermission.toolUseId, 'approved')
       const role = e.subagentType.startsWith('wololo:') ? e.subagentType.slice('wololo:'.length) : e.subagentType
       await emit($, 'agent.started', {
         id: spawned.agentId,
@@ -1421,6 +1438,7 @@ export const register: Register = (on, options) => {
       live.isTurnRunning = false
       await settlePermission($, '', 'not_run')
       live.permission = null
+      asks = new Map()
       lastTurnEndAt = await nowSeconds($)
       await refresh($)
       if (run.pause_requested_at && !run.paused && run.status === 'paused') {
@@ -1473,6 +1491,12 @@ export const register: Register = (on, options) => {
     const compacted = await next({ ...e, instructions: [e.instructions, keep].filter(Boolean).join('\n\n') })
     reorient = true
     return compacted
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'ToolProgress' }, async ($, e, next) => {
+    const id = e.props.tool_use_id
+    if (pendingPermission && pendingPermission.toolUseId === id) void quietly(() => settlePermission($, id, 'approved'))
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
