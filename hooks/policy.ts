@@ -4,6 +4,8 @@ export type PolicyContext = {
   runDir: string
   commands: readonly string[]
   patterns: readonly RegExp[]
+  // config.env as the run puts it before each project command; a segment that starts with exactly it is judged without it.
+  envPrefix?: string
 }
 
 const SAFE_SEGMENTS: readonly RegExp[] = [
@@ -88,6 +90,7 @@ export function isInside(path: string, dir: string): boolean {
 }
 
 function isAllowedSegment(segment: string, ctx: PolicyContext): boolean {
+  if (ctx.envPrefix && segment.startsWith(`${ctx.envPrefix} `)) return isAllowedSegment(segment.slice(ctx.envPrefix.length + 1), { ...ctx, envPrefix: '' })
   const cd = /^cd\s+("?)(.+)\1$/.exec(segment)
   if (cd?.[2]) {
     const target = cd[2]

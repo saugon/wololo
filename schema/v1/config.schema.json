@@ -353,6 +353,31 @@
           "type": "boolean"
         }
       }
+    },
+    "risk_paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Globs: a run whose branch changes a matching path is high risk."
+    },
+    "env": {
+      "type": "object",
+      "description": "Variables every project command runs with (set) or without (unset).",
+      "properties": {
+        "set": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "unset": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

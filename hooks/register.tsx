@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
-import { type Config, DEFAULT_CONFIG, expand, merge, parseJson, planTouched, ports, projectKey, resolve, slugify, touchedPattern, validate } from './config'
+import { type Config, DEFAULT_CONFIG, envPrefix, expand, merge, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv } from './config'
 import {
   type EventType,
   type Live,
@@ -23,6 +23,7 @@ import {
   ORPHAN_AFTER_SECONDS,
   nextSeq,
   sinceLastSeen,
+  stageIndex,
   timeKind,
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
@@ -253,7 +254,7 @@ function policyContext(): PolicyContext | null {
     ],
     touchedPattern,
   )
-  return { branch: run.project.branch, workdir: workdir(), runDir: runDir(paths, run.id), ...rules }
+  return { branch: run.project.branch, workdir: workdir(), runDir: runDir(paths, run.id), ...rules, envPrefix: envPrefix(config.env) }
 }
 
 function workdir(): string {
@@ -763,7 +764,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     mode,
     risk,
     slot,
-    ports: ports(config, slot),
+    ports: ports(config, slot).map(port => ({ ...port, cmd: withEnv(port.cmd, envPrefix(config.env)) })),
     isolation: config.isolation,
     worktree,
     branch,
@@ -778,6 +779,18 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     skill_root: root,
     next: `Read ${root}/stages/01-context.md, then record stage.entered for context.`,
   })
+}
+
+// A run whose branch changes a path in config.risk_paths is high risk: it cannot claim less, nor reach the evidence, Aprobar PR or
+// the PR, without risk.set high.
+async function riskyChange($: Engine, type: string, data: Record<string, unknown>): Promise<string | null> {
+  if (!run) return null
+  const lowering = type === 'risk.set' && data.risk !== 'high'
+  const late = type === 'stage.entered' && ['evidence', 'gate_b', 'pr'].includes(String(data.stage)) && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
+  if (!lowering && !(late && run.risk !== 'high')) return null
+  const files = riskyFiles(await changedFiles($, workdir(), run.project.base ?? config.pr.base), config.risk_paths)
+  if (files.length === 0) return null
+  return `The branch changes ${files.slice(0, 5).join(', ')}${files.length > 5 ? ` and ${files.length - 5} more` : ''}, in config.risk_paths: the run is high risk. Record risk.set {risk: "high", reason}${lowering ? ' instead' : ' before moving on'}.`
 }
 
 // The tree `git add -A && git commit` would make of the work tree now, built in a scratch index so the real one is left alone.
@@ -806,6 +819,10 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   if (worktree && type === 'item.committed' && typeof data.sha === 'string') data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])
   const problem = checkEvent(run, type, data, config.budgets)
   if (problem) return fail(problem)
+  if (config.risk_paths.length > 0 && worktree) {
+    const risky = await riskyChange($, type, data)
+    if (risky) return fail(risky)
+  }
   const guarded = ['stage.entered', 'pr.opened'].includes(type) || (type === 'gate.resolved' && (data.outcome ?? 'approved') === 'approved')
   if (guarded) {
     const current = await snapshot($, runDir(paths, run.id), run.project.worktree)
@@ -1120,6 +1137,7 @@ async function changedFiles($: Engine, dir: string, base: string): Promise<strin
 async function testsToRun($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run) return fail('No active run in this session.')
   const tests = config.tests
+  const prefix = envPrefix(config.env)
   const common = {
     work_tree: workdir(),
     follow: tests.follow,
@@ -1130,9 +1148,9 @@ async function testsToRun($: Engine, input: Record<string, unknown>): Promise<st
   if (input.scope === 'suite') {
     return ok({
       ...common,
-      suite: tests.suite,
+      suite: tests.suite.map(command => withEnv(command, prefix)),
       suite_runs: tests.suite_runs,
-      e2e: tests.e2e,
+      e2e: tests.e2e.map(command => withEnv(command, prefix)),
       e2e_runs: tests.e2e_runs,
       e2e_needs_servers: tests.e2e.length > 0 && config.commands.start.length > 0,
     })
@@ -1142,6 +1160,7 @@ async function testsToRun($: Engine, input: Record<string, unknown>): Promise<st
   return ok({
     ...common,
     ...plan,
+    commands: plan.commands.map(command => ({ ...command, cmd: withEnv(command.cmd, prefix) })),
     note:
       plan.files.length === 0
         ? 'No test file was created or changed yet. A behaviour change without a test is not done.'

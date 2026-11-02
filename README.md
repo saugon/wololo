@@ -90,6 +90,8 @@ Nothing is written into your repositories. All configuration and run data live i
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
+| `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
+| `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |
 | `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |
 | `view.colors` | the card's colors per group of states (`working`, `waiting`, `blocked`, `done`): a theme key such as `claude` or `warning`, or a hex color. Changes show within 15 s |
 

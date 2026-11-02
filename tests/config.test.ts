@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_CONFIG, expand, globToRegExp, planTouched, ports, projectKey, resolve, slugify, validate } from '../hooks/config'
+import { DEFAULT_CONFIG, envPrefix, expand, globToRegExp, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv } from '../hooks/config'
 
 test('project config overrides global, which overrides defaults; arrays replace', async () => {
   const { config, errors } = resolve({ autonomy: 'full', debate: { max_rounds: 3 } }, { autonomy: 'guided', tests: { suite: ['make test'] } })
@@ -73,4 +73,19 @@ test('view colors take theme keys or hex values, and keep the others when only o
   expect(errors).toEqual([])
   expect(config.view.colors).toEqual({ working: '#7aa2f7', waiting: 'warning', blocked: 'error', done: 'success' })
   expect(validate({ view: { colors: { workin: 'red' } } })).toEqual(['view.colors.workin: unknown key'])
+})
+
+test('env goes before each step of a project command, never before a cd', async () => {
+  const prefix = envPrefix({ set: { MIX_ENV: 'test', LABEL: 'a b' }, unset: ['INST', 'E2E_BACKEND_PORT'] })
+  expect(prefix).toBe("env -u INST -u E2E_BACKEND_PORT MIX_ENV=test LABEL='a b'")
+  expect(withEnv('cd frontend && pnpm vitest run a.ts', prefix)).toBe(`cd frontend && ${prefix} pnpm vitest run a.ts`)
+  expect(withEnv('make test', '')).toBe('make test')
+  expect(envPrefix(DEFAULT_CONFIG.env)).toBe('')
+})
+
+test('risk paths pick the changed files that make a run high risk', async () => {
+  const files = ['backend/priv/repo/migrations/1_add.exs', 'frontend/src/a.ts', 'infra/main.tf']
+  expect(riskyFiles(files, ['**/migrations/**', 'infra/**'])).toEqual(['backend/priv/repo/migrations/1_add.exs', 'infra/main.tf'])
+  expect(riskyFiles(files, [])).toEqual([])
+  expect(validate({ risk_paths: ['a/**'], env: { set: { A: '1' }, unset: ['INST'] } })).toEqual([])
 })

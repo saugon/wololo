@@ -98,3 +98,12 @@ test('GitHub writes outside publish are denied during a run, reads are not', asy
   expect(githubWriteDenial('mcp__github__add_issue_comment', {})).not.toBe(null)
   expect(githubWriteDenial('mcp__github__get_issue', {})).toBe(null)
 })
+
+test('a project command with the run\'s env prefix is the same command', async () => {
+  const prefix = 'env -u INST MIX_ENV=test'
+  const withPrefix = { ...ctx, envPrefix: prefix }
+  expect(isAllowedBash(`cd ${ctx.workdir} && ${prefix} make test`, withPrefix)).toBe(true)
+  expect(isAllowedBash(`${prefix} mix test test/a_test.exs`, withPrefix)).toBe(true)
+  expect(isAllowedBash(`${prefix} rm -rf .`, withPrefix)).toBe(false)
+  expect(isAllowedBash('env -u PATH make test', withPrefix)).toBe(false)
+})

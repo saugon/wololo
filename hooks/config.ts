@@ -58,6 +58,10 @@ export type Config = {
     run_minutes: number
   }
   permissions: { auto_allow: boolean }
+  // Paths whose change makes a run high risk, whatever risk it was given.
+  risk_paths: string[]
+  // Variables every project command runs with (set) or without (unset), so the session's own environment does not leak in.
+  env: { set: Record<string, string>; unset: string[] }
   view: {
     header: boolean
     band: boolean
@@ -112,6 +116,8 @@ export const DEFAULT_CONFIG: Config = {
     run_minutes: 240,
   },
   permissions: { auto_allow: true },
+  risk_paths: [],
+  env: { set: {}, unset: [] },
   view: {
     header: true,
     band: true,
@@ -160,7 +166,7 @@ function typeOf(value: unknown): string {
   return typeof value
 }
 
-const OPEN_MAPS = ['models', 'project_agents']
+const OPEN_MAPS = ['models', 'project_agents', 'env.set']
 
 function walkTypes(expected: unknown, actual: unknown, path: string, errors: string[]) {
   if (actual === undefined) return
@@ -321,6 +327,29 @@ export function globToRegExp(glob: string): RegExp {
     else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   }
   return new RegExp(`^${out}$`)
+}
+
+export function riskyFiles(files: readonly string[], globs: readonly string[]): string[] {
+  return files.filter(file => globs.some(glob => globToRegExp(glob).test(file)))
+}
+
+function shellQuote(text: string): string {
+  return /^[\w./@:+=-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`
+}
+
+// What goes before each project command so it runs with config.env: `env -u NAME ... NAME=value ...`, or nothing.
+export function envPrefix(env: Config['env']): string {
+  const parts = [...env.unset.map(name => `-u ${name}`), ...Object.entries(env.set).map(([name, value]) => `${name}=${shellQuote(value)}`)]
+  return parts.length > 0 ? `env ${parts.join(' ')}` : ''
+}
+
+// The command with config.env applied to each of its steps; a `cd` changes nothing to apply it to.
+export function withEnv(command: string, prefix: string): string {
+  if (!prefix) return command
+  return command
+    .split(' && ')
+    .map(step => (/^cd\s/.test(step.trim()) ? step : `${prefix} ${step.trim()}`))
+    .join(' && ')
 }
 
 export function isTestFile(path: string, patterns: readonly string[]): boolean {
