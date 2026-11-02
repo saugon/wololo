@@ -241,6 +241,65 @@ export function resolve(global: unknown, project: unknown): { config: Config; er
   return { config, errors }
 }
 
+// What a run's launch flags change: config paths set for that run only. `{}` for adapters turns them all off.
+export type Overrides = Record<string, Json>
+
+const SWITCHES: Record<string, Overrides> = {
+  '--awake': { keep_awake: true },
+  '--no-awake': { keep_awake: false },
+  '--no-adapters': { adapters: {} },
+  '--worktree': { isolation: 'worktree' },
+  '--in-place': { isolation: 'branch' },
+  '--no-pr': { 'pr.enabled': false },
+  '--draft': { 'pr.draft': true },
+  '--ready': { 'pr.draft': false },
+  '--no-wait-ci': { 'pr.wait_ci': false },
+  '--no-screenshots': { 'screenshots.enabled': false },
+  '--github-spec': { 'spec.to_github': true },
+  '--no-github-spec': { 'spec.to_github': false },
+}
+
+const VALUED: Record<string, string> = {
+  '--base': 'pr.base',
+  '--debate': 'debate.depth',
+  '--critic': 'debate.critic',
+  '--reviewer': 'review.reviewer',
+  '--suite': 'tests.suite_runs',
+  '--e2e': 'tests.e2e_runs',
+}
+
+const MODES: Record<string, Mode> = { '--full': 'full', '--checkpoints': 'checkpoints', '--guided': 'guided' }
+const REVIEWS: Record<string, 'local' | 'pr'> = { '--review-pr': 'pr', '--review-local': 'local' }
+
+export const LAUNCH_FLAGS = [...Object.keys(MODES), ...Object.keys(REVIEWS), ...Object.keys(SWITCHES), ...Object.keys(VALUED).map(flag => `${flag}=`)]
+
+export function parseFlags(flags: readonly string[]): { mode?: Mode; review?: 'local' | 'pr'; overrides: Overrides; errors: string[] } {
+  const out: { mode?: Mode; review?: 'local' | 'pr'; overrides: Overrides; errors: string[] } = { overrides: {}, errors: [] }
+  for (const flag of flags) {
+    const [name = '', value] = flag.split(/=(.*)/s)
+    if (MODES[flag]) out.mode = MODES[flag]
+    else if (REVIEWS[flag]) out.review = REVIEWS[flag]
+    else if (SWITCHES[flag]) Object.assign(out.overrides, SWITCHES[flag])
+    else if (VALUED[name] && value) out.overrides[VALUED[name]] = value
+    else out.errors.push(VALUED[name] ? `${name} needs a value: ${name}=<value>` : `unknown flag ${flag}`)
+  }
+  const errors = validate(Object.entries(out.overrides).reduce<Record<string, unknown>>((tree, [path, value]) => setAt(tree, path, value), {}))
+  out.errors.push(...errors.map(error => `${error} (from a flag)`))
+  return out
+}
+
+function setAt<T>(target: T, path: string, value: unknown): T {
+  const keys = path.split('.')
+  const out = { ...(target as Record<string, unknown>) }
+  const [head = '', ...rest] = keys
+  out[head] = rest.length === 0 ? value : setAt(isObject(out[head]) ? out[head] : {}, rest.join('.'), value)
+  return out as T
+}
+
+export function withOverrides(config: Config, overrides: Overrides | undefined): Config {
+  return Object.entries(overrides ?? {}).reduce((out, [path, value]) => setAt(out, path, value), config)
+}
+
 export function parseJson(text: string | undefined): {
   value: Json | undefined
   error: string | null

@@ -99,6 +99,30 @@ Nothing is written into your repositories. All configuration and run data live i
 | `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |
 | `view.colors` | the card's colors per group of states (`working`, `waiting`, `blocked`, `done`): a theme key such as `claude` or `warning`, or a hex color. Changes show within 15 s |
 
+### Launch flags
+
+Flags after `/wololo <issue>` change the config for that run only; the run keeps them, `get` scope `config` shows them as `run_flags`, and an unknown flag is refused with the list.
+
+| Flag | Sets |
+|---|---|
+| `--full`, `--checkpoints`, `--guided` | `autonomy` |
+| `--review-pr`, `--review-local` | `review.approval` |
+| `--awake`, `--no-awake` | `keep_awake` |
+| `--no-adapters` | `adapters` to none |
+| `--worktree`, `--in-place` | `isolation` |
+| `--base=<branch>` | `pr.base` |
+| `--no-pr`, `--draft`, `--ready`, `--no-wait-ci` | `pr.enabled`, `pr.draft`, `pr.wait_ci` |
+| `--no-screenshots` | `screenshots.enabled` |
+| `--github-spec`, `--no-github-spec` | `spec.to_github` |
+| `--debate=`, `--critic=`, `--reviewer=` | `debate.depth`, `debate.critic`, `review.reviewer` |
+| `--suite=`, `--e2e=` | `tests.suite_runs`, `tests.e2e_runs` |
+
+```
+/wololo 4321 --full --review-pr --awake
+/wololo 4321 --checkpoints --no-adapters --in-place
+/wololo 4321 --base=release/2.4 --ready --e2e=local
+```
+
 ## The store, for dashboards
 
 Every run is a directory any app can read. Several terminals and projects write at once without coordinating: each run has a single writer, the session that owns it.

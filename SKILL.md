@@ -1,7 +1,7 @@
 ---
 name: wololo
 description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] [--review-pr | --review-local] | help | status | history | pause | resume [run] | panel | init | config | cancel
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] [--review-pr | --review-local] [--awake] [--no-adapters] [--in-place] [--base=<branch>] [--no-pr] [--ready] [more flags: /wololo help] | help | status | history | pause | resume [run] | panel | init | config | cancel
 ---
 
 # wololo
@@ -21,7 +21,7 @@ Take the text after `/wololo`:
 | Text | Do |
 |---|---|
 | empty | If this session has an active run (`get` scope `run` succeeds): `get` scope `since_last_seen`, show the lines under a heading "Mientras no estabas" (or "Since you last looked" in English), say what the run waits on, and carry on if it is not waiting on the person. Otherwise `get` scope `all` and show the table, then one line on how to start a run. |
-| `help` | The mod answers it before you see it, as `/wololo-help`. If it reaches you anyway, list the subcommands of this table, the `--full`/`--checkpoints`/`--guided` flags and the card's keys (m, r, i, h, d, p). |
+| `help` | The mod answers it before you see it, as `/wololo-help`. If it reaches you anyway, list the subcommands of this table, the launch flags (below, in **Start a run**) and the card's keys (m, r, i, h, d, p). |
 | `status` | The mod answers it before you see it, as `/wololo-status`: a card of every active run. If it reaches you anyway, `get` scope `all` and print `table` verbatim in a code block, with one line under it per run that waits on the person. |
 | `history` | `get` scope `history`; print `lines` verbatim in a code block, and the path of `history.md`. With `all`, add `include_minor: true`. `/wololo-history` shows the same without a model turn. |
 | `pause` | The mod answers it before you see it, as `/wololo-pause`. |
@@ -34,13 +34,27 @@ Take the text after `/wololo`:
 
 ## Start a run
 
-1. **Mode.** `--full`, `--checkpoints` or `--guided` in the text overrides the configured autonomy for this run. `--review-pr` or `--review-local` overrides `config.review.approval`: with `pr`, Aprobar PR passes by itself and the change is approved on the PR once CI is green; pass it to `start` as `review`.
+1. **Flags.** Take every `--flag` out of the text and pass them to `start` as `flags`, as typed (`--base=<branch>` keeps its value; `--base <branch>` becomes `--base=<branch>`). They change the config for this run only, and `start` refuses an unknown one with the list:
+
+   | Flag | For this run |
+   |---|---|
+   | `--full`, `--checkpoints`, `--guided` | autonomy |
+   | `--review-pr`, `--review-local` | `review.approval`: with `pr`, Aprobar PR passes by itself and the change is approved on the PR once CI is green |
+   | `--awake`, `--no-awake` | `keep_awake` |
+   | `--no-adapters` | no `adapters`: wololo does every stage itself |
+   | `--worktree`, `--in-place` | `isolation`: a worktree, or a branch in the repository |
+   | `--base=<branch>` | `pr.base` |
+   | `--no-pr`, `--draft`, `--ready`, `--no-wait-ci` | `pr.enabled`, `pr.draft`, `pr.wait_ci` |
+   | `--no-screenshots` | `screenshots.enabled` |
+   | `--github-spec`, `--no-github-spec` | `spec.to_github` |
+   | `--debate=by_risk\|light\|deep`, `--critic=claude\|external`, `--reviewer=claude\|external\|both` | `debate.depth`, `debate.critic`, `review.reviewer` |
+   | `--suite=local\|ci`, `--e2e=local\|ci\|off` | `tests.suite_runs`, `tests.e2e_runs` |
 2. **Source.**
    - `#123`, `123` or a GitHub issue URL → `github_issue`.
    - The path of an existing file → `file`.
    - Anything else → `text`.
 3. **Config.** `get` scope `config`. If `project_config_exists` is false, follow `stages/init.md` first. In `full` mode, init saves without asking and records it as an assumption. Then come back here.
-4. **Start.** `start` with the source, a short title and the mode. In the turn that starts (or resumes) a run, the run's own tools (`event`, `tests`, `publish`, `external_turn`) may still be behind ToolSearch: its answer's `tools` says how to load them. Keep its answer: it holds `run_dir`, `branch`, `worktree`, `base`, `slot`, `ports` and the effective `config`.
+4. **Start.** `start` with the source, a short title and the flags. In the turn that starts (or resumes) a run, the run's own tools (`event`, `tests`, `publish`, `external_turn`) may still be behind ToolSearch: its answer's `tools` says how to load them. Keep its answer: it holds `run_dir`, `branch`, `worktree`, `base`, `slot`, `ports` and the effective `config`.
 5. **Isolate the work.**
    - **`worktree`**:
      1. `git fetch origin <base>`. If it fails, for example because there is no remote, use the local `<base>` and record an assumption.

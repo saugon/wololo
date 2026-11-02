@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_CONFIG, envPrefix, expand, globToRegExp, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv } from '../hooks/config'
+import { DEFAULT_CONFIG, envPrefix, expand, globToRegExp, parseFlags, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv, withOverrides } from '../hooks/config'
+import { helpText } from '../hooks/help'
 
 test('project config overrides global, which overrides defaults; arrays replace', async () => {
   const { config, errors } = resolve({ autonomy: 'full', budgets: { debate_rounds: 3 } }, { autonomy: 'guided', tests: { suite: ['make test'] } })
@@ -96,4 +97,29 @@ test('debate.max_rounds from an earlier config becomes budgets.debate_rounds, un
   expect(old.config.debate.depth).toBe('deep')
   expect(old.config.budgets.debate_rounds).toBe(4)
   expect(resolve({ debate: { max_rounds: 4 }, budgets: { debate_rounds: 1 } }, {}).config.budgets.debate_rounds).toBe(1)
+})
+
+test('launch flags become a mode, a review and config paths for one run; bad ones are named', async () => {
+  const flags = parseFlags(['--guided', '--review-pr', '--awake', '--no-adapters', '--base=release/2.4', '--e2e=off', '--ready'])
+  expect([flags.mode, flags.review, flags.errors]).toEqual(['guided', 'pr', []])
+  const config = withOverrides({ ...DEFAULT_CONFIG, adapters: { plan: { steps: [{ cmd: 'make plan' }] } } }, flags.overrides)
+  expect([config.keep_awake, config.adapters, config.pr.base, config.pr.draft, config.tests.e2e_runs]).toEqual([true, {}, 'release/2.4', false, 'off'])
+  expect(config.pr.enabled).toBe(true)
+  expect(parseFlags(['--e2e=sometimes', '--base', '--yolo']).errors).toEqual([
+    '--base needs a value: --base=<value>',
+    'unknown flag --yolo',
+    'tests.e2e_runs: must be one of local, ci, off (from a flag)',
+  ])
+})
+
+test("the help says, next to each launch flag, what the project's config does without it", async () => {
+  const { config } = resolve({}, { autonomy: 'full', keep_awake: true, spec: { to_github: false }, pr: { base: 'develop' } })
+  const text = helpText('es', config)
+  expect(text).toContain('--full: no pregunta: decide solo y anota cada supuesto (sin flag)')
+  expect(text).toContain('--checkpoints: frena para aprobar el spec y el PR\n')
+  expect(text).toContain('(sin flag: --awake)')
+  expect(text).toContain('(sin flag: --no-github-spec)')
+  expect(text).toContain('(sin flag: --base=develop)')
+  expect(text).toContain('(sin flag: no hay adaptadores configurados)')
+  expect(helpText('en', DEFAULT_CONFIG)).toContain('--checkpoints: stops to approve the spec and the PR (without a flag)')
 })

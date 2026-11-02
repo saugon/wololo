@@ -238,6 +238,8 @@ export type Run = {
   adapter_vars?: Record<string, string>
   // Where this run's change is approved: at Aprobar PR (local) or on the PR (pr). Runs from before it are local.
   review?: 'local' | 'pr'
+  // Config paths this run's launch flags set, over the project's config.
+  overrides?: Record<string, unknown>
   risk: Risk
   lang: Lang
   slot: number
@@ -410,6 +412,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.project = (d.project as Project) ?? r.project
       r.mode = (d.mode as Mode) ?? r.mode
       if (d.review === 'pr' || d.review === 'local') r.review = d.review
+      if (d.overrides && typeof d.overrides === 'object' && Object.keys(d.overrides).length > 0) r.overrides = d.overrides as Record<string, unknown>
       r.risk = (d.risk as Risk) ?? r.risk
       r.lang = (d.lang as Lang) ?? r.lang
       r.slot = num(d.slot)

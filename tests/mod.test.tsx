@@ -240,6 +240,26 @@ test('with spec.to_github off, issue writes stay in files', async ($, on) => {
   expect(host.gh).toEqual([])
 })
 
+test('launch flags change the config for that run only, and an unknown one is refused', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ spec: { to_github: false } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const refused = (await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Flags', flags: ['--github-spec', '--yolo'] } as never)).result
+  expect(String(refused)).toContain('unknown flag --yolo')
+  const started = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Flags', flags: ['--full', '--review-pr', '--github-spec', '--base=release/2.4'] } as never)).result,
+  )
+  const config = started.config as { spec: { to_github: boolean }; review: { approval: string } }
+  expect([started.mode, started.base, config.spec.to_github, config.review.approval]).toEqual(['full', 'release/2.4', true, 'local'])
+  const shown = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'config' } as never)).result)
+  expect(shown.run_flags).toEqual({ 'spec.to_github': true, 'pr.base': 'release/2.4' })
+  expect((shown.effective as { spec: { to_github: boolean } }).spec.to_github).toBe(true)
+  host.files.set('/tmp/body.md', 'spec')
+  const sent = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'issue_body', number: 12, body_file: '/tmp/body.md' } as never)).result)
+  expect(sent.published).toBe(true)
+})
+
 
 test('a run whose snapshot predates the items list is rebuilt from its events on load', async ($, on) => {
   const host = fakeHost(on)

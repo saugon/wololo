@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
-import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, merge, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv } from './config'
+import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, LAUNCH_FLAGS, merge, type Overrides, parseFlags, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv, withOverrides } from './config'
 import {
   type EventType,
   type Live,
@@ -29,7 +29,7 @@ import {
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
 import { type Field, SECTIONS, fieldValue, parseInput, setAt, summarize } from './configui'
-import { helpLangOf, helpSections, helpText } from './help'
+import { helpLangOf, helpNow, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { changedSinceApproval, checkEvent, hintFor, stageForFile } from './rules'
 import {
@@ -247,6 +247,21 @@ async function loadConfig($: Engine, key: string): Promise<{ config: Config; err
   ]
   const resolved = resolve(global.value, project.value)
   return { config: resolved.config, errors: [...parseErrors, ...resolved.errors], projectExists: projectText !== undefined }
+}
+
+// The help shows, next to each launch flag, what this project does without it: its config, not a run's flags.
+let helpConfig: Config = DEFAULT_CONFIG
+
+async function help($: Engine): Promise<string> {
+  const info = await projectInfo($, await $.session.cwd())
+  helpConfig = info ? (await loadConfig($, info.key)).config : DEFAULT_CONFIG
+  return helpText(run?.lang ?? config.languages.chat, helpConfig)
+}
+
+// The project's config, with the active run's launch flags over it.
+async function runConfig($: Engine, key: string): Promise<Config> {
+  const loaded = (await loadConfig($, key)).config
+  return run && run.project.key === key ? withOverrides(loaded, run.overrides as Overrides | undefined) : loaded
 }
 
 function policyContext(): PolicyContext | null {
@@ -487,7 +502,7 @@ async function saveConfig($: Engine, lang: string): Promise<boolean> {
     return false
   }
   await writeJson($, dialog.paths[dialog.target], content)
-  if (run) config = (await loadConfig($, run.project.key)).config
+  if (run) config = await runConfig($, run.project.key)
   await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, dirty: false, message: lang === 'es' ? `Guardado en ${d.paths[d.target]}` : `Saved to ${d.paths[d.target]}` } : d))
   return true
 }
@@ -695,7 +710,7 @@ async function heartbeat($: Engine) {
   if (!run || !paths || run.outcome) return
   const ts = await nowSeconds($)
   run.owner.heartbeat_at = ts
-  config = (await loadConfig($, run.project.key)).config
+  config = await runConfig($, run.project.key)
   if (run.items.total > 0 && (run.items.list ?? []).length < run.items.total && pending.length === 0) {
     const revived = await reviveRun($, run.id)
     if (revived) run = { ...revived, owner: run.owner, status: run.status, last_user_at: run.last_user_at }
@@ -763,8 +778,10 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const cwd = await $.session.cwd()
   const info = await projectInfo($, cwd)
   if (!info) return fail(`${cwd} is not inside a git repository.`)
+  const flags = parseFlags(Array.isArray(input.flags) ? input.flags.map(String) : [])
+  if (flags.errors.length > 0) return fail(`${flags.errors.join('; ')}. Launch flags: ${LAUNCH_FLAGS.join(' ')}`)
   const loaded = await loadConfig($, info.key)
-  config = loaded.config
+  config = withOverrides(loaded.config, flags.overrides)
   const ts = await nowSeconds($)
   const slot = await freeSlot($, ts)
   const ref =
@@ -778,9 +795,9 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const branch = expand(config.branch, vars)
   const worktree = config.isolation === 'worktree' ? normalize(`${info.mainPath}/${expand(config.worktree_dir, vars)}`) : null
   if (worktree) await excludeInsideRepo($, info.mainPath, worktree)
-  const mode = ['full', 'checkpoints', 'guided'].includes(String(input.mode)) ? String(input.mode) : config.autonomy
+  const mode = ['full', 'checkpoints', 'guided'].includes(String(input.mode)) ? String(input.mode) : (flags.mode ?? config.autonomy)
   const risk = ['low', 'high', 'unknown'].includes(String(input.risk)) ? String(input.risk) : 'unknown'
-  const review = input.review === 'pr' || input.review === 'local' ? input.review : config.review.approval
+  const review = input.review === 'pr' || input.review === 'local' ? input.review : (flags.review ?? config.review.approval)
 
   await costDelta($)
   run = emptyRun(id, ts)
@@ -794,6 +811,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     project: { key: info.key, path: info.mainPath, worktree, branch, base: config.pr.base },
     mode,
     review,
+    overrides: flags.overrides,
     risk,
     lang: config.languages.chat,
     slot,
@@ -935,6 +953,7 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
     const info = await projectInfo($, cwd)
     if (!info) return fail(`${cwd} is not inside a git repository.`)
     const loaded = await loadConfig($, info.key)
+    const flagged = run && !run.outcome && run.project.key === info.key ? run.overrides : undefined
     return ok({
       project_key: info.key,
       project_path: info.mainPath,
@@ -942,7 +961,8 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
       project_config_path: projectConfigPath(paths, info.key),
       project_config_exists: loaded.projectExists,
       errors: loaded.errors,
-      effective: loaded.config,
+      effective: withOverrides(loaded.config, flagged as Overrides | undefined),
+      ...(flagged ? { run_flags: flagged } : {}),
       defaults: DEFAULT_CONFIG,
     })
   }
@@ -985,7 +1005,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   historyCache = undefined
   recent = events.slice(-RECENT)
   pending = []
-  config = (await loadConfig($, target.project.key)).config
+  config = await runConfig($, target.project.key)
   live = { isTurnRunning: true, question: null, permission: null }
   await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() })
   if (run.paused || run.pause_requested_at) await emit($, 'resumed', {})
@@ -1165,6 +1185,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
         title: { type: 'string', description: 'Short human title of what the run delivers.' },
         mode: { type: 'string', enum: ['full', 'checkpoints', 'guided'], description: 'Overrides the configured autonomy for this run.' },
         review: { type: 'string', enum: ['local', 'pr'], description: 'Overrides config.review.approval: approve the change at Aprobar PR (local) or on the PR once CI is green (pr).' },
+        flags: { type: 'array', items: { type: 'string' }, description: 'The --flags the person launched the run with, as typed (--base=<branch> with its value). Unknown flags are refused.' },
         risk: { type: 'string', enum: ['low', 'high', 'unknown'] },
       },
       required: ['source', 'title'],
@@ -1510,7 +1531,7 @@ export const register: Register = (on, options) => {
           run = loaded
           await exposeRunTools($)
           recent = (await readEvents($, runDir(paths, loaded.id))).slice(-RECENT)
-          config = (await loadConfig($, loaded.project.key)).config
+          config = await runConfig($, loaded.project.key)
           await settlePermission($, '', 'not_run')
           await inspectWorktree($)
           await refresh($)
@@ -1987,7 +2008,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'wololo-status' }, async ($, e) => statusOutput($, String(e.args ?? '')))
 
-  on('command.run', { command: 'wololo-help' }, async () => ({ text: helpText(run?.lang ?? config.languages.chat) }))
+  on('command.run', { command: 'wololo-help' }, async $ => ({ text: await help($) }))
 
   on('command.run', { command: 'wololo-pause' }, async $ => pauseRun($))
 
@@ -1995,7 +2016,7 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'wololo' }, async ($, e, next) => {
     const args = String(e.args ?? '').trim()
-    if (/^help\b/.test(args)) return { text: helpText(run?.lang ?? config.languages.chat) }
+    if (/^help\b/.test(args)) return { text: await help($) }
     if (/^pause\b/.test(args)) return pauseRun($)
     if (/^config\b/.test(args)) return { text: configOpened(await openConfig($, 'config')) }
     const status = /^status\b\s*(.*)$/.exec(args)
@@ -2006,7 +2027,7 @@ export const register: Register = (on, options) => {
     const helpLang = helpLangOf(e.props.text)
     if (helpLang) {
       const { Box, Text } = $.ui.resolve(e)
-      const sections = helpSections(helpLang)
+      const sections = helpSections(helpLang, helpConfig)
       return (
         <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
           <Text bold color="subtle">
@@ -2024,7 +2045,10 @@ export const register: Register = (on, options) => {
                     <Box width={width} flexShrink={0}>
                       <Text color="suggestion">{line.key}</Text>
                     </Box>
-                    <Text>{line.text}</Text>
+                    <Text>
+                      {line.text}
+                      {line.now ? <Text color="subtle">{` · ${helpNow(helpLang, line.now)}`}</Text> : null}
+                    </Text>
                   </Box>
                 ))}
               </Box>

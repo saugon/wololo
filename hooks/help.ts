@@ -1,10 +1,16 @@
-export type HelpLine = { key: string; text: string }
+import { type Config, DEFAULT_CONFIG } from './config'
+
+// `now`: what applies when the person passes none of the line's flags, from the project's config.
+export type HelpLine = { key: string; text: string; now?: string }
 
 export type HelpSection = { title: string; lines: HelpLine[] }
 
 export const HELP_MARKER: Record<string, string> = { es: 'wololo · ayuda', en: 'wololo · help' }
 
-export function helpSections(lang: string): HelpSection[] {
+export function helpSections(lang: string, config: Config = DEFAULT_CONFIG): HelpSection[] {
+  const mode = (flag: string) => (config.autonomy === flag.slice(2) ? (lang === 'es' ? 'sin flag' : 'without a flag') : undefined)
+  const pick = (value: boolean, yes: string, no: string) => (value ? yes : no)
+  const adapters = Object.keys(config.adapters).join(', ')
   if (lang !== 'es') {
     return [
       {
@@ -13,9 +19,27 @@ export function helpSections(lang: string): HelpSection[] {
           { key: '/wololo <text>', text: 'a run from a request written in your own words' },
           { key: '/wololo #123', text: 'from a GitHub issue (number or URL)' },
           { key: '/wololo plan.md', text: 'from a local plan file' },
-          { key: '--full', text: 'never asks: decides alone and records every assumption' },
-          { key: '--checkpoints', text: 'stops to approve the spec and the PR (the default)' },
-          { key: '--guided', text: 'asks at every relevant doubt' },
+          { key: '--full', text: 'never asks: decides alone and records every assumption', now: mode('--full') },
+          { key: '--checkpoints', text: 'stops to approve the spec and the PR', now: mode('--checkpoints') },
+          { key: '--guided', text: 'asks at every relevant doubt', now: mode('--guided') },
+        ],
+      },
+      {
+        title: 'Launch flags: they change the config for that run only',
+        lines: [
+          { key: '--review-pr · --review-local', text: 'the change is approved on the PR once CI is green, or at Aprobar PR in the session', now: pick(config.review.approval === 'pr', '--review-pr', '--review-local') },
+          { key: '--awake · --no-awake', text: 'keep the machine awake while the run is active, or not', now: pick(config.keep_awake, '--awake', '--no-awake') },
+          { key: '--no-adapters', text: "wololo does every stage itself, without the project's tool", now: adapters ? `with the adapters for ${adapters}` : 'no adapters configured' },
+          { key: '--worktree · --in-place', text: 'work in a worktree, or in a branch of the repository', now: pick(config.isolation === 'worktree', '--worktree', '--in-place') },
+          { key: '--base=<branch>', text: 'the branch the work starts from and the PR goes to', now: `--base=${config.pr.base}` },
+          { key: '--no-pr · --draft · --ready', text: 'no PR, or open it as a draft or ready for review', now: config.pr.enabled ? pick(config.pr.draft, '--draft', '--ready') : '--no-pr' },
+          { key: '--no-wait-ci', text: "don't follow CI after opening the PR", now: pick(config.pr.wait_ci, 'follows CI', '--no-wait-ci') },
+          { key: '--no-screenshots', text: 'no screenshots stage', now: pick(config.screenshots.enabled, 'takes screenshots', '--no-screenshots') },
+          { key: '--github-spec · --no-github-spec', text: 'publish the spec on the issue, or keep it in the run', now: pick(config.spec.to_github, '--github-spec', '--no-github-spec') },
+          { key: '--debate=by_risk|light|deep', text: 'how hard the spec and the plan are challenged', now: `--debate=${config.debate.depth}` },
+          { key: '--critic=claude|external', text: 'who challenges them', now: `--critic=${config.debate.critic}` },
+          { key: '--reviewer=claude|external|both', text: 'who reviews each item', now: `--reviewer=${config.review.reviewer}` },
+          { key: '--suite=local|ci · --e2e=local|ci|off', text: 'where the full suite and the e2e run', now: `--suite=${config.tests.suite_runs} · --e2e=${config.tests.e2e_runs}` },
         ],
       },
       {
@@ -79,9 +103,27 @@ export function helpSections(lang: string): HelpSection[] {
         { key: '/wololo <texto>', text: 'un run a partir de un pedido escrito con tus palabras' },
         { key: '/wololo #123', text: 'desde un issue de GitHub (número o URL)' },
         { key: '/wololo plan.md', text: 'desde un plan en un archivo local' },
-        { key: '--full', text: 'no pregunta: decide solo y anota cada supuesto' },
-        { key: '--checkpoints', text: 'frena para aprobar el spec y el PR (el default)' },
-        { key: '--guided', text: 'pregunta en cada duda relevante' },
+        { key: '--full', text: 'no pregunta: decide solo y anota cada supuesto', now: mode('--full') },
+        { key: '--checkpoints', text: 'frena para aprobar el spec y el PR', now: mode('--checkpoints') },
+        { key: '--guided', text: 'pregunta en cada duda relevante', now: mode('--guided') },
+      ],
+    },
+    {
+      title: 'Flags al arrancar: cambian la config solo para ese run',
+      lines: [
+        { key: '--review-pr · --review-local', text: 'el cambio se aprueba en el PR con el CI verde, o en Aprobar PR en la sesión', now: pick(config.review.approval === 'pr', '--review-pr', '--review-local') },
+        { key: '--awake · --no-awake', text: 'que la Mac no se duerma mientras el run está activo, o sí', now: pick(config.keep_awake, '--awake', '--no-awake') },
+        { key: '--no-adapters', text: 'wololo hace cada etapa él mismo, sin la herramienta del proyecto', now: adapters ? `con los adaptadores de ${adapters}` : 'no hay adaptadores configurados' },
+        { key: '--worktree · --in-place', text: 'trabajar en un worktree, o en una rama del repo', now: pick(config.isolation === 'worktree', '--worktree', '--in-place') },
+        { key: '--base=<rama>', text: 'la rama de la que parte el trabajo y a la que va el PR', now: `--base=${config.pr.base}` },
+        { key: '--no-pr · --draft · --ready', text: 'sin PR, o abrirlo como borrador o listo para revisar', now: config.pr.enabled ? pick(config.pr.draft, '--draft', '--ready') : '--no-pr' },
+        { key: '--no-wait-ci', text: 'no seguir el CI después de abrir el PR', now: pick(config.pr.wait_ci, 'sigue el CI', '--no-wait-ci') },
+        { key: '--no-screenshots', text: 'sin la etapa de capturas', now: pick(config.screenshots.enabled, 'con capturas', '--no-screenshots') },
+        { key: '--github-spec · --no-github-spec', text: 'publicar el spec en el issue, o dejarlo en el run', now: pick(config.spec.to_github, '--github-spec', '--no-github-spec') },
+        { key: '--debate=by_risk|light|deep', text: 'qué tan a fondo se discuten el spec y el plan', now: `--debate=${config.debate.depth}` },
+        { key: '--critic=claude|external', text: 'quién los discute', now: `--critic=${config.debate.critic}` },
+        { key: '--reviewer=claude|external|both', text: 'quién revisa cada ítem', now: `--reviewer=${config.review.reviewer}` },
+        { key: '--suite=local|ci · --e2e=local|ci|off', text: 'dónde corren la suite completa y los e2e', now: `--suite=${config.tests.suite_runs} · --e2e=${config.tests.e2e_runs}` },
       ],
     },
     {
@@ -139,9 +181,14 @@ export function helpSections(lang: string): HelpSection[] {
   ]
 }
 
-export function helpText(lang: string): string {
-  const sections = helpSections(lang)
-  const body = sections.flatMap(section => ['', section.title, ...section.lines.map(line => `  ${line.key}: ${line.text}`)])
+export function helpNow(lang: string, now: string): string {
+  return now === 'sin flag' || now === 'without a flag' ? now : `${lang === 'es' ? 'sin flag' : 'without a flag'}: ${now}`
+}
+
+export function helpText(lang: string, config: Config = DEFAULT_CONFIG): string {
+  const sections = helpSections(lang, config)
+  const line = (l: HelpLine) => `  ${l.key}: ${l.text}${l.now ? ` (${helpNow(lang, l.now)})` : ''}`
+  const body = sections.flatMap(section => ['', section.title, ...section.lines.map(line)])
   return [...body.slice(1), '', HELP_MARKER[lang === 'es' ? 'es' : 'en']].join('\n')
 }
 
