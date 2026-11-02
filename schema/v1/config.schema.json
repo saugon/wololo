@@ -81,6 +81,13 @@
             "external",
             "both"
           ]
+        },
+        "approval": {
+          "enum": [
+            "local",
+            "pr"
+          ],
+          "description": "Where the change is approved: at Aprobar PR in the session (local), or on the PR once CI is green (pr)."
         }
       }
     },

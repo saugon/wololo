@@ -87,6 +87,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `commands.start`, `commands.app_url`, `commands.login` | how to run the app for screenshots; `{slot}` gives each parallel run its own ports |
 | `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only |
 | `pr.*` | open a PR, as a draft, wait for CI, and the base branch |
+| `review.approval` | where the change is approved: `local`, at Aprobar PR in the session, or `pr`, on the PR once CI is green (Aprobar PR passes by itself). `--review-pr` / `--review-local` override it for one run |
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |

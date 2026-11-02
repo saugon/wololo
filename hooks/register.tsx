@@ -734,6 +734,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   if (worktree) await excludeInsideRepo($, info.mainPath, worktree)
   const mode = ['full', 'checkpoints', 'guided'].includes(String(input.mode)) ? String(input.mode) : config.autonomy
   const risk = ['low', 'high', 'unknown'].includes(String(input.risk)) ? String(input.risk) : 'unknown'
+  const review = input.review === 'pr' || input.review === 'local' ? input.review : config.review.approval
 
   await costDelta($)
   run = emptyRun(id, ts)
@@ -746,6 +747,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     source: { kind: source.kind, ref: source.ref, url: source.url ?? null },
     project: { key: info.key, path: info.mainPath, worktree, branch, base: config.pr.base },
     mode,
+    review,
     risk,
     lang: config.languages.chat,
     slot,
@@ -996,6 +998,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
         },
         title: { type: 'string', description: 'Short human title of what the run delivers.' },
         mode: { type: 'string', enum: ['full', 'checkpoints', 'guided'], description: 'Overrides the configured autonomy for this run.' },
+        review: { type: 'string', enum: ['local', 'pr'], description: 'Overrides config.review.approval: approve the change at Aprobar PR (local) or on the PR once CI is green (pr).' },
         risk: { type: 'string', enum: ['low', 'high', 'unknown'] },
       },
       required: ['source', 'title'],

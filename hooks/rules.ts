@@ -31,6 +31,11 @@ const GATE_HEADERS: Partial<Record<StageId, readonly string[]>> = {
 }
 const APPROVAL = /^\s*(aprobar|approve)\b/i
 
+// A gate the run passes by itself: every gate in full mode, and Aprobar PR when the change is approved on the PR.
+function selfResolved(run: Run, id: StageId): boolean {
+  return run.mode === 'full' || (id === 'gate_b' && run.review === 'pr')
+}
+
 function gateResolved(run: Run, id: StageId): boolean {
   return run.gates[id]?.resolved_at != null
 }
@@ -78,11 +83,11 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       const ci = run.stage?.index ?? -1
       if (ti <= ci) return text(data.reason) ? null : `Going back to ${target} needs data.reason.`
       const current = run.stage?.id
-      if (current && isGate(current) && !gateResolved(run, current) && run.mode !== 'full') {
+      if (current && isGate(current) && !gateResolved(run, current) && !selfResolved(run, current)) {
         return `${current} is not resolved. Ask the person with AskUserQuestion, then record gate.resolved.`
       }
       for (const skipped of STAGES.slice(ci + 1, ti)) {
-        if (skipped.isGate && run.mode === 'full') continue
+        if (skipped.isGate && selfResolved(run, skipped.id)) continue
         if (skipped.isGate && !gateResolved(run, skipped.id)) return `${skipped.id} must be resolved before ${target}.`
         if (!skipped.isGate)
           return `Enter ${skipped.id} before ${target}; a stage that does not apply is entered and completed with a note.`
@@ -97,7 +102,8 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       if (stageIndex(gate) < 0 || !isGate(gate)) return `"${String(data.gate)}" is not a gate. Gates: gate_a, gate_b.`
       if (type === 'gate.requested') return null
       const by = data.by ?? 'user'
-      if (by === 'auto') return run.mode === 'full' ? null : `Only a full-autonomy run resolves a gate by itself; this run is ${run.mode}.`
+      if (by === 'auto')
+        return selfResolved(run, gate) ? null : `Only a full-autonomy run, or Aprobar PR when the change is approved on the PR, resolves a gate by itself; this run is ${run.mode}.`
       const requested = run.gates[gate]?.requested_at
       if (requested === undefined) return `Enter ${gate} (or record gate.requested) before resolving it.`
       const outcome = String(data.outcome ?? 'approved')

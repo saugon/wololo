@@ -268,3 +268,16 @@ test('each attempt goes verify, review, commit, and commits the tree that was ve
   ])
   expect(checkEvent(retried, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toMatch(/verify it/)
 })
+
+test('a run approved on the PR passes Aprobar PR by itself, and still asks Aprobar spec', async () => {
+  const onPr = runAt('checkpoints', [])
+  onPr.review = 'pr'
+  expect(checkEvent(onPr, 'gate.resolved', { gate: 'gate_b', outcome: 'approved', by: 'auto' })).toBe(null)
+  expect(checkEvent(onPr, 'gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'auto' })).toMatch(/full-autonomy/)
+  const local = runAt('checkpoints', [])
+  expect(checkEvent(local, 'gate.resolved', { gate: 'gate_b', outcome: 'approved', by: 'auto' })).toMatch(/full-autonomy/)
+  const started = rebuild('r1', [
+    { v: 1, seq: 1, ts: 1, run: 'r1', type: 'run.started', data: { title: 't', source: { kind: 'text', ref: 'x', url: null }, mode: 'guided', review: 'pr' } },
+  ])
+  expect(started.review).toBe('pr')
+})

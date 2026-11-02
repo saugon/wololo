@@ -90,6 +90,15 @@ export const SECTIONS: Section[] = [
           { value: 'both', label: t('los dos', 'both') },
         ],
       },
+      {
+        kind: 'radio',
+        path: 'review.approval',
+        label: t('Aprobación del cambio', 'Approving the change'),
+        options: [
+          { value: 'local', label: t('en la sesión (Aprobar PR)', 'in the session (Approve PR)') },
+          { value: 'pr', label: t('en el PR, con CI en verde', 'on the PR, once CI is green') },
+        ],
+      },
       { kind: 'number', path: 'budgets.debate_rounds', label: t('Rondas máximas', 'Max rounds') },
       {
         kind: 'list',

@@ -233,6 +233,8 @@ export type Run = {
   source: Source
   project: Project
   mode: Mode
+  // Where this run's change is approved: at Aprobar PR (local) or on the PR (pr). Runs from before it are local.
+  review?: 'local' | 'pr'
   risk: Risk
   lang: Lang
   slot: number
@@ -404,6 +406,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.source = (d.source as Source) ?? r.source
       r.project = (d.project as Project) ?? r.project
       r.mode = (d.mode as Mode) ?? r.mode
+      if (d.review === 'pr' || d.review === 'local') r.review = d.review
       r.risk = (d.risk as Risk) ?? r.risk
       r.lang = (d.lang as Lang) ?? r.lang
       r.slot = num(d.slot)

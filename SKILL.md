@@ -1,7 +1,7 @@
 ---
 name: wololo
 description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] | help | status | history | pause | resume [run] | panel | init | config | cancel
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] [--review-pr | --review-local] | help | status | history | pause | resume [run] | panel | init | config | cancel
 ---
 
 # wololo
@@ -34,7 +34,7 @@ Take the text after `/wololo`:
 
 ## Start a run
 
-1. **Mode.** `--full`, `--checkpoints` or `--guided` in the text overrides the configured autonomy for this run.
+1. **Mode.** `--full`, `--checkpoints` or `--guided` in the text overrides the configured autonomy for this run. `--review-pr` or `--review-local` overrides `config.review.approval`: with `pr`, Aprobar PR passes by itself and the change is approved on the PR once CI is green; pass it to `start` as `review`.
 2. **Source.**
    - `#123`, `123` or a GitHub issue URL → `github_issue`.
    - The path of an existing file → `file`.

@@ -35,7 +35,8 @@ export type Config = {
     critic: 'claude' | 'external'
     external_cmd: string[]
   }
-  review: { reviewer: 'claude' | 'external' | 'both' }
+  // approval: where the change is approved, at Aprobar PR in the session (local) or on the PR itself once CI is green (pr).
+  review: { reviewer: 'claude' | 'external' | 'both'; approval: 'local' | 'pr' }
   isolation: 'worktree' | 'branch'
   worktree_dir: string
   branch: string
@@ -83,7 +84,7 @@ export const DEFAULT_CONFIG: Config = {
     critic: 'claude',
     external_cmd: ['codex', 'exec', '--sandbox', 'read-only', '-'],
   },
-  review: { reviewer: 'claude' },
+  review: { reviewer: 'claude', approval: 'local' },
   isolation: 'worktree',
   worktree_dir: '.claude/worktrees/wololo-{run}',
   branch: 'wololo/{ref}-{slug}',
@@ -148,6 +149,7 @@ const ENUMS: Record<string, readonly string[]> = {
   'debate.depth': ['by_risk', 'light', 'deep'],
   'debate.critic': ['claude', 'external'],
   'review.reviewer': ['claude', 'external', 'both'],
+  'review.approval': ['local', 'pr'],
   isolation: ['worktree', 'branch'],
   'languages.chat': ['es', 'en'],
   'view.pane': ['auto', 'command', 'off'],
