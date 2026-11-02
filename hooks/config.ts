@@ -76,6 +76,8 @@ export type Config = {
     run_minutes: number
   }
   permissions: { auto_allow: boolean }
+  // While a run is active and the machine has caffeinate (macOS), keep it from sleeping, so an unattended run goes on.
+  keep_awake: boolean
   adapters: Partial<Record<AdapterPoint, Adapter>>
   // Runs another tool drives without a session, shown in /wololo status: the command that lists them, and the one that says where one stands ({run}).
   mirror: { list: string; run: string }
@@ -136,6 +138,7 @@ export const DEFAULT_CONFIG: Config = {
     run_minutes: 240,
   },
   permissions: { auto_allow: true },
+  keep_awake: false,
   adapters: {},
   mirror: { list: '', run: '' },
   risk_paths: [],

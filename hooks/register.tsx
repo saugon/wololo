@@ -56,6 +56,12 @@ type Engine = EngineInterface
 const TOOL_PREFIX = 'mcp__wololo__'
 const PANE = 'wololo'
 const TICK_MS = 1_000
+// keep_awake holds the machine up in five-minute leases, renewed every four while a run is active: the lease ends on its own when the run or
+// the session does.
+const AWAKE_LEASE_SECONDS = 300
+const AWAKE_RENEW_TICKS = 240
+// The tick at which the next lease is due: the first tick a run is active, then every AWAKE_RENEW_TICKS.
+let awakeRenewAt = 0
 const HEARTBEAT_TICKS = 15
 const REDRAW_TICKS = 30
 const MAX_NUDGES = 2
@@ -590,6 +596,12 @@ async function statusOutput($: Engine, args: string): Promise<{ text: string }> 
   statusRenders.set(stamp, [...statusCards(runs, ts), ...mirrorCards(mirrored, project, lang)])
   const lines = mirrored.map(m => `runner ${m.issue ? `#${m.issue}` : m.id} · ${m.state} · ${m.waiting_on}${m.exit === 2 && m.unblock ? ` · ${m.unblock}` : ''}`)
   return { text: [statusTable(runs, ts), ...(lines.length > 0 ? ['', ...lines] : []), '', stamp].join('\n') }
+}
+
+async function keepAwake($: Engine) {
+  await $.process
+    .run(['sh', '-c', `command -v caffeinate >/dev/null && (caffeinate -i -t ${AWAKE_LEASE_SECONDS} >/dev/null 2>&1 &)`], { timeoutMs: 5_000 })
+    .catch(() => undefined)
 }
 
 // The runs config.mirror points at that have not ended, each with where it stands; none when the config names no command or it fails.
@@ -1519,6 +1531,10 @@ export const register: Register = (on, options) => {
           ticks += 1
           if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
           if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
+          if (config.keep_awake && run && !run.outcome && ticks >= awakeRenewAt) {
+            await keepAwake($)
+            awakeRenewAt = ticks + AWAKE_RENEW_TICKS
+          }
           await flush($)
         }).finally(() => {
           isWriting = false

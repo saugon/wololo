@@ -93,6 +93,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
 | `mirror.list`, `mirror.run` | show in `/wololo status` the runs another tool drives without a session: the command that lists them (`data.runs`) and the one that says where one stands (`{run}`), both as the JSON protocol of **Adapters** |
 | `adapters.<point>` | hand a point of the run (`definition`, `gate_a`, `plan`, `item`, `pr`, `poll`) to another tool; see **Adapters** below |
+| `keep_awake` | while a run is active, keep the machine from sleeping (`caffeinate`, macOS), in five-minute leases that lapse on their own when the run or the session ends; for a run left unattended in `full` |
 | `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
 | `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |
 | `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |

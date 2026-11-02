@@ -1,4 +1,4 @@
-import { type TestBody, expect, test } from 'claude-code/testing'
+import { type TestBody, expect, mock, test } from 'claude-code/testing'
 
 const HOME = '/home/t'
 const REPO = '/repo'
@@ -6,7 +6,7 @@ const DATA = `${HOME}/.claude/wololo`
 
 type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
 
-function fakeHost(on: Parameters<TestBody>[1]): Host {
+function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}): Host {
   const files = new Map<string, string>()
   const gh: string[] = []
   const tools = new Map<string, boolean>()
@@ -98,9 +98,11 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
     return done('', 1)
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
-  on('clock.every', () => ({ value: undefined }))
-  let now = 1_800_000_000_000
-  on('clock.now', () => ({ value: (now += 1_000) }))
+  if (options.clock !== false) {
+    on('clock.every', () => ({ value: undefined }))
+    let now = 1_800_000_000_000
+    on('clock.now', () => ({ value: (now += 1_000) }))
+  }
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
   return { files, gh, tools, ps, killed, shells, answers }
 }
@@ -644,4 +646,19 @@ test("/wololo-status shows the runs another tool drives, and what unblocks the o
   expect(await ui.find({ type: 'Text', text: /te espera/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /sigue solo/ })).toBeTruthy()
   await ui.unmount()
+})
+
+test('keep_awake holds the machine up in leases while a run is active, and not otherwise', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ keep_awake: true }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await clock.advance(3_000)
+  expect(host.shells.filter(line => line.includes('caffeinate'))).toEqual([])
+  await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)
+  await clock.advance(3_000)
+  expect(host.shells.filter(line => line.includes('caffeinate -i -t 300'))).toHaveLength(1)
+  await clock.advance(240_000)
+  expect(host.shells.filter(line => line.includes('caffeinate -i -t 300'))).toHaveLength(2)
 })

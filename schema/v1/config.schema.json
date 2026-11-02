@@ -459,6 +459,10 @@
           "description": "Where one run stands, as JSON; {run} is its id."
         }
       }
+    },
+    "keep_awake": {
+      "type": "boolean",
+      "description": "While a run is active, keep the machine from sleeping (caffeinate, macOS)."
     }
   }
 }
