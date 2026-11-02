@@ -33,14 +33,14 @@ At gate_a the issue is updated as in "After approval" below.
      - the assumptions and decisions;
      - the branch and the PR title it will open;
      - how many commits are unsigned, if any: they are signed right after approval, so the person should have their signing key unlocked when they approve.
-3. **Ask** with AskUserQuestion, with the context block before it. Options:
+3. **Ask** with AskUserQuestion, with the context block before it, under the gate's header (**Aprobar spec** or **Aprobar PR**): the run accepts `gate.resolved` only on an answer to that question, and a dialog the person cancelled is no answer, so ask again. Options:
    - **Aprobar (Recomendado)**;
    - **Ajustar**: the person says what to change;
    - **Ver completo**: you print `spec.md` whole (at gate_b, the diff of each file), and ask again;
    - **Cancelar el run**.
 4. **Apply the answer.**
    - **Aprobar**: `event gate.resolved {gate, outcome: "approved", by: "user"}`, then "After approval".
-   - **Ajustar**: apply the change and record each point as a `decision`. Ask again; the run stays in the gate. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`. At gate_b the equivalent is `implement`.
+   - **Ajustar**: apply the change and record each point as a `decision`, and `gate.resolved {gate, outcome: "changes", by: "user"}`. Ask again; the run stays in the gate until an approval. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`. At gate_b the equivalent is `implement`.
    - **Ver completo**: show it and ask again.
    - **Cancelar**: `run.finished {outcome: "cancelled", summary}`.
 

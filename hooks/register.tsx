@@ -1417,7 +1417,9 @@ export const register: Register = (on, options) => {
             ...q,
             answer: typeof result?.answers?.[q.question] === 'string' ? result.answers[q.question] : '',
           }))
-          await emit($, 'question.answered', { pairs, response: typeof result?.response === 'string' ? result.response : null })
+          // Answered only when the dialog returned and the person chose something; a cancelled or denied one is recorded as not answered.
+          const answered = result !== undefined && (pairs.some(pair => pair.answer !== '') || typeof result.response === 'string')
+          await emit($, 'question.answered', { pairs, response: typeof result?.response === 'string' ? result.response : null, answered })
           if (ran && ran.deny === undefined) await liftBlock($, 'answer')
         }
       }

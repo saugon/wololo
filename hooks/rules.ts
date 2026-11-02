@@ -24,6 +24,13 @@ function isGate(id: StageId): boolean {
   return STAGES[stageIndex(id)]?.isGate === true
 }
 
+// The AskUserQuestion header each gate is asked under, as stages/gates.md names it to the person.
+const GATE_HEADERS: Partial<Record<StageId, readonly string[]>> = {
+  gate_a: ['Aprobar spec', 'Approve spec'],
+  gate_b: ['Aprobar PR', 'Approve PR'],
+}
+const APPROVAL = /^\s*(aprobar|approve)\b/i
+
 function gateResolved(run: Run, id: StageId): boolean {
   return run.gates[id]?.resolved_at != null
 }
@@ -62,12 +69,18 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       if (by === 'auto') return run.mode === 'full' ? null : `Only a full-autonomy run resolves a gate by itself; this run is ${run.mode}.`
       const requested = run.gates[gate]?.requested_at
       if (requested === undefined) return `Enter ${gate} (or record gate.requested) before resolving it.`
-      if (run.last_answer_at === null || run.last_answer_at < requested) {
-        return `${gate} needs the person's answer: ask with AskUserQuestion after requesting it, then record gate.resolved.`
+      const outcome = String(data.outcome ?? 'approved')
+      if (!['approved', 'changes', 'rejected'].includes(outcome)) return 'data.outcome must be approved, changes or rejected.'
+      const headers = GATE_HEADERS[gate] ?? []
+      const answer = run.last_answer && run.last_answer.at >= requested ? run.last_answer : null
+      const pair = answer?.pairs.find(p => headers.some(header => header.toLowerCase() === p.header.trim().toLowerCase()))
+      if (!pair) {
+        return `${gate} needs the person's answer to its own question: ask with AskUserQuestion under the header "${headers[0] ?? gate}" after requesting it (a cancelled dialog is no answer), then record gate.resolved.`
       }
-      return ['approved', 'changes', 'rejected'].includes(String(data.outcome ?? 'approved'))
-        ? null
-        : 'data.outcome must be approved, changes or rejected.'
+      if (outcome === 'approved' && !APPROVAL.test(pair.answer)) {
+        return `The person answered "${pair.answer}", which is not an approval: apply it, ask again, and record the outcome they chose.`
+      }
+      return null
     }
     case 'risk.set':
       return ['low', 'high', 'unknown'].includes(String(data.risk)) ? null : 'data.risk must be low, high or unknown.'

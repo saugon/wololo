@@ -31,9 +31,48 @@ test('outside full mode a gate needs an answer given after it was requested', as
   const answered = runAt('checkpoints', [
     ['stage.entered', { stage: 'definition' }, 3],
     ['stage.entered', { stage: 'gate_a' }, 4],
-    ['question.answered', {}, 5],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Aprobar (Recomendado)' }], answered: true }, 5],
   ])
   expect(checkEvent(answered, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toBe(null)
+})
+
+function atGateA(answer: Record<string, unknown>) {
+  return runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'gate_a' }, 4],
+    ['question.answered', answer, 5],
+  ])
+}
+
+test('a gate is answered by its own question, and a cancelled dialog answers nothing', async () => {
+  const cancelled = atGateA({ pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: '' }], answered: false })
+  expect(checkEvent(cancelled, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toMatch(/cancelled dialog/)
+  const elsewhere = atGateA({ pairs: [{ header: 'Commit', question: '¿Cómo sigo?', answer: 'Aprobar' }], answered: true })
+  expect(checkEvent(elsewhere, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toMatch(/Aprobar spec/)
+  const english = atGateA({ pairs: [{ header: 'Approve spec', question: 'Approve?', answer: 'Approve (Recommended)' }], answered: true })
+  expect(checkEvent(english, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toBe(null)
+})
+
+test('only an approving answer approves a gate, and changes leave it pending until asked again', async () => {
+  const adjust = atGateA({ pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Ajustar' }], answered: true })
+  expect(checkEvent(adjust, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toMatch(/not an approval/)
+  expect(checkEvent(adjust, 'gate.resolved', { gate: 'gate_a', outcome: 'changes' })).toBe(null)
+  const changed = runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'gate_a' }, 4],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Ajustar' }], answered: true }, 5],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'changes', by: 'user' }, 6],
+  ])
+  expect(checkEvent(changed, 'stage.entered', { stage: 'plan' })).toMatch(/gate_a is not resolved/)
+  const approved = runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'gate_a' }, 4],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Ajustar' }], answered: true }, 5],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'changes', by: 'user' }, 6],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Aprobar (Recomendado)' }], answered: true }, 7],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }, 8],
+  ])
+  expect(checkEvent(approved, 'stage.entered', { stage: 'plan' })).toBe(null)
 })
 
 test('a full run may skip gates and resolve them by itself', async () => {

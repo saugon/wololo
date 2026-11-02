@@ -270,6 +270,8 @@ export type Run = {
   last_seq: number
   last_user_at: number | null
   last_answer_at: number | null
+  // The last question the person answered, with each header and the option they chose: what a gate is resolved on.
+  last_answer: { at: number; pairs: Array<{ header: string; answer: string }> } | null
   created_at: number
   updated_at: number
   finished_at: number | null
@@ -342,6 +344,7 @@ export function emptyRun(id: string, ts: number): Run {
     last_seq: 0,
     last_user_at: null,
     last_answer_at: null,
+    last_answer: null,
     created_at: ts,
     updated_at: ts,
     finished_at: null,
@@ -446,10 +449,12 @@ export function apply(run: Run, ev: RunEvent): Run {
         outcome: null,
         by: null,
       }
+      const outcome = str(d.outcome, 'approved')
+      // Only an approval passes a gate: after changes or a rejection it is pending again, and needs a new answer.
       r.gates[id] = {
         ...gate,
-        resolved_at: ev.ts,
-        outcome: str(d.outcome, 'approved'),
+        resolved_at: outcome === 'approved' ? ev.ts : null,
+        outcome,
         by: str(d.by, 'user'),
       }
       for (const s of r.stages) if (s.id === id && s.finished_at === null) s.finished_at = ev.ts
@@ -460,7 +465,12 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'question.answered':
       if (r.waiting?.on === 'user') r.waiting = null
-      r.last_answer_at = ev.ts
+      // A dialog the person cancelled or dismissed is no answer. Events from before `answered` existed count as one.
+      if (d.answered !== false) {
+        r.last_answer_at = ev.ts
+        const pairs = Array.isArray(d.pairs) ? d.pairs : []
+        r.last_answer = { at: ev.ts, pairs: pairs.map(pair => ({ header: str(pair?.header), answer: str(pair?.answer) })) }
+      }
       break
     case 'permission.asked':
       if (r.waiting?.on !== 'user') r.waiting = { on: 'permission', question: [str(d.tool), str(d.what)].filter(Boolean).join(' · '), since: ev.ts }
