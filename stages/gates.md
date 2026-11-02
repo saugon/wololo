@@ -52,6 +52,8 @@ The run keeps what each gate approved: `spec.md` for **Aprobar spec**; `spec.md`
 
 **At gate_a:**
 
+When `config.adapters.gate_a` exists, call `mcp__wololo__run_adapter {point: "gate_a"}` right after the approval, before anything below: it records the approval where the project's tool reads it.
+
 When `config.spec.to_github` is false, nothing goes to GitHub: the spec stays in `run_dir/spec.md` only, and this step ends here.
 
 Otherwise, publish the minimum someone needs to understand and check the change, in `config.languages.issue`:

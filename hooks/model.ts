@@ -89,6 +89,7 @@ export type EventType =
   | 'signing.deferred'
   | 'signing.done'
   | 'github.published'
+  | 'adapter.ran'
   | 'screenshot.saved'
   | 'usage'
   | 'time'
@@ -233,6 +234,8 @@ export type Run = {
   source: Source
   project: Project
   mode: Mode
+  // Values the run's adapters captured, for the commands of later steps.
+  adapter_vars?: Record<string, string>
   // Where this run's change is approved: at Aprobar PR (local) or on the PR (pr). Runs from before it are local.
   review?: 'local' | 'pr'
   risk: Risk
@@ -603,6 +606,9 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'signing.done':
       r.counts.unsigned = 0
+      break
+    case 'adapter.ran':
+      if (d.captured && typeof d.captured === 'object') r.adapter_vars = { ...(r.adapter_vars ?? {}), ...(d.captured as Record<string, string>) }
       break
     case 'blocked':
       r.blocked = { reason: str(d.reason), since: ev.ts }

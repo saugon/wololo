@@ -4,7 +4,7 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; killed: string[] }
+type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
 
 function fakeHost(on: Parameters<TestBody>[1]): Host {
   const files = new Map<string, string>()
@@ -12,6 +12,8 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
   const tools = new Map<string, boolean>()
   const ps = new Map<string, string>()
   const killed: string[] = []
+  const shells: string[] = []
+  const answers: Array<{ match: RegExp; stdout: string; exit: number }> = []
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('session.id', () => ({ value: 's1' }))
@@ -72,6 +74,12 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
       const shown = ps.get(args[args.length - 1] ?? '')
       return shown === undefined ? done('', 1) : done(shown)
     }
+    if (cmd === 'sh' && args[0] === '-c') {
+      const line = args[1] ?? ''
+      shells.push(line)
+      const found = answers.find(answer => answer.match.test(line))
+      return found ? done(found.stdout, found.exit) : done('', 127)
+    }
     if (cmd === 'kill') {
       killed.push(args.join(' '))
       return done()
@@ -85,6 +93,7 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
       if (line === 'rev-parse --show-toplevel') return done(REPO)
       if (line.startsWith('rev-parse --path-format=absolute --git-common-dir')) return done(`${REPO}/.git`)
       if (line === 'remote get-url origin') return done('git@github.com:acme/shop.git')
+      if (line === 'rev-parse HEAD') return done('5ha1')
     }
     return done('', 1)
   })
@@ -93,7 +102,7 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
   let now = 1_800_000_000_000
   on('clock.now', () => ({ value: (now += 1_000) }))
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
-  return { files, gh, tools, ps, killed }
+  return { files, gh, tools, ps, killed, shells, answers }
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -554,4 +563,55 @@ test('a finished run stops the servers it started, and only those', async ($, on
   )
   expect(host.killed).toEqual(['-TERM -4240'])
   expect((finished.cleanup as { stopped: string[] }).stopped).toEqual(['4242 (make backend.run)'])
+})
+
+const RUNNER = {
+  item: {
+    steps: [
+      { cmd: 'make agent.adopt ISSUE={issue} CONFIRM={confirm} JSON=1', if_missing: 'runner_run', capture: { runner_run: 'run', publish_hash: '/CONFIRM=(\\w+)/' }, accept_states: ['verified'] },
+      { cmd: 'make agent.verify RUN={runner_run} SHA={sha} JSON=1', if_present: 'runner_run', capture: { publish_hash: '/CONFIRM=(\\w+)/' }, accept_states: ['verified'] },
+    ],
+  },
+  plan: { steps: [{ cmd: 'make agent.plan ISSUE={issue} JSON=1', capture: { confirm: 'data.confirm' } }] },
+}
+
+async function adapterRun($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]) {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ adapters: RUNNER, env: { set: {}, unset: ['INST'] } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'X' } as never)).result)
+  return host
+}
+
+const adapter = async ($: Parameters<TestBody>[0], point: string) => parse((await $.tool.call({ tool: 'mcp__wololo__run_adapter', point } as never)).result)
+
+test("an adapter hands a point of the run to the project's tool, and carries what it answers to the next steps", async ($, on) => {
+  const host = await adapterRun($, on)
+  host.answers.push({ match: /agent\.plan/, stdout: JSON.stringify({ ok: true, command: 'plan', data: { confirm: 'c0ffee' } }), exit: 0 })
+  host.answers.push({ match: /agent\.adopt/, stdout: JSON.stringify({ ok: true, run: 'r42', state: 'verified', unblock: 'make agent.publish RUN=r42 CONFIRM=h1' }), exit: 2 })
+  host.answers.push({ match: /agent\.verify/, stdout: JSON.stringify({ ok: true, run: 'r42', state: 'verified', unblock: 'make agent.publish RUN=r42 CONFIRM=h2' }), exit: 2 })
+  expect((await adapter($, 'plan')).blocked).toBe(false)
+  expect((await adapter($, 'item')).blocked).toBe(false)
+  expect((await adapter($, 'item')).blocked).toBe(false)
+  // The first item hands the branch over; the next ones are verified inside the run it captured.
+  expect(host.shells).toEqual([
+    'env -u INST make agent.plan ISSUE=12 JSON=1',
+    'env -u INST make agent.adopt ISSUE=12 CONFIRM=c0ffee JSON=1',
+    'env -u INST make agent.verify RUN=r42 SHA=5ha1 JSON=1',
+  ])
+  const status = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result) as { run: { adapter_vars: Record<string, string>; blocked: unknown } }
+  expect(status.run.adapter_vars).toEqual({ confirm: 'c0ffee', runner_run: 'r42', publish_hash: 'h2' })
+  expect(status.run.blocked ?? null).toBe(null)
+  expect(String((await adapter($, 'poll')).reason)).toContain('nothing for poll')
+})
+
+test("a refusal of the project's tool blocks the run with its words, and a missing value is named", async ($, on) => {
+  const host = await adapterRun($, on)
+  host.answers.push({ match: /agent\.plan/, stdout: JSON.stringify({ ok: false, code: 'not_approved', message: 'Issue is not approved: approve its current spec' }), exit: 1 })
+  const refused = await adapter($, 'plan')
+  expect(refused.blocked).toBe(true)
+  const status = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result) as { run: { blocked: { reason: string } } }
+  expect(status.run.blocked.reason).toBe('plan: Issue is not approved: approve its current spec')
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__run_adapter', point: 'item' } as never)).result)).toContain('needs confirm')
 })

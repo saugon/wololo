@@ -24,5 +24,5 @@ Goal: `run_dir/spec.md`, a definition a reviewer can approve and an implementer 
    - **full**: resolve them all yourself as assumptions. A blocking condition still stops the run.
 
    Each answer is a `decision {text, by: "person"}`. Decided means final: no critic and no later revision may reopen it.
-4. **Debate the spec**: follow `stages/debate.md` with `stage: "definition"` and the document `spec.md`.
+4. **Debate the spec**: follow `stages/debate.md` with `stage: "definition"` and the document `spec.md`. When `config.adapters.definition` exists, call `mcp__wololo__run_adapter {point: "definition"}` after writing `spec.md`; if it `replaces` the debate, skip your own and take the tool's result into `spec.md`.
 5. `event stage.completed {stage: "definition"}`, then go to `stages/gates.md` for gate_a.

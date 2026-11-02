@@ -38,6 +38,7 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
      2. Record `item.committed {n, sha, title}`, then `signing.deferred {n, sha}`.
      3. Keep going. The commits get signed before the push (`stages/06-pr.md`).
    - Any other commit failure (a pre-commit hook, a conflict) is a real failure: fix it through the implement loop.
+   - When `config.adapters.item` exists, call `mcp__wololo__run_adapter {point: "item"}` after recording the commit: the project's tool checks the item too. If it blocks the run with findings, they are the item's next attempt (`item.started {n, title}` again).
 6. **Log.** Append to `log.md`:
 
    ```

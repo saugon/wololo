@@ -2,7 +2,7 @@
 
 Goal: `run_dir/plan.md`, small items, each with how it is verified.
 
-1. `event stage.entered {stage: "plan"}`.
+1. `event stage.entered {stage: "plan"}`. When `config.adapters.plan` exists, call `mcp__wololo__run_adapter {point: "plan"}` now: a refusal (the project's tool does not take the issue as it is) blocks the run before any plan is written.
 2. **Architects.** Give each one `spec.md`, `context.md` and its approach.
    - Low risk or `light`: one `wololo:architect`, pragmatic.
    - High or unknown risk: two in parallel, minimal and pragmatic.

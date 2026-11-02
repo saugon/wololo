@@ -382,6 +382,69 @@
           }
         }
       }
+    },
+    "adapters": {
+      "type": "object",
+      "description": "Steps handed to another tool at points of the run (definition, gate_a, plan, item, pr, poll).",
+      "propertyNames": {
+        "enum": [
+          "definition",
+          "gate_a",
+          "plan",
+          "item",
+          "pr",
+          "poll"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "replaces": {
+            "type": "boolean"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "cmd"
+              ],
+              "properties": {
+                "cmd": {
+                  "type": "string"
+                },
+                "capture": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "accept_codes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "if_missing": {
+                  "type": "string"
+                },
+                "if_present": {
+                  "type": "string"
+                },
+                "accept_states": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
     }
   }
 }

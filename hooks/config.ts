@@ -12,6 +12,24 @@ export type StartCommand = {
 
 export type TouchedCommand = { match: string; cmd: string }
 
+// Where a run hands a step to another tool, such as a project's own delivery runner.
+export const ADAPTER_POINTS = ['definition', 'gate_a', 'plan', 'item', 'pr', 'poll'] as const
+export type AdapterPoint = (typeof ADAPTER_POINTS)[number]
+export type AdapterStep = {
+  // A shell command, run in the work tree with config.env; {name} takes a run variable or one captured before.
+  cmd: string
+  // name: a dotted path into the command's JSON answer, or /regex/ whose first group is taken from its output.
+  capture?: Record<string, string>
+  // Refusals the step expects, by the answer's code: they do not block the run.
+  accept_codes?: string[]
+  // States the step expects the tool to leave its own run in while it waits on a person (exit 2), such as verified: they do not block the run.
+  accept_states?: string[]
+  // Run the step only when the variable was (not) captured before this point started.
+  if_missing?: string
+  if_present?: string
+}
+export type Adapter = { replaces?: boolean; steps: AdapterStep[] }
+
 export type TestsConfig = {
   follow: 'wololo' | 'project'
   rules_from: string[]
@@ -58,6 +76,7 @@ export type Config = {
     run_minutes: number
   }
   permissions: { auto_allow: boolean }
+  adapters: Partial<Record<AdapterPoint, Adapter>>
   // Paths whose change makes a run high risk, whatever risk it was given.
   risk_paths: string[]
   // Variables every project command runs with (set) or without (unset), so the session's own environment does not leak in.
@@ -115,6 +134,7 @@ export const DEFAULT_CONFIG: Config = {
     run_minutes: 240,
   },
   permissions: { auto_allow: true },
+  adapters: {},
   risk_paths: [],
   env: { set: {}, unset: [] },
   view: {
@@ -166,7 +186,7 @@ function typeOf(value: unknown): string {
   return typeof value
 }
 
-const OPEN_MAPS = ['models', 'project_agents', 'env.set']
+const OPEN_MAPS = ['models', 'project_agents', 'env.set', 'adapters']
 
 function walkTypes(expected: unknown, actual: unknown, path: string, errors: string[]) {
   if (actual === undefined) return

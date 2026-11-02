@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
-import { type Config, DEFAULT_CONFIG, envPrefix, expand, merge, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv } from './config'
+import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, merge, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv } from './config'
 import {
   type EventType,
   type Live,
@@ -959,6 +959,80 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   })
 }
 
+// A value at a dotted path of a JSON answer, or the first group of /regex/ in the output.
+function captured(spec: string, answer: Record<string, unknown> | null, output: string): string | null {
+  const regex = /^\/(.+)\/$/.exec(spec)
+  if (regex?.[1]) return new RegExp(regex[1]).exec(output)?.[1] ?? null
+  let value: unknown = answer
+  for (const key of spec.split('.')) value = isObject(value) ? value[key] : undefined
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : null
+}
+
+async function runAdapter($: Engine, input: Record<string, unknown>): Promise<string> {
+  if (!run || !paths) return fail('No active run in this session.')
+  const point = String(input.point) as AdapterPoint
+  const adapter = config.adapters[point]
+  if (!adapter) return ok({ ran: false, reason: `config.adapters has nothing for ${point}: the stage does its own work.` })
+  const known = { ...(run.adapter_vars ?? {}) }
+  const head = run.project.worktree ? await git($, run.project.worktree, ['rev-parse', 'HEAD']) : null
+  const vars: Record<string, string> = {
+    ...known,
+    issue: run.source.kind === 'github_issue' ? run.source.ref.replace(/^#/, '') : '',
+    branch: run.project.branch ?? '',
+    base: run.project.base ?? config.pr.base,
+    worktree: workdir(),
+    run_dir: runDir(paths, run.id),
+    sha: head ?? '',
+  }
+  const prefix = envPrefix(config.env)
+  const results: Array<Record<string, unknown>> = []
+  for (const step of adapter.steps) {
+    if (step.if_missing && known[step.if_missing]) continue
+    if (step.if_present && !known[step.if_present]) continue
+    const missing = [...step.cmd.matchAll(/\{(\w+)\}/g)].map(m => m[1] ?? '').filter(name => !vars[name])
+    if (missing.length > 0) {
+      const reason = `The ${point} adapter needs ${missing.join(', ')} for \`${step.cmd}\`, and the run has none yet.`
+      await emit($, 'blocked', { reason })
+      return fail(reason)
+    }
+    const cmd = withEnv(expand(step.cmd, vars), prefix)
+    const ran = await $.process
+      .run(['sh', '-c', cmd], { cwd: workdir(), timeoutMs: 600_000 })
+      .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
+    const output = `${ran.stdout}\n${ran.stderr}`
+    const answer = (() => {
+      const last = ran.stdout.trim().split('\n').pop() ?? ''
+      const parsed = parseJson(last).value
+      return isObject(parsed) ? (parsed as Record<string, unknown>) : null
+    })()
+    const got: Record<string, string> = {}
+    for (const [name, spec] of Object.entries(step.capture ?? {})) {
+      const value = captured(spec, answer, output)
+      if (value !== null) got[name] = value
+    }
+    Object.assign(vars, got)
+    const refused = answer ? answer.ok === false : ran.exitCode !== 0
+    const code = typeof answer?.code === 'string' ? answer.code : null
+    const message = typeof answer?.message === 'string' ? answer.message : ran.stderr.trim().split('\n').slice(-3).join(' ')
+    const state = typeof answer?.state === 'string' ? answer.state : null
+    const waiting = typeof answer?.waiting_on === 'string' ? answer.waiting_on : null
+    const unblock = typeof answer?.unblock === 'string' ? answer.unblock : null
+    await emit($, 'adapter.ran', { point, cmd, ok: !refused, exit: ran.exitCode, code, state, message: refused ? message : null, captured: got })
+    results.push({ cmd, exit: ran.exitCode, ok: !refused, code, state, waiting_on: waiting, unblock, data: answer?.data ?? null })
+    if (refused && !(code && step.accept_codes?.includes(code))) {
+      // The tool refused: the run stops on its words.
+      await emit($, 'blocked', { reason: `${point}: ${message || `\`${cmd}\` failed (exit ${ran.exitCode})`}` })
+      return ok({ point, ran: true, blocked: true, results })
+    }
+    if (!refused && ran.exitCode === 2 && !(state && step.accept_states?.includes(state))) {
+      await emit($, 'blocked', { reason: `${point}: waiting on ${waiting ?? 'a person'}${unblock ? ` — ${unblock}` : ''}` })
+      return ok({ point, ran: true, blocked: true, results })
+    }
+    if (!refused && ran.exitCode === 3) await emit($, 'doing', { text: `${point}: ${waiting ?? 'the tool goes on by itself'}` })
+  }
+  return ok({ point, ran: true, blocked: false, replaces: adapter.replaces === true, results, vars: run.adapter_vars ?? {} })
+}
+
 async function externalTurn($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run || !paths) return fail('No active run in this session.')
   const promptFile = String(input.prompt_file ?? '')
@@ -1018,7 +1092,7 @@ async function togglePane($: Engine, input: Record<string, unknown>): Promise<st
 }
 
 // The tools only a run uses: deferred until one is active in the session.
-const RUN_TOOLS: ReadonlySet<string> = new Set(['event', 'tests', 'publish', 'external_turn'])
+const RUN_TOOLS: ReadonlySet<string> = new Set(['event', 'tests', 'publish', 'external_turn', 'run_adapter'])
 const RUN_TOOLS_NOTE = `Until the next prompt, the run's own tools load with ToolSearch "select:${[...RUN_TOOLS].map(name => `${TOOL_PREFIX}${name}`).join(',')}".`
 
 async function exposeRunTools($: Engine): Promise<void> {
@@ -1083,6 +1157,12 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
     description:
       "Takes over a run whose session closed (or this session's own run after a restart) and returns what happened since the person last looked.",
     inputSchema: { type: 'object', properties: { run_id: { type: 'string', description: "Left out: this session's run." } } },
+  },
+  {
+    name: 'run_adapter',
+    description:
+      "Runs the steps config.adapters gives a point of the run (definition, gate_a, plan, item, pr, poll), in the work tree, and reads each answer as JSON (ok, state, waiting_on, unblock, code, message, data). A refusal blocks the run with the tool's message; a wait on a person blocks it with what to do; a wait on the machine shows as what the run is doing. Call it at each point the stage files name, when that point has an adapter.",
+    inputSchema: { type: 'object', properties: { point: { type: 'string', enum: [...ADAPTER_POINTS] } }, required: ['point'] },
   },
   {
     name: 'external_turn',
@@ -1231,6 +1311,8 @@ async function handleOwnTool($: Engine, name: string, input: Record<string, unkn
       return resumeRun($, input)
     case 'external_turn':
       return externalTurn($, input)
+    case 'run_adapter':
+      return runAdapter($, input)
     case 'panel':
       return togglePane($, input)
     case 'tests':

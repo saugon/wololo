@@ -91,6 +91,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
+| `adapters.<point>` | hand a point of the run (`definition`, `gate_a`, `plan`, `item`, `pr`, `poll`) to another tool; see **Adapters** below |
 | `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
 | `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |
 | `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |
@@ -123,3 +124,40 @@ tsc -p .                 # type-check (types in .claude-plugin/types)
 claude plugin test .     # unit tests
 claude plugin validate .
 ```
+
+## Adapters
+
+A project can hand points of a run to its own tooling, such as a delivery runner that already gates, verifies and publishes. `config.adapters.<point>` lists `steps`, each a shell command run in the work tree with `config.env`:
+
+| Field | Meaning |
+|---|---|
+| `cmd` | the command; `{issue}`, `{branch}`, `{base}`, `{worktree}`, `{run_dir}`, `{sha}` (the work tree's HEAD) and every captured value fill in |
+| `capture` | `{name: "data.confirm"}` takes a value from the command's JSON answer, `{name: "/CONFIRM=(\\w+)/"}` from its output |
+| `accept_codes` | refusals the step expects (by `code`), which do not block the run |
+| `accept_states` | states the tool may leave its own run in while it waits on a person (exit 2), which do not block the run |
+| `if_missing`, `if_present` | run the step only when a value was (not) captured before this point started |
+
+`replaces: true` on a point means the tool does that stage's work instead of wololo. A command is read as the JSON protocol `{ok, state, waiting_on, unblock, code, message, data}` with exit codes 0, 1, 2 (waits on a person) and 3 (goes on by itself). A refusal blocks the run with the tool's message; a wait on a person blocks it with what to do; a wait on the machine shows as what the run is doing.
+
+A runner that speaks that protocol, as `make agent.*` with `JSON=1` does:
+
+```json
+{
+  "env": { "unset": ["INST", "E2E_BACKEND_PORT", "E2E_WEB_PORT_BASE"] },
+  "adapters": {
+    "plan": { "steps": [{ "cmd": "make agent.plan ISSUE={issue} JSON=1", "capture": { "confirm": "data.confirm" } }] },
+    "item": { "steps": [
+      { "cmd": "make agent.adopt ISSUE={issue} CONFIRM={confirm} JSON=1", "if_missing": "runner_run",
+        "capture": { "runner_run": "run", "publish_hash": "/CONFIRM=(\\w+)/" }, "accept_states": ["verified"] },
+      { "cmd": "make agent.verify RUN={runner_run} SHA={sha} JSON=1", "if_present": "runner_run",
+        "capture": { "publish_hash": "/CONFIRM=(\\w+)/" }, "accept_states": ["verified"] }
+    ] },
+    "pr": { "replaces": true, "steps": [{ "cmd": "make agent.publish RUN={runner_run} CONFIRM={publish_hash} JSON=1",
+      "capture": { "pr_url": "data.pr" }, "accept_states": ["awaiting_approval", "awaiting_merge"] }] },
+    "poll": { "steps": [{ "cmd": "make agent.step RUN={runner_run} JSON=1", "accept_states": ["awaiting_approval", "awaiting_merge"] }] }
+  }
+}
+```
+
+The run plans and implements in the session; the runner takes the branch after the first item, verifies each next item with its own gates and reviewer, publishes and follows CI. A command runs at most ten minutes: a step that may take longer, such as a spec debate on the issue, belongs in the session.
+
