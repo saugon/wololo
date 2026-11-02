@@ -436,6 +436,12 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "background": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
                 }
               }
             }

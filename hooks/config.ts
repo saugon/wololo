@@ -27,6 +27,10 @@ export type AdapterStep = {
   // Run the step only when the variable was (not) captured before this point started.
   if_missing?: string
   if_present?: string
+  // The command may outlast the ten minutes a step is given: it runs in the background, and the point goes on from it once it ends.
+  background?: boolean
+  // While a background step runs, a short command whose JSON answer says what the tool is doing; it fills the card.
+  status?: string
 }
 export type Adapter = { replaces?: boolean; steps: AdapterStep[] }
 
@@ -428,7 +432,7 @@ export function riskyFiles(files: readonly string[], globs: readonly string[]): 
   return files.filter(file => globs.some(glob => globToRegExp(glob).test(file)))
 }
 
-function shellQuote(text: string): string {
+export function shellQuote(text: string): string {
   return /^[\w./@:+=-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`
 }
 

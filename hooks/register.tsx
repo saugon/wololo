@@ -1,8 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
-import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, LAUNCH_FLAGS, merge, type Overrides, parseFlags, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, slugify, touchedPattern, validate, withEnv, withOverrides } from './config'
+import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, LAUNCH_FLAGS, merge, type Overrides, parseFlags, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, shellQuote, slugify, touchedPattern, validate, withEnv, withOverrides } from './config'
 import {
+  type AdapterJob,
   type EventType,
   type Live,
   type Run,
@@ -272,6 +273,8 @@ function policyContext(): PolicyContext | null {
       ...config.tests.e2e,
       ...config.tests.touched.map(entry => entry.cmd),
       ...config.commands.start.map(start => start.cmd),
+      // The wait for a background adapter step is wololo's own.
+      ...(run.adapter_job?.wait ? [run.adapter_job.wait] : []),
     ],
     touchedPattern,
   )
@@ -1034,15 +1037,21 @@ function captured(spec: string, answer: Record<string, unknown> | null, output: 
   return typeof value === 'string' || typeof value === 'number' ? String(value) : null
 }
 
-async function runAdapter($: Engine, input: Record<string, unknown>): Promise<string> {
-  if (!run || !paths) return fail('No active run in this session.')
-  const point = String(input.point) as AdapterPoint
-  const adapter = config.adapters[point]
-  if (!adapter) return ok({ ran: false, reason: `config.adapters has nothing for ${point}: the stage does its own work.` })
-  const known = { ...(run.adapter_vars ?? {}) }
+type Ran = { exitCode: number; stdout: string; stderr: string }
+
+const WAIT_NOTE =
+  'The step runs in the background. Run `wait` with Bash and run_in_background (it ends when the step does), end your turn, and when it ends call run_adapter for this point again: it goes on from that step.'
+// The most of a background step's output read back: its answer is its last line.
+const JOB_OUTPUT_BYTES = 200_000
+const JOB_STATUS_SECONDS = 60
+let jobStatusAt = 0
+let jobStatusText = ''
+
+async function adapterVars($: Engine): Promise<Record<string, string>> {
+  if (!run || !paths) return {}
   const head = run.project.worktree ? await git($, run.project.worktree, ['rev-parse', 'HEAD']) : null
-  const vars: Record<string, string> = {
-    ...known,
+  return {
+    ...(run.adapter_vars ?? {}),
     issue: run.source.kind === 'github_issue' ? run.source.ref.replace(/^#/, '') : '',
     branch: run.project.branch ?? '',
     base: run.project.base ?? config.pr.base,
@@ -1050,21 +1059,106 @@ async function runAdapter($: Engine, input: Record<string, unknown>): Promise<st
     run_dir: runDir(paths, run.id),
     sha: head ?? '',
   }
+}
+
+// Starts a step that may outlast the ten minutes a command is given, detached so it lives on without the session, writing its output and
+// then its exit code next to job. Returns the command that waits for it, or why it could not start.
+async function startJob($: Engine, point: string, step: number, cmd: string, known: Record<string, string>): Promise<{ wait: string } | string> {
+  if (!run || !paths) return 'No active run.'
+  const job = `${runDir(paths, run.id)}/adapters/${point}-${step}-${hex(6)}`
+  const q = (suffix: string) => shellQuote(`${job}${suffix}`)
+  await $.fs.write(`${job}.sh`, [`cd ${shellQuote(workdir())} || exit 1`, `${cmd} > ${q('.out')} 2> ${q('.err')}`, `echo $? > ${q('.code.tmp')}`, `mv ${q('.code.tmp')} ${q('.code')}`, ''].join('\n'))
+  const started = await $.process
+    .run(['sh', '-c', `nohup sh ${q('.sh')} </dev/null >/dev/null 2>&1 & echo $!`], { cwd: workdir(), timeoutMs: 10_000 })
+    .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error) }))
+  const pid = Number(started.stdout.trim())
+  if (started.exitCode !== 0 || !Number.isInteger(pid) || pid <= 0) return `\`${cmd}\` could not start in the background: ${started.stderr.trim() || 'no pid'}`
+  await $.fs.write(`${job}.wait`, `while [ ! -f ${q('.code')} ] && kill -0 ${pid} 2>/dev/null; do sleep 15; done\n`)
+  const wait = `sh ${q('.wait')}`
+  await emit($, 'adapter.started', { point, step, cmd, job, pid, known, wait })
+  await emit($, 'doing', { text: `${point}: \`${cmd}\` runs in the background` })
+  jobStatusAt = 0
+  jobStatusText = ''
+  return { wait }
+}
+
+// What a background step ended with, null while it still runs. One that died without an exit code ends as a failure.
+async function finishedJob($: Engine, job: AdapterJob): Promise<Ran | null> {
+  const code = await readText($, `${job.job}.code`)
+  if (code === undefined) {
+    const alive = await $.process.run(['kill', '-0', String(job.pid)], { timeoutMs: 5_000 }).then(r => r.exitCode === 0, () => false)
+    if (alive) return null
+  }
+  const stdout = ((await readText($, `${job.job}.out`)) ?? '').slice(-JOB_OUTPUT_BYTES)
+  const stderr = ((await readText($, `${job.job}.err`)) ?? '').slice(-JOB_OUTPUT_BYTES)
+  if (code === undefined) return { exitCode: 1, stdout, stderr: `${stderr}\n\`${job.cmd}\` stopped before it finished` }
+  return { exitCode: Number.parseInt(code.trim(), 10) || 0, stdout, stderr }
+}
+
+// While a background step runs, its status command says on the card what the tool is doing, at most once a minute.
+async function checkJob($: Engine) {
+  const job = run?.adapter_job
+  if (!run || run.outcome || !job) return
+  const status = config.adapters[job.point as AdapterPoint]?.steps[job.step]?.status
+  if (!status) return
+  const ts = await nowSeconds($)
+  if (ts - jobStatusAt < JOB_STATUS_SECONDS) return
+  jobStatusAt = ts
+  const vars = await adapterVars($)
+  if ([...status.matchAll(/\{(\w+)\}/g)].some(m => !vars[m[1] ?? ''])) return
+  const ran = await $.process.run(['sh', '-c', withEnv(expand(status, vars), envPrefix(config.env))], { cwd: workdir(), timeoutMs: 60_000 }).catch(() => null)
+  const answer = ran ? parseJson(ran.stdout.trim().split('\n').pop() ?? '').value : undefined
+  if (!isObject(answer)) return
+  const text = [answer.state, answer.waiting_on].filter(part => typeof part === 'string' && part).join(' · ')
+  if (!text || text === jobStatusText) return
+  jobStatusText = text
+  await emit($, 'doing', { text: `${job.point}: ${text}` })
+}
+
+async function runAdapter($: Engine, input: Record<string, unknown>): Promise<string> {
+  if (!run || !paths) return fail('No active run in this session.')
+  const point = String(input.point) as AdapterPoint
+  const job = run.adapter_job ?? null
+  if (job && job.point !== point) {
+    return fail(`The ${job.point} adapter still runs \`${job.cmd}\` in the background. Wait for it with \`${job.wait}\` (run_in_background), then call run_adapter for ${job.point} again.`)
+  }
+  const adapter = config.adapters[point]
+  if (!adapter) return ok({ ran: false, reason: `config.adapters has nothing for ${point}: the stage does its own work.` })
+  // A point that comes back to its background step goes on from it, judging the steps after it by what was known when the point started.
+  const resumed = job ? await finishedJob($, job) : null
+  if (job && !resumed) return ok({ point, ran: true, running: true, since: job.since, wait: job.wait, next: WAIT_NOTE })
+  const known = job ? job.known : { ...(run.adapter_vars ?? {}) }
+  const vars = await adapterVars($)
   const prefix = envPrefix(config.env)
   const results: Array<Record<string, unknown>> = []
-  for (const step of adapter.steps) {
-    if (step.if_missing && known[step.if_missing]) continue
-    if (step.if_present && !known[step.if_present]) continue
-    const missing = [...step.cmd.matchAll(/\{(\w+)\}/g)].map(m => m[1] ?? '').filter(name => !vars[name])
-    if (missing.length > 0) {
-      const reason = `The ${point} adapter needs ${missing.join(', ')} for \`${step.cmd}\`, and the run has none yet.`
-      await emit($, 'blocked', { reason })
-      return fail(reason)
+  for (const [index, step] of adapter.steps.entries()) {
+    if (job && index < job.step) continue
+    const resuming = job !== null && index === job.step
+    if (!resuming) {
+      if (step.if_missing && known[step.if_missing]) continue
+      if (step.if_present && !known[step.if_present]) continue
+      const missing = [...step.cmd.matchAll(/\{(\w+)\}/g)].map(m => m[1] ?? '').filter(name => !vars[name])
+      if (missing.length > 0) {
+        const reason = `The ${point} adapter needs ${missing.join(', ')} for \`${step.cmd}\`, and the run has none yet.`
+        await emit($, 'blocked', { reason })
+        return fail(reason)
+      }
     }
-    const cmd = withEnv(expand(step.cmd, vars), prefix)
-    const ran = await $.process
-      .run(['sh', '-c', cmd], { cwd: workdir(), timeoutMs: 600_000 })
-      .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
+    const cmd = resuming && job ? job.cmd : withEnv(expand(step.cmd, vars), prefix)
+    if (step.background && !resuming) {
+      const started = await startJob($, point, index, cmd, known)
+      if (typeof started === 'string') {
+        await emit($, 'blocked', { reason: `${point}: ${started}` })
+        return ok({ point, ran: true, blocked: true, results })
+      }
+      return ok({ point, ran: true, running: true, results, wait: started.wait, next: WAIT_NOTE })
+    }
+    const ran: Ran =
+      resuming && resumed
+        ? resumed
+        : await $.process
+            .run(['sh', '-c', cmd], { cwd: workdir(), timeoutMs: 600_000 })
+            .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error) }))
     const output = `${ran.stdout}\n${ran.stderr}`
     const answer = (() => {
       const last = ran.stdout.trim().split('\n').pop() ?? ''
@@ -1551,6 +1645,7 @@ export const register: Register = (on, options) => {
           }
           ticks += 1
           if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
+          if (ticks % HEARTBEAT_TICKS === 0) await checkJob($)
           if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
           if (config.keep_awake && run && !run.outcome && ticks >= awakeRenewAt) {
             await keepAwake($)

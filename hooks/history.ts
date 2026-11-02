@@ -136,6 +136,8 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('✓', es ? 'PR listo para revisión' : 'PR ready for review')
     case 'adapter.ran':
       return one(d.ok === false ? '✗' : '✓', `${es ? 'Adaptador' : 'Adapter'} ${str(d.point)}: ${str(d.state) || str(d.message) || (d.ok === false ? 'error' : 'ok')}`)
+    case 'adapter.started':
+      return one('⧗', `${es ? 'Adaptador' : 'Adapter'} ${str(d.point)}: ${es ? 'corre en segundo plano' : 'runs in the background'}`)
     case 'github.published':
       return one('✓', `GitHub ${str(d.kind)}${d.mode === 'summary' ? (es ? ' (resumen)' : ' (summary)') : ''}: ${str(d.url)}`)
     case 'screenshot.saved':

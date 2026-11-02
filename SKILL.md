@@ -140,6 +140,8 @@ The run enforces the budgets itself: past `budgets.design_reversals` for an item
 
 **Waiting.** For anything long, use background work: a subagent with `run_in_background`, or a background Bash command. Then end the turn. The mod shows the run as waiting on those jobs, and their notification wakes you. Never sleep-poll.
 
+**Adapters in the background.** When `run_adapter` answers `running`, the project's tool goes on without the session: run its `wait` command with Bash and `run_in_background`, start nothing that depends on that point, and end the turn. When the wait ends, call `run_adapter` for the same point again; it goes on from that step and answers as usual. Another point refuses while one runs.
+
 **Subagents.**
 - Use `wololo:<role>` (explorer, architect, critic, implementer, verifier, reviewer), unless `config.project_agents` maps the role to one of the repository's agents.
 - Pass `config.models[role].model` when the config sets one.

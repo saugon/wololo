@@ -4,7 +4,7 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
+type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
 
 function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}): Host {
   const files = new Map<string, string>()
@@ -12,6 +12,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}
   const tools = new Map<string, boolean>()
   const ps = new Map<string, string>()
   const killed: string[] = []
+  const dead = new Set<string>()
   const shells: string[] = []
   const answers: Array<{ match: RegExp; stdout: string; exit: number }> = []
 
@@ -81,6 +82,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}
       return found ? done(found.stdout, found.exit) : done('', 127)
     }
     if (cmd === 'kill') {
+      if (args[0] === '-0') return done('', dead.has(args[1] ?? '') ? 1 : 0)
       killed.push(args.join(' '))
       return done()
     }
@@ -104,7 +106,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}
     on('clock.now', () => ({ value: (now += 1_000) }))
   }
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
-  return { files, gh, tools, ps, killed, shells, answers }
+  return { files, gh, tools, ps, dead, killed, shells, answers }
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -628,6 +630,62 @@ test("an adapter hands a point of the run to the project's tool, and carries wha
   expect(String((await adapter($, 'poll')).reason)).toContain('nothing for poll')
 })
 
+test('a background step outlives the ten minutes a command is given: the point goes on from it once it ends', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const item = {
+    steps: [
+      { cmd: 'make inst.claim', if_missing: 'runner_run' },
+      { ...RUNNER.item.steps[0], background: true, status: 'make agent.status ISSUE={issue} JSON=1' },
+      RUNNER.item.steps[1],
+      { cmd: 'echo after' },
+    ],
+  }
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ adapters: { ...RUNNER, item } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'X' } as never)).result)
+  host.answers.push({ match: /agent\.plan/, stdout: JSON.stringify({ ok: true, data: { confirm: 'c0ffee' } }), exit: 0 })
+  host.answers.push({ match: /^nohup sh /, stdout: '4242\n', exit: 0 })
+  host.answers.push({ match: /inst\.claim|echo after/, stdout: '', exit: 0 })
+  await adapter($, 'plan')
+
+  const started = await adapter($, 'item')
+  expect([started.running, started.blocked]).toEqual([true, undefined])
+  const job = (parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result) as { run: { adapter_job: { job: string; pid: number; cmd: string } } }).run.adapter_job
+  expect([job.pid, job.cmd]).toEqual([4242, 'make agent.adopt ISSUE=12 CONFIRM=c0ffee JSON=1'])
+  expect(host.files.get(`${job.job}.sh`)).toContain(`make agent.adopt ISSUE=12 CONFIRM=c0ffee JSON=1 > ${job.job}.out 2> ${job.job}.err`)
+  expect(started.wait).toBe(`sh ${job.job}.wait`)
+  // The wait is wololo's own command, so the run allows it; another point waits for this one.
+  expect((await $.tool.check({ tool: 'Bash', input: { command: started.wait } } as never)).decision).toBe('allow')
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__run_adapter', point: 'pr' } as never)).result)).toContain('still runs')
+
+  // Still running: nothing more runs, and the answer says to wait again.
+  expect((await adapter($, 'item')).running).toBe(true)
+  host.files.set(`${job.job}.out`, `progress\n${JSON.stringify({ ok: true, run: 'r42', state: 'verified', unblock: 'make agent.publish RUN=r42 CONFIRM=h1' })}\n`)
+  host.files.set(`${job.job}.code`, '2\n')
+  const ended = await adapter($, 'item')
+  expect([ended.running, ended.blocked]).toEqual([undefined, false])
+  // The verify step is judged by what was known when the point started, as without the background: the first item does not verify.
+  expect(host.shells.filter(line => !line.startsWith('nohup'))).toEqual(['make agent.plan ISSUE=12 JSON=1', 'make inst.claim', 'echo after'])
+  const status = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result) as { run: { adapter_vars: Record<string, string>; adapter_job: unknown } }
+  expect(status.run.adapter_vars).toEqual({ confirm: 'c0ffee', runner_run: 'r42', publish_hash: 'h1' })
+  expect(status.run.adapter_job).toBe(null)
+})
+
+test('a background step that dies without an exit code blocks the run', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ adapters: { pr: { steps: [{ cmd: 'make agent.publish JSON=1', background: true }] } } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'X' } as never)).result)
+  host.answers.push({ match: /^nohup sh /, stdout: '777\n', exit: 0 })
+  expect((await adapter($, 'pr')).running).toBe(true)
+  host.dead.add('777')
+  expect((await adapter($, 'pr')).blocked).toBe(true)
+  const status = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result) as { run: { blocked: { reason: string } } }
+  expect(status.run.blocked.reason).toContain('stopped before it finished')
+})
+
 test("a refusal of the project's tool blocks the run with its words, and a missing value is named", async ($, on) => {
   const host = await adapterRun($, on)
   host.answers.push({ match: /agent\.plan/, stdout: JSON.stringify({ ok: false, code: 'not_approved', message: 'Issue is not approved: approve its current spec' }), exit: 1 })
@@ -681,4 +739,26 @@ test('keep_awake holds the machine up in leases while a run is active, and not o
   expect(host.shells.filter(line => line.includes('caffeinate -i -t 300'))).toHaveLength(1)
   await clock.advance(240_000)
   expect(host.shells.filter(line => line.includes('caffeinate -i -t 300'))).toHaveLength(2)
+})
+
+test("while a background step runs, its status command says on the card what the tool is doing", async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  const pr = { steps: [{ cmd: 'make agent.publish JSON=1', background: true, status: 'make agent.status ISSUE={issue} JSON=1' }] }
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ adapters: { pr } }))
+  host.answers.push({ match: /^nohup sh /, stdout: '4242\n', exit: 0 })
+  host.answers.push({ match: /agent\.status ISSUE=12/, stdout: JSON.stringify({ ok: true, state: 'verifying', waiting_on: 'Codex' }), exit: 3 })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'X' } as never)
+  expect((await adapter($, 'pr')).running).toBe(true)
+  await clock.advance(16_000)
+  expect(host.shells.filter(line => line.includes('agent.status'))).toHaveLength(1)
+  const events = (host.files.get(`${DATA}/runs/${[...host.files.keys()].find(k => k.endsWith('/events.jsonl'))?.split('/').at(-2)}/events.jsonl`) ?? '').split('\n')
+  expect(events.some(line => line.includes('"doing"') && line.includes('pr: verifying · Codex'))).toBe(true)
+  // At most once a minute.
+  await clock.advance(30_000)
+  expect(host.shells.filter(line => line.includes('agent.status'))).toHaveLength(1)
+  await clock.advance(45_000)
+  expect(host.shells.filter(line => line.includes('agent.status'))).toHaveLength(2)
 })

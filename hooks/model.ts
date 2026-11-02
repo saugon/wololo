@@ -90,6 +90,7 @@ export type EventType =
   | 'signing.done'
   | 'github.published'
   | 'adapter.ran'
+  | 'adapter.started'
   | 'screenshot.saved'
   | 'usage'
   | 'time'
@@ -227,6 +228,8 @@ export type Waiting = {
   since: number
 }
 
+export type AdapterJob = { point: string; step: number; cmd: string; job: string; pid: number; known: Record<string, string>; wait: string; since: number }
+
 export type Run = {
   schema_version: number
   id: string
@@ -236,6 +239,9 @@ export type Run = {
   mode: Mode
   // Values the run's adapters captured, for the commands of later steps.
   adapter_vars?: Record<string, string>
+  // The adapter step running in the background: its point and index, the files it writes (job + .out .err .code), its pid, what was
+  // known when the point started, and the command that waits for it.
+  adapter_job?: AdapterJob | null
   // Where this run's change is approved: at Aprobar PR (local) or on the PR (pr). Runs from before it are local.
   review?: 'local' | 'pr'
   // Config paths this run's launch flags set, over the project's config.
@@ -612,6 +618,19 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'adapter.ran':
       if (d.captured && typeof d.captured === 'object') r.adapter_vars = { ...(r.adapter_vars ?? {}), ...(d.captured as Record<string, string>) }
+      if (r.adapter_job && r.adapter_job.point === d.point) r.adapter_job = null
+      break
+    case 'adapter.started':
+      r.adapter_job = {
+        point: str(d.point),
+        step: num(d.step),
+        cmd: str(d.cmd),
+        job: str(d.job),
+        pid: num(d.pid),
+        known: (d.known as Record<string, string>) ?? {},
+        wait: str(d.wait),
+        since: ev.ts,
+      }
       break
     case 'blocked':
       r.blocked = { reason: str(d.reason), since: ev.ts }
