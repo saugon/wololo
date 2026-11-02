@@ -20,18 +20,31 @@ const SAFE_SEGMENTS: readonly RegExp[] = [
 ]
 
 export function segments(command: string): string[] {
+  // A lone & runs what precedes it in the background and goes on with what follows: two commands, like ; .
   return command
-    .split(/&&|\|\||;|\||\n/)
+    .split(/&&|\|\||;|\||\n|&/)
     .map(part => part.trim())
     .filter(part => part.length > 0)
+}
+
+// Inside a segment that otherwise looks safe, these write files or run other commands: output redirection,
+// command and process substitution.
+const HIDDEN_EFFECTS = /\$\(|`|<\(|>/
+
+export function hasHiddenEffects(segment: string): boolean {
+  return HIDDEN_EFFECTS.test(segment)
 }
 
 function escape(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// git's global options before the subcommand, which can point the push at another repository: -C <dir>, -c <k=v>,
+// --git-dir=<dir>, --work-tree=<dir>.
+const GIT_OPTIONS = String.raw`(?:(?:-C|-c)\s+\S+\s+|--(?:git-dir|work-tree)(?:=|\s+)\S+\s+)*`
+
 export function isPush(segment: string): boolean {
-  return /^git\s+push\b/.test(segment)
+  return new RegExp(`^git\\s+${GIT_OPTIONS}push\\b`).test(segment)
 }
 
 export function isAllowedPush(segment: string, branch: string | null): boolean {
@@ -51,6 +64,24 @@ export function pushDenial(command: string, branch: string | null): string | nul
   return null
 }
 
+// What writes to GitHub: during a run that goes through the publish tool only, which checks the config and GitHub's limits.
+const GH_WRITES: readonly RegExp[] = [
+  /^gh\s+pr\s+(create|comment|edit|merge|close|reopen|review)\b/,
+  /^gh\s+issue\s+(create|comment|edit|close|reopen|delete|transfer|lock|pin)\b/,
+  /^gh\s+(release|label|repo)\s+(create|edit|delete|upload)\b/,
+  /^gh\s+api\b.*\s(-X|--method)\s*(POST|PATCH|PUT|DELETE)\b/i,
+  /^gh\s+api\b.*\s(-f|-F|--field|--raw-field|--input)\b/,
+]
+const MCP_GITHUB_WRITE = /^mcp__github__(create|update|add|push|merge|fork|delete)/
+
+export function githubWriteDenial(tool: string, input: Record<string, unknown>): string | null {
+  const reason = 'wololo: during a run, GitHub writes go through its publish tool, which keeps the config and GitHub limits.'
+  if (MCP_GITHUB_WRITE.test(tool)) return reason
+  if (tool === 'Bash' && typeof input.command === 'string' && segments(input.command).some(segment => GH_WRITES.some(write => write.test(segment))))
+    return reason
+  return null
+}
+
 export function isInside(path: string, dir: string): boolean {
   const base = dir.replace(/\/+$/, '')
   return path === base || path.startsWith(`${base}/`)
@@ -66,7 +97,9 @@ function isAllowedSegment(segment: string, ctx: PolicyContext): boolean {
   const chmod = /^chmod\s+[ugoa]*\+x\s+(.+)$/.exec(segment)
   if (chmod?.[1]) return chmod[1].split(/\s+/).every(file => isInside(file, ctx.workdir) || !file.startsWith('/'))
   if (isPush(segment)) return isAllowedPush(segment, ctx.branch)
+  // The project's own commands are trusted exactly as configured, redirections included.
   if (ctx.commands.some(command => segments(command).includes(segment))) return true
+  if (hasHiddenEffects(segment)) return false
   if (ctx.patterns.some(pattern => pattern.test(segment))) return true
   return SAFE_SEGMENTS.some(pattern => pattern.test(segment))
 }

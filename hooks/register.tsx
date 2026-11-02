@@ -25,7 +25,7 @@ import {
   timeKind,
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
-import { type PolicyContext, commandRules, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
+import { type PolicyContext, commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
 import { type Field, SECTIONS, fieldValue, parseInput, setAt, summarize } from './configui'
 import { helpLangOf, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
@@ -1327,6 +1327,8 @@ export const register: Register = (on, options) => {
       const denial = pushDenial(input.command, ctx.branch)
       if (denial) return { decision: 'deny' as const, reason: denial }
     }
+    const githubDenial = ctx ? githubWriteDenial(e.tool, input) : null
+    if (githubDenial) return { decision: 'deny' as const, reason: githubDenial }
     const verdict = await next(e)
     if (verdict.decision !== 'ask') return verdict
     const path =
