@@ -46,6 +46,8 @@ At gate_a the issue is updated as in "After approval" below.
 
 ## After approval
 
+The run keeps what each gate approved: `spec.md` for **Aprobar spec**; `spec.md`, `plan.md` and the committed code for **Aprobar PR**. If any of them changes afterwards, the run refuses to move on (or to open the PR) until you go back to the stage that redoes it (`definition` or `implement`) and ask the gate again. Going back before a gate reopens it.
+
 **At gate_a:**
 
 When `config.spec.to_github` is false, nothing goes to GitHub: the spec stays in `run_dir/spec.md` only, and this step ends here.

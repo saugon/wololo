@@ -4,6 +4,8 @@ export const ORPHAN_AFTER_SECONDS = 90
 export type Mode = 'full' | 'checkpoints' | 'guided'
 export type Risk = 'low' | 'high' | 'unknown'
 export type Lang = 'es' | 'en'
+// Hashes of what a gate approved: the run's spec and plan files, and the worktree's committed tree. null where there was none.
+export type Snapshot = { spec: string | null; plan: string | null; tree: string | null }
 
 export type StageId = 'context' | 'definition' | 'gate_a' | 'plan' | 'implement' | 'evidence' | 'gate_b' | 'pr'
 
@@ -235,6 +237,8 @@ export type Run = {
         resolved_at: number | null
         outcome: string | null
         by: string | null
+        // What the gate approved, as file and tree hashes: a later change to any of them needs the gate again.
+        snapshot?: Snapshot
       }
     >
   >
@@ -414,6 +418,9 @@ export function apply(run: Run, ev: RunEvent): Run {
       if (index < 0) break
       const open = r.stages.find(s => s.finished_at === null && s.id !== id)
       if (open) open.finished_at = ev.ts
+      // Going back to a stage before a gate reopens that gate: what it approved is being redone.
+      if (r.stage && index <= r.stage.index)
+        for (const gate of STAGES.filter(stage => stage.isGate && stageIndex(stage.id) > index)) delete r.gates[gate.id]
       r.stage = { id, index, total: STAGES.length, since: ev.ts }
       r.doing = null
       r.stages.push({ id, started_at: ev.ts, finished_at: null })
@@ -456,6 +463,7 @@ export function apply(run: Run, ev: RunEvent): Run {
         resolved_at: outcome === 'approved' ? ev.ts : null,
         outcome,
         by: str(d.by, 'user'),
+        ...(outcome === 'approved' && d.snapshot && typeof d.snapshot === 'object' ? { snapshot: d.snapshot as Snapshot } : {}),
       }
       for (const s of r.stages) if (s.id === id && s.finished_at === null) s.finished_at = ev.ts
       break

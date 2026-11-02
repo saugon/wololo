@@ -1,4 +1,4 @@
-import { type EventType, MODEL_EVENTS, type Run, STAGES, type StageId, stageIndex } from './model'
+import { type EventType, MODEL_EVENTS, type Run, STAGES, type Snapshot, type StageId, stageIndex } from './model'
 
 export const STAGE_FILES: Record<StageId, string> = {
   context: '01-context.md',
@@ -122,4 +122,27 @@ export function hintFor(type: string, data: Record<string, unknown>, root: strin
   if (type !== 'stage.entered') return null
   const file = STAGE_FILES[data.stage as StageId]
   return file ? `Read ${root}/stages/${file} before working on this stage.` : null
+}
+
+// What each gate approved, and where the run goes back to redo it when that changed since.
+const GUARDED: ReadonlyArray<{ gate: StageId; keys: ReadonlyArray<keyof Snapshot>; back: StageId }> = [
+  { gate: 'gate_a', keys: ['spec'], back: 'definition' },
+  { gate: 'gate_b', keys: ['spec', 'plan', 'tree'], back: 'implement' },
+]
+const WHAT: Record<keyof Snapshot, string> = { spec: 'spec.md', plan: 'plan.md', tree: 'the committed code' }
+
+// Moving forward, or opening the PR, on something other than what a gate approved: the gate has to see it again.
+export function changedSinceApproval(run: Run, type: string, data: Record<string, unknown>, current: Snapshot): string | null {
+  const forward = type === 'stage.entered' && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
+  if (!forward && type !== 'pr.opened') return null
+  for (const { gate, keys, back } of GUARDED) {
+    const approved = run.gates[gate]?.snapshot
+    if (!approved || run.gates[gate]?.resolved_at == null) continue
+    const changed = keys.filter(key => approved[key] !== current[key])
+    if (changed.length > 0) {
+      const name = gate === 'gate_a' ? 'Aprobar spec' : 'Aprobar PR'
+      return `${changed.map(key => WHAT[key]).join(' and ')} changed after ${name} approved it: go back with stage.entered {stage: "${back}", reason}, and ask ${name} again.`
+    }
+  }
+  return null
 }

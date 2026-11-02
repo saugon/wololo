@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { type RunEvent, rebuild } from '../hooks/model'
-import { checkEvent, stageForFile } from '../hooks/rules'
+import { changedSinceApproval, checkEvent, stageForFile } from '../hooks/rules'
 
 function runAt(mode: string, extra: Array<[RunEvent['type'], Record<string, unknown>, number]> = []) {
   const list: Array<[RunEvent['type'], Record<string, unknown>, number]> = [
@@ -105,4 +105,52 @@ test('a deferred signature names the item and the commit', async () => {
   expect(checkEvent(run, 'signing.deferred', { n: 1 })).toMatch(/sha/)
   expect(checkEvent(run, 'signing.deferred', { n: 1, sha: 'abc123' })).toBe(null)
   expect(checkEvent(run, 'signing.done', { count: 3 })).toBe(null)
+})
+
+const approvedSpec = { spec: 'aaa', plan: null, tree: 't1' }
+
+function pastGateA() {
+  return runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'gate_a' }, 4],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Aprobar' }], answered: true }, 5],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user', snapshot: approvedSpec }, 6],
+    ['stage.entered', { stage: 'plan' }, 7],
+  ])
+}
+
+test('moving on after a gate needs what it approved unchanged', async () => {
+  const run = pastGateA()
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'implement' }, { spec: 'aaa', plan: 'p1', tree: 't2' })).toBe(null)
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'implement' }, { spec: 'bbb', plan: 'p1', tree: 't2' })).toMatch(
+    /spec\.md changed after Aprobar spec approved it: go back with stage\.entered \{stage: "definition"/,
+  )
+  // Going back is how to redo it, and is never refused for it.
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'definition', reason: 'x' }, { spec: 'bbb', plan: null, tree: 't1' })).toBe(null)
+})
+
+test('opening the PR needs the code, spec and plan Aprobar PR saw', async () => {
+  const run = runAt('full', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['gate.resolved', { gate: 'gate_a', by: 'auto', snapshot: approvedSpec }, 4],
+    ['gate.resolved', { gate: 'gate_b', by: 'auto', snapshot: { spec: 'aaa', plan: 'p1', tree: 't9' } }, 5],
+  ])
+  expect(changedSinceApproval(run, 'pr.opened', { url: 'u' }, { spec: 'aaa', plan: 'p1', tree: 't9' })).toBe(null)
+  expect(changedSinceApproval(run, 'pr.opened', { url: 'u' }, { spec: 'aaa', plan: 'p1', tree: 't10' })).toMatch(/the committed code changed after Aprobar PR.*"implement"/)
+})
+
+test('going back before a gate reopens it, so it is asked again', async () => {
+  const back = runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'gate_a' }, 4],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Aprobar' }], answered: true }, 5],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user', snapshot: approvedSpec }, 6],
+    ['stage.entered', { stage: 'plan' }, 7],
+    ['stage.entered', { stage: 'definition', reason: 'the spec changed' }, 8],
+    ['stage.entered', { stage: 'gate_a' }, 9],
+  ])
+  expect(back.gates.gate_a?.resolved_at).toBe(null)
+  expect(checkEvent(back, 'stage.entered', { stage: 'plan' })).toMatch(/gate_a is not resolved/)
+  // The answer given before going back no longer counts.
+  expect(checkEvent(back, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toMatch(/its own question/)
 })

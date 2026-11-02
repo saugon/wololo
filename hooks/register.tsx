@@ -7,6 +7,7 @@ import {
   type Live,
   type Run,
   type RunEvent,
+  type Snapshot,
   type Source,
   type StageId,
   type TimeKind,
@@ -29,7 +30,7 @@ import { type PolicyContext, commandRules, githubWriteDenial, isAllowedBash, isA
 import { type Field, SECTIONS, fieldValue, parseInput, setAt, summarize } from './configui'
 import { helpLangOf, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
-import { checkEvent, hintFor, stageForFile } from './rules'
+import { changedSinceApproval, checkEvent, hintFor, stageForFile } from './rules'
 import {
   type Paths,
   appendLines,
@@ -779,12 +780,25 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   })
 }
 
+// The hashes a gate approves: spec.md and plan.md in the run directory, and the worktree's committed tree.
+async function snapshot($: Engine, dir: string, worktree: string | null): Promise<Snapshot> {
+  const hash = async (name: string) => ((await readText($, `${dir}/${name}`)) === undefined ? null : await git($, dir, ['hash-object', `${dir}/${name}`]))
+  return { spec: await hash('spec.md'), plan: await hash('plan.md'), tree: worktree ? await git($, worktree, ['rev-parse', 'HEAD^{tree}']) : null }
+}
+
 async function recordEvent($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run || !paths) return fail('No active run in this session. Start one with /wololo, or resume one with /wololo resume <run>.')
   const type = String(input.type ?? '')
   const data = isObject(input.data) ? input.data : {}
   const problem = checkEvent(run, type, data)
   if (problem) return fail(problem)
+  const guarded = ['stage.entered', 'pr.opened'].includes(type) || (type === 'gate.resolved' && (data.outcome ?? 'approved') === 'approved')
+  if (guarded) {
+    const current = await snapshot($, runDir(paths, run.id), run.project.worktree)
+    const changed = changedSinceApproval(run, type, data, current)
+    if (changed) return fail(changed)
+    if (type === 'gate.resolved') data.snapshot = current
+  }
   await emit($, type as EventType, data)
   if (type === 'run.finished') await flush($)
   const ts = await nowSeconds($)
