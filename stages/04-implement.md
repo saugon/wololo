@@ -19,7 +19,7 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
    - **No test file at all:** the item is not done. Back to step 2: a behaviour change without a test fails verification.
    - **`config.tests.follow` is `project`:** the verifier also reads `config.tests.rules_from`, and the project's rules win wherever they differ from these steps.
    - **Stale reports.** The verifier reports the tree hash before and after. If they differ, or they do not match `git rev-parse HEAD` plus `git diff HEAD | shasum` now, the report is stale: discard it and verify again. Never act on a stale PASS.
-   - Record `item.verified {n, result: "pass" | "fail", tree}`.
+   - Record `item.verified {n, result: "pass" | "fail", tree}`. On a pass the run records the tree it verified itself: the one `git add -A` would commit now.
    - **On FAIL**: back to step 2 with the failures. Count the attempts.
 4. **Review.** Use `config.review.reviewer`:
    - `claude`: `config.project_agents.reviewer` or `wololo:reviewer`;
@@ -27,12 +27,12 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
    - `both`: both.
 
    What to do with each finding:
-   - **blocking or major**: fix it through the implementer, then verify again;
+   - **blocking or major**: fix it through the implementer, then verify and review again: the run takes a commit only of what was reviewed after its last verification;
    - **minor**: fix it, or accept it with a reason.
    - In `guided`, ask the person about the findings you would accept.
 
    Record `item.reviewed {n, findings, verdict}`.
-5. **Commit.** `git add -A && git commit -m "<message in the repository's style>"`, with no trailers. Record `item.committed {n, sha, title}`.
+5. **Commit.** `git add -A && git commit -m "<message in the repository's style>"`, with no trailers. Record `item.committed {n, sha, title}`. The run refuses it when the commit's tree is not the one it verified: something changed after verification, so verify and review again.
    - **If the commit fails because it cannot be signed** (gpg, ssh-keygen or 1Password errors: the person is away or the key is locked), never stop the run and never retry in a loop:
      1. Commit the same thing unsigned: `git -c commit.gpgsign=false commit -m "<the same message>"`.
      2. Record `item.committed {n, sha, title}`, then `signing.deferred {n, sha}`.

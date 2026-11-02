@@ -119,9 +119,20 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       return Array.isArray(data.items) && data.items.length > 0 ? null : 'data.items must list the plan items (titles).'
     case 'item.started':
     case 'item.verified':
-    case 'item.reviewed':
-    case 'item.committed':
       return typeof data.n === 'number' ? null : 'data.n (the item number) is required.'
+    case 'item.reviewed':
+    case 'item.committed': {
+      if (typeof data.n !== 'number') return 'data.n (the item number) is required.'
+      const item = run.items.list?.find(entry => entry.n === data.n)
+      // Each attempt goes verify, review, commit, in that order: a review of unverified code, or a commit nobody reviewed, is refused.
+      if (!item?.verified) return `Item ${data.n} has no passing verification since it started: verify it (item.verified) before ${type === 'item.reviewed' ? 'reviewing' : 'committing'} it.`
+      if (type === 'item.reviewed') return null
+      if (item.reviewed_at == null || item.reviewed_at < item.verified.at)
+        return `Item ${data.n} was not reviewed since its last verification: review it (item.reviewed) before committing it.`
+      if (item.verified.tree && typeof data.commit_tree === 'string' && data.commit_tree !== item.verified.tree)
+        return `The commit of item ${data.n} is not the tree that was verified: something changed after verification. Verify and review it again, then commit.`
+      return null
+    }
     case 'paused':
       return text(data.note) ? null : 'data.note is required: where the run stopped and what comes next.'
     case 'doing':

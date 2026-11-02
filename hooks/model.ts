@@ -204,7 +204,15 @@ export function tokenTotal(t: Tokens): number {
   return t.input + t.output + t.cache_read + t.cache_write
 }
 
-export type ItemEntry = { n: number; title: string; state: 'pending' | 'active' | 'failing' | 'done'; sha: string | null }
+export type ItemEntry = {
+  n: number
+  title: string
+  state: 'pending' | 'active' | 'failing' | 'done'
+  sha: string | null
+  // The current attempt's checks: when it last passed verification and on which tree, and when it was reviewed after that.
+  verified?: { at: number; tree: string | null } | null
+  reviewed_at?: number | null
+}
 
 export type StageEntry = {
   id: StageId
@@ -553,7 +561,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'item.started':
       r.items.current = { n: num(d.n), title: str(d.title), since: ev.ts }
-      setItem(r, num(d.n), str(d.title), { state: 'active' })
+      setItem(r, num(d.n), str(d.title), { state: 'active', verified: null, reviewed_at: null })
       r.counts.attempts += 1
       if (d.reversal === true) {
         r.counts.reversals += 1
@@ -561,7 +569,11 @@ export function apply(run: Run, ev: RunEvent): Run {
       }
       break
     case 'item.verified':
-      if (d.result === 'fail') setItem(r, num(d.n), '', { state: 'failing' })
+      if (d.result === 'fail') setItem(r, num(d.n), '', { state: 'failing', verified: null })
+      else setItem(r, num(d.n), '', { verified: { at: ev.ts, tree: typeof d.worktree_tree === 'string' ? d.worktree_tree : null } })
+      break
+    case 'item.reviewed':
+      setItem(r, num(d.n), '', { reviewed_at: ev.ts })
       break
     case 'item.committed':
       r.items.done = Math.min(Math.max(r.items.done, num(d.n)), Math.max(r.items.total, num(d.n)))

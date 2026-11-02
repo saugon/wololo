@@ -227,3 +227,44 @@ test("a run that spent its minutes stops moving on until the person extends them
   long.time = { implement: { work: 100 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
   expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toBe(null)
 })
+
+test('each attempt goes verify, review, commit, and commits the tree that was verified', async () => {
+  const started = implementing([['item.started', { n: 1, title: 'a' }, 6]])
+  expect(checkEvent(started, 'item.reviewed', { n: 1, findings: 0, verdict: 'ok' })).toMatch(/verify it/)
+  expect(checkEvent(started, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toMatch(/verify it/)
+  const verified = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tA' }, 7],
+  ])
+  expect(checkEvent(verified, 'item.reviewed', { n: 1, findings: 0, verdict: 'ok' })).toBe(null)
+  expect(checkEvent(verified, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toMatch(/not reviewed/)
+  const reviewed = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tA' }, 7],
+    ['item.reviewed', { n: 1, findings: 0, verdict: 'ok' }, 8],
+  ])
+  expect(checkEvent(reviewed, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toBe(null)
+  expect(checkEvent(reviewed, 'item.committed', { n: 1, sha: 's', commit_tree: 'tB' })).toMatch(/not the tree that was verified/)
+  // A failed verification, or a new attempt, needs the checks again.
+  const failedAgain = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tA' }, 7],
+    ['item.reviewed', { n: 1, findings: 1, verdict: 'changes' }, 8],
+    ['item.verified', { n: 1, result: 'fail' }, 9],
+  ])
+  expect(checkEvent(failedAgain, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toMatch(/verify it/)
+  const reverified = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tA' }, 7],
+    ['item.reviewed', { n: 1, findings: 1, verdict: 'changes' }, 8],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tB' }, 9],
+  ])
+  expect(checkEvent(reverified, 'item.committed', { n: 1, sha: 's', commit_tree: 'tB' })).toMatch(/not reviewed/)
+  const retried = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.verified', { n: 1, result: 'pass', worktree_tree: 'tA' }, 7],
+    ['item.reviewed', { n: 1, findings: 0, verdict: 'ok' }, 8],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 9],
+  ])
+  expect(checkEvent(retried, 'item.committed', { n: 1, sha: 's', commit_tree: 'tA' })).toMatch(/verify it/)
+})

@@ -780,6 +780,17 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   })
 }
 
+// The tree `git add -A && git commit` would make of the work tree now, built in a scratch index so the real one is left alone.
+async function worktreeTree($: Engine, worktree: string, dir: string): Promise<string | null> {
+  const env = { GIT_INDEX_FILE: `${dir}/verified.index` }
+  for (const args of [['read-tree', 'HEAD'], ['add', '-A']]) {
+    const ran = await $.process.run(['git', ...args], { cwd: worktree, env, timeoutMs: 30_000 }).catch(() => undefined)
+    if (!ran || ran.exitCode !== 0) return null
+  }
+  const ran = await $.process.run(['git', 'write-tree'], { cwd: worktree, env, timeoutMs: 30_000 }).catch(() => undefined)
+  return ran && ran.exitCode === 0 ? ran.stdout.trim() : null
+}
+
 // The hashes a gate approves: spec.md and plan.md in the run directory, and the worktree's committed tree.
 async function snapshot($: Engine, dir: string, worktree: string | null): Promise<Snapshot> {
   const hash = async (name: string) => ((await readText($, `${dir}/${name}`)) === undefined ? null : await git($, dir, ['hash-object', `${dir}/${name}`]))
@@ -790,6 +801,9 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   if (!run || !paths) return fail('No active run in this session. Start one with /wololo, or resume one with /wololo resume <run>.')
   const type = String(input.type ?? '')
   const data = isObject(input.data) ? input.data : {}
+  const worktree = run.project.worktree
+  if (worktree && type === 'item.verified' && data.result !== 'fail') data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
+  if (worktree && type === 'item.committed' && typeof data.sha === 'string') data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])
   const problem = checkEvent(run, type, data, config.budgets)
   if (problem) return fail(problem)
   const guarded = ['stage.entered', 'pr.opened'].includes(type) || (type === 'gate.resolved' && (data.outcome ?? 'approved') === 'approved')
