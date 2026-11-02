@@ -445,6 +445,20 @@
           "steps"
         ]
       }
+    },
+    "mirror": {
+      "type": "object",
+      "description": "Runs another tool drives without a session, shown in /wololo status.",
+      "properties": {
+        "list": {
+          "type": "string",
+          "description": "Lists the runs as JSON (data.runs)."
+        },
+        "run": {
+          "type": "string",
+          "description": "Where one run stands, as JSON; {run} is its id."
+        }
+      }
     }
   }
 }

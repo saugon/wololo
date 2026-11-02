@@ -77,6 +77,8 @@ export type Config = {
   }
   permissions: { auto_allow: boolean }
   adapters: Partial<Record<AdapterPoint, Adapter>>
+  // Runs another tool drives without a session, shown in /wololo status: the command that lists them, and the one that says where one stands ({run}).
+  mirror: { list: string; run: string }
   // Paths whose change makes a run high risk, whatever risk it was given.
   risk_paths: string[]
   // Variables every project command runs with (set) or without (unset), so the session's own environment does not leak in.
@@ -135,6 +137,7 @@ export const DEFAULT_CONFIG: Config = {
   },
   permissions: { auto_allow: true },
   adapters: {},
+  mirror: { list: '', run: '' },
   risk_paths: [],
   env: { set: {}, unset: [] },
   view: {

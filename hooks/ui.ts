@@ -2,6 +2,7 @@ import type { Band, Progress, Row, Segment, Tone, ViewState } from '../types'
 import { type Entry, formatEntry, timeline } from './history'
 import {
   type AgentEntry,
+  type Lang,
   type Run,
   type RunEvent,
   type Status,
@@ -459,6 +460,30 @@ export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last
       waiting,
       last: last ? `${es ? 'Último' : 'Last'}: ${last.icon} ${last.text} · ${ago(last.ts)}` : '',
       ago: ago(run.updated_at),
+    }
+  })
+}
+
+// A run another tool drives without a session, as its own JSON status said: its state, who it waits on, and what unblocks it.
+export type MirrorRun = { id: string; issue: string; state: string; waiting_on: string; unblock: string | null; exit: number }
+
+export function mirrorCards(runs: readonly MirrorRun[], project: string, lang: Lang): StatusCard[] {
+  const es = lang === 'es'
+  return runs.map(run => {
+    const person = run.exit === 2
+    return {
+      id: run.id,
+      project,
+      title: `runner ${run.issue ? `#${run.issue}` : run.id}`,
+      badge: person ? (es ? '✋ te espera' : '✋ waiting for you') : run.exit === 3 ? (es ? '⏳ sigue solo' : '⏳ goes on by itself') : run.state,
+      tone: person ? 'warning' : 'subtle',
+      stage: run.state,
+      current: '',
+      doing: person ? '' : run.waiting_on,
+      workers: [],
+      waiting: person ? [run.waiting_on, run.unblock].filter(Boolean).join(' · ') : '',
+      last: '',
+      ago: '',
     }
   })
 }

@@ -91,6 +91,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
 | `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
+| `mirror.list`, `mirror.run` | show in `/wololo status` the runs another tool drives without a session: the command that lists them (`data.runs`) and the one that says where one stands (`{run}`), both as the JSON protocol of **Adapters** |
 | `adapters.<point>` | hand a point of the run (`definition`, `gate_a`, `plan`, `item`, `pr`, `poll`) to another tool; see **Adapters** below |
 | `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
 | `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |
@@ -158,6 +159,8 @@ A runner that speaks that protocol, as `make agent.*` with `JSON=1` does:
   }
 }
 ```
+
+For the runs its watcher drives without a session, `"mirror": { "list": "make agent.status JSON=1", "run": "make agent.status RUN={run} JSON=1" }` puts each one that has not ended in `/wololo status`, with what it waits on and, when that is you, the command that unblocks it.
 
 The run plans and implements in the session; the runner takes the branch after the first item, verifies each next item with its own gates and reviewer, publishes and follows CI. A command runs at most ten minutes: a step that may take longer, such as a spec debate on the issue, belongs in the session.
 

@@ -49,7 +49,7 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
+import { type MirrorRun, type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, mirrorCards, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
 
 type Engine = EngineInterface
 
@@ -582,9 +582,43 @@ async function statusOutput($: Engine, args: string): Promise<{ text: string }> 
     const entries = timeline(await readEvents($, runDir(paths, item.run.id)), item.run.lang).filter(entry => entry.isMajor && entry.icon !== '→')
     runs.push({ ...item, last: entries[entries.length - 1] })
   }
-  const stamp = statusStamp(ts, run?.lang ?? config.languages.chat)
-  statusRenders.set(stamp, statusCards(runs, ts))
-  return { text: [statusTable(runs, ts), '', stamp].join('\n') }
+  const lang = run?.lang ?? config.languages.chat
+  const stamp = statusStamp(ts, lang)
+  const cwd = await $.session.cwd()
+  const mirrored = await mirrorRuns($, cwd)
+  const project = (await projectInfo($, cwd))?.key.split('__').slice(-1)[0] ?? ''
+  statusRenders.set(stamp, [...statusCards(runs, ts), ...mirrorCards(mirrored, project, lang)])
+  const lines = mirrored.map(m => `runner ${m.issue ? `#${m.issue}` : m.id} · ${m.state} · ${m.waiting_on}${m.exit === 2 && m.unblock ? ` · ${m.unblock}` : ''}`)
+  return { text: [statusTable(runs, ts), ...(lines.length > 0 ? ['', ...lines] : []), '', stamp].join('\n') }
+}
+
+// The runs config.mirror points at that have not ended, each with where it stands; none when the config names no command or it fails.
+async function mirrorRuns($: Engine, cwd: string): Promise<MirrorRun[]> {
+  if (!config.mirror.list) return []
+  const answer = async (cmd: string) => {
+    const ran = await $.process.run(['sh', '-c', withEnv(cmd, envPrefix(config.env))], { cwd, timeoutMs: 20_000 }).catch(() => undefined)
+    const parsed = ran ? parseJson(ran.stdout.trim().split('\n').pop() ?? '').value : undefined
+    return ran && isObject(parsed) ? { exit: ran.exitCode, json: parsed as Record<string, unknown> } : null
+  }
+  const listed = await answer(config.mirror.list)
+  const data = listed && isObject(listed.json.data) ? listed.json.data : {}
+  const rows = Array.isArray(data.runs) ? data.runs.filter(isObject) : []
+  const open = rows.filter(row => !['merged', 'staged', 'already_satisfied', 'cancelled', 'superseded', 'accepted'].includes(String(row.state)))
+  const mirrored: MirrorRun[] = []
+  for (const row of open.slice(0, 8)) {
+    const id = String(row.id)
+    const one = config.mirror.run ? await answer(expand(config.mirror.run, { run: id })) : null
+    const json = one?.json ?? {}
+    mirrored.push({
+      id,
+      issue: row.issue === undefined || row.issue === null ? '' : String(row.issue),
+      state: String(json.state ?? row.state),
+      waiting_on: String(json.waiting_on ?? row.waiting_on ?? ''),
+      unblock: typeof json.unblock === 'string' ? json.unblock : null,
+      exit: one?.exit ?? 0,
+    })
+  }
+  return mirrored
 }
 
 async function writePointer($: Engine) {

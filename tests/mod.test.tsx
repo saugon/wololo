@@ -615,3 +615,33 @@ test("a refusal of the project's tool blocks the run with its words, and a missi
   expect(status.run.blocked.reason).toBe('plan: Issue is not approved: approve its current spec')
   expect(String((await $.tool.call({ tool: 'mcp__wololo__run_adapter', point: 'item' } as never)).result)).toContain('needs confirm')
 })
+
+test("/wololo-status shows the runs another tool drives, and what unblocks the ones waiting for you", async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ mirror: { list: 'make agent.status JSON=1', run: 'make agent.status RUN={run} JSON=1' } }))
+  const runs = [
+    { id: 'a1', issue: 4301, state: 'needs_decision', request: null, waiting_on: 'the developer: answer' },
+    { id: 'b2', issue: 4290, state: 'ci', request: null, waiting_on: 'nobody yet' },
+    { id: 'c3', issue: 4100, state: 'merged', request: null, waiting_on: 'the release owner' },
+  ]
+  host.answers.push({ match: /RUN=a1/, stdout: JSON.stringify({ ok: true, state: 'needs_decision', waiting_on: 'the developer: answer', unblock: 'make agent.decision RUN=a1 REVISION=r ANSWER=<file>' }), exit: 2 })
+  host.answers.push({ match: /RUN=b2/, stdout: JSON.stringify({ ok: true, state: 'ci', waiting_on: 'CI', unblock: null }), exit: 3 })
+  host.answers.push({ match: /agent\.status JSON=1$/, stdout: JSON.stringify({ ok: true, data: { runs } }), exit: 0 })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const ran = await $.command.run({ command: 'wololo-status', args: '' } as never)
+  expect(ran.text).toContain('runner #4301 · needs_decision · the developer: answer · make agent.decision RUN=a1')
+  expect(ran.text).toContain('runner #4290 · ci · CI')
+  expect(ran.text).not.toContain('#4100')
+  const ui = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'CommandOutput',
+    props: { command: 'wololo-status', args: '', text: ran.text ?? '', isErrored: false },
+  })
+  expect((await ui.find({ type: 'Text', text: /runner #4301/ }))?.text).toBe('shop · runner #4301')
+  expect(await ui.find({ type: 'Text', text: /te espera/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /sigue solo/ })).toBeTruthy()
+  await ui.unmount()
+})
