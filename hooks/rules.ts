@@ -1,4 +1,4 @@
-import { type EventType, MODEL_EVENTS, type Run, STAGES, type Snapshot, type StageId, stageIndex } from './model'
+import { type BudgetName, type EventType, MODEL_EVENTS, type Run, STAGES, type Snapshot, type StageId, activeMinutes, stageIndex } from './model'
 
 export const STAGE_FILES: Record<StageId, string> = {
   context: '01-context.md',
@@ -35,9 +35,40 @@ function gateResolved(run: Run, id: StageId): boolean {
   return run.gates[id]?.resolved_at != null
 }
 
-export function checkEvent(run: Run, type: string, data: Record<string, unknown>): string | null {
+export type Budgets = Record<BudgetName, number>
+
+const BUDGET_WHAT: Record<BudgetName, string> = {
+  design_reversals: 'design reversals for one item',
+  ci_fix_attempts: 'CI fixes',
+  run_minutes: "minutes of the run's own work",
+}
+
+// A spent budget stops the run in every mode: the person decides whether it goes on.
+function overBudget(run: Run, type: string, data: Record<string, unknown>, budgets: Budgets): string | null {
+  const allowed = (name: BudgetName) => budgets[name] * (1 + (run.counts.budget_extensions?.[name] ?? 0))
+  const spent = (name: BudgetName, used: number) =>
+    `${budgets[name]} ${BUDGET_WHAT[name]} (budgets.${name}) are spent, ${Math.round(used)} used: record blocked, ask the person, and record unblocked {budget: "${name}"} once they say to go on.`
+  if (type === 'item.started' && data.reversal === true) {
+    const used = run.counts.reversals_by_item?.[Number(data.n)] ?? 0
+    if (used >= allowed('design_reversals')) return spent('design_reversals', used)
+  }
+  if (type === 'item.started' && run.stage?.id === 'pr') {
+    const failures = run.counts.ci_failures ?? 0
+    if (failures > allowed('ci_fix_attempts')) return spent('ci_fix_attempts', failures - 1)
+  }
+  const forward = type === 'stage.entered' && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
+  if (forward || type === 'item.started') {
+    const minutes = activeMinutes(run)
+    if (minutes > allowed('run_minutes')) return spent('run_minutes', minutes)
+  }
+  return null
+}
+
+export function checkEvent(run: Run, type: string, data: Record<string, unknown>, budgets?: Budgets): string | null {
   if (!MODEL_EVENTS.has(type as EventType)) return `Unknown event type "${type}". Allowed: ${[...MODEL_EVENTS].join(', ')}.`
   if (run.outcome) return `The run already finished (${run.outcome}). Start a new one with /wololo.`
+  const budget = budgets ? overBudget(run, type, data, budgets) : null
+  if (budget) return budget
 
   switch (type as EventType) {
     case 'stage.entered': {
@@ -101,6 +132,16 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       return text(data.text) ? null : 'data.text is required.'
     case 'blocked':
       return text(data.reason) ? null : 'data.reason is required.'
+    case 'unblocked': {
+      if (data.budget === undefined) return null
+      if (!['design_reversals', 'ci_fix_attempts', 'run_minutes'].includes(String(data.budget)))
+        return 'data.budget must be design_reversals, ci_fix_attempts or run_minutes.'
+      // Extending a budget is the person's call, in every mode.
+      const since = run.blocked?.since
+      if (since === undefined || !run.last_answer || run.last_answer.at < since)
+        return 'Extending a budget needs the person: record blocked, ask with AskUserQuestion, then record unblocked {budget}.'
+      return null
+    }
     case 'debate.turn':
       return text(data.role) ? null : 'data.role is required.'
     case 'signing.deferred':

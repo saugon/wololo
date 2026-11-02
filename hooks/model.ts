@@ -5,6 +5,7 @@ export type Mode = 'full' | 'checkpoints' | 'guided'
 export type Risk = 'low' | 'high' | 'unknown'
 export type Lang = 'es' | 'en'
 // Hashes of what a gate approved: the run's spec and plan files, and the worktree's committed tree. null where there was none.
+export type BudgetName = 'design_reversals' | 'ci_fix_attempts' | 'run_minutes'
 export type Snapshot = { spec: string | null; plan: string | null; tree: string | null }
 
 export type StageId = 'context' | 'definition' | 'gate_a' | 'plan' | 'implement' | 'evidence' | 'gate_b' | 'pr'
@@ -262,6 +263,10 @@ export type Run = {
     reversals: number
     nudges: number
     unsigned: number
+    // Toward the budgets: reversals per item, CI runs that failed, and how many times the person extended each budget.
+    reversals_by_item?: Record<number, number>
+    ci_failures?: number
+    budget_extensions?: Partial<Record<BudgetName, number>>
   }
   pr: {
     url: string
@@ -298,6 +303,13 @@ const TERMINAL: ReadonlySet<Status> = new Set<Status>(['done', 'failed', 'cancel
 
 export function isTerminal(status: Status): boolean {
   return TERMINAL.has(status)
+}
+
+// The run's own minutes: working, running agents and tests, but not waiting for the person or paused.
+export function activeMinutes(run: Run): number {
+  let seconds = 0
+  for (const time of Object.values(run.time ?? {})) seconds += (time?.work ?? 0) + (time?.agents ?? 0) + (time?.tests ?? 0)
+  return seconds / 60
 }
 
 export function stageIndex(id: StageId): number {
@@ -543,7 +555,10 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.items.current = { n: num(d.n), title: str(d.title), since: ev.ts }
       setItem(r, num(d.n), str(d.title), { state: 'active' })
       r.counts.attempts += 1
-      if (d.reversal === true) r.counts.reversals += 1
+      if (d.reversal === true) {
+        r.counts.reversals += 1
+        r.counts.reversals_by_item = { ...(r.counts.reversals_by_item ?? {}), [num(d.n)]: (r.counts.reversals_by_item?.[num(d.n)] ?? 0) + 1 }
+      }
       break
     case 'item.verified':
       if (d.result === 'fail') setItem(r, num(d.n), '', { state: 'failing' })
@@ -591,12 +606,15 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'unblocked':
       r.blocked = null
+      if (typeof d.budget === 'string')
+        r.counts.budget_extensions = { ...(r.counts.budget_extensions ?? {}), [d.budget]: (r.counts.budget_extensions?.[d.budget as BudgetName] ?? 0) + 1 }
       break
     case 'stalled':
       r.counts.nudges += 1
       break
     case 'ci.updated':
       if (r.pr) r.pr.ci = (d.state as 'pending' | 'passing' | 'failing') ?? r.pr.ci
+      if (d.state === 'failing') r.counts.ci_failures = (r.counts.ci_failures ?? 0) + 1
       break
     case 'pr.opened':
       r.pr = {

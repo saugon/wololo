@@ -154,3 +154,76 @@ test('going back before a gate reopens it, so it is asked again', async () => {
   // The answer given before going back no longer counts.
   expect(checkEvent(back, 'gate.resolved', { gate: 'gate_a', outcome: 'approved' })).toMatch(/its own question/)
 })
+
+const budgets = { design_reversals: 2, ci_fix_attempts: 2, run_minutes: 240 }
+
+function implementing(extra: Array<[RunEvent['type'], Record<string, unknown>, number]> = []) {
+  return runAt('full', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'plan' }, 4],
+    ['stage.entered', { stage: 'implement' }, 5],
+    ...extra,
+  ])
+}
+
+test('an item gets as many design reversals as the budget allows, then the person decides', async () => {
+  const twice = implementing([
+    ['item.started', { n: 1, title: 'a' }, 6],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 7],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 8],
+  ])
+  expect(checkEvent(twice, 'item.started', { n: 1, title: 'a', reversal: true }, budgets)).toMatch(/budgets\.design_reversals.*record blocked/)
+  expect(checkEvent(twice, 'item.started', { n: 2, title: 'b', reversal: true }, budgets)).toBe(null)
+  // The person cannot be skipped: unblocking needs their answer after the block.
+  const blocked = implementing([
+    ['item.started', { n: 1, title: 'a', reversal: true }, 7],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 8],
+    ['blocked', { reason: 'budget' }, 9],
+  ])
+  expect(checkEvent(blocked, 'unblocked', { budget: 'design_reversals' })).toMatch(/needs the person/)
+  const extended = implementing([
+    ['item.started', { n: 1, title: 'a', reversal: true }, 7],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 8],
+    ['blocked', { reason: 'budget' }, 9],
+    ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Sigo?', answer: 'Sí' }], answered: true }, 10],
+  ])
+  expect(checkEvent(extended, 'unblocked', { budget: 'design_reversals' })).toBe(null)
+  const after = implementing([
+    ['item.started', { n: 1, title: 'a', reversal: true }, 7],
+    ['item.started', { n: 1, title: 'a', reversal: true }, 8],
+    ['blocked', { reason: 'budget' }, 9],
+    ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Sigo?', answer: 'Sí' }], answered: true }, 10],
+    ['unblocked', { budget: 'design_reversals' }, 11],
+  ])
+  expect(checkEvent(after, 'item.started', { n: 1, title: 'a', reversal: true }, budgets)).toBe(null)
+})
+
+test('CI gets as many fixes as the budget allows', async () => {
+  const pr = runAt('full', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'pr' }, 4],
+    ['pr.opened', { url: 'u', number: 1 }, 5],
+    ['ci.updated', { state: 'failing' }, 6],
+    ['ci.updated', { state: 'failing' }, 7],
+  ])
+  expect(checkEvent(pr, 'item.started', { n: 9, title: 'fix CI' }, budgets)).toBe(null)
+  const spent = runAt('full', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'pr' }, 4],
+    ['pr.opened', { url: 'u', number: 1 }, 5],
+    ['ci.updated', { state: 'failing' }, 6],
+    ['ci.updated', { state: 'failing' }, 7],
+    ['ci.updated', { state: 'failing' }, 8],
+  ])
+  expect(checkEvent(spent, 'item.started', { n: 9, title: 'fix CI' }, budgets)).toMatch(/budgets\.ci_fix_attempts/)
+})
+
+test("a run that spent its minutes stops moving on until the person extends them", async () => {
+  const long = implementing()
+  long.time = { implement: { work: 200 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
+  expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toMatch(/budgets\.run_minutes/)
+  expect(checkEvent(long, 'stage.entered', { stage: 'evidence' }, budgets)).toMatch(/budgets\.run_minutes/)
+  // Waiting for the person does not count.
+  long.time = { implement: { work: 100 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
+  expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toBe(null)
+})

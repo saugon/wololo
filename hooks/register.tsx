@@ -790,7 +790,7 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   if (!run || !paths) return fail('No active run in this session. Start one with /wololo, or resume one with /wololo resume <run>.')
   const type = String(input.type ?? '')
   const data = isObject(input.data) ? input.data : {}
-  const problem = checkEvent(run, type, data)
+  const problem = checkEvent(run, type, data, config.budgets)
   if (problem) return fail(problem)
   const guarded = ['stage.entered', 'pr.opened'].includes(type) || (type === 'gate.resolved' && (data.outcome ?? 'approved') === 'approved')
   if (guarded) {
