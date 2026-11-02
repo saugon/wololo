@@ -55,9 +55,6 @@
             "type": "string"
           }
         },
-        "max_rounds": {
-          "type": "integer"
-        },
         "critic": {
           "enum": [
             "claude",

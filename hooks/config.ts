@@ -31,7 +31,6 @@ export type Config = {
   debate: {
     depth: 'by_risk' | 'light' | 'deep'
     risk_signals: string[]
-    max_rounds: number
     critic: 'claude' | 'external'
     external_cmd: string[]
   }
@@ -80,7 +79,6 @@ export const DEFAULT_CONFIG: Config = {
   debate: {
     depth: 'by_risk',
     risk_signals: [],
-    max_rounds: 2,
     critic: 'claude',
     external_cmd: ['codex', 'exec', '--sandbox', 'read-only', '-'],
   },
@@ -201,7 +199,17 @@ export function validate(candidate: unknown): string[] {
   return errors
 }
 
+// Keys a config written by an earlier wololo may still hold, carried to where they live now.
+function migrate(candidate: unknown): unknown {
+  if (!isObject(candidate) || !isObject(candidate.debate) || !('max_rounds' in candidate.debate)) return candidate
+  const { max_rounds, ...debate } = candidate.debate
+  const budgets = isObject(candidate.budgets) ? candidate.budgets : {}
+  return { ...candidate, debate, budgets: 'debate_rounds' in budgets ? budgets : { ...budgets, debate_rounds: max_rounds } }
+}
+
 export function resolve(global: unknown, project: unknown): { config: Config; errors: string[] } {
+  global = migrate(global)
+  project = migrate(project)
   const errors = [...validate(global).map(e => `global ${e}`), ...validate(project).map(e => `project ${e}`)]
   const config = merge(merge(DEFAULT_CONFIG, global ?? {}), project ?? {})
   return { config, errors }

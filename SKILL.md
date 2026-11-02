@@ -40,7 +40,7 @@ Take the text after `/wololo`:
    - The path of an existing file → `file`.
    - Anything else → `text`.
 3. **Config.** `get` scope `config`. If `project_config_exists` is false, follow `stages/init.md` first. In `full` mode, init saves without asking and records it as an assumption. Then come back here.
-4. **Start.** `start` with the source, a short title and the mode. Keep its answer: it holds `run_dir`, `branch`, `worktree`, `base`, `slot`, `ports` and the effective `config`.
+4. **Start.** `start` with the source, a short title and the mode. In the turn that starts (or resumes) a run, the run's own tools (`event`, `tests`, `publish`, `external_turn`) may still be behind ToolSearch: its answer's `tools` says how to load them. Keep its answer: it holds `run_dir`, `branch`, `worktree`, `base`, `slot`, `ports` and the effective `config`.
 5. **Isolate the work.**
    - **`worktree`**:
      1. `git fetch origin <base>`. If it fails, for example because there is no remote, use the local `<base>` and record an assumption.

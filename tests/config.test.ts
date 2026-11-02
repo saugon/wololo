@@ -3,10 +3,10 @@ import { expect, test } from 'claude-code/testing'
 import { DEFAULT_CONFIG, envPrefix, expand, globToRegExp, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv } from '../hooks/config'
 
 test('project config overrides global, which overrides defaults; arrays replace', async () => {
-  const { config, errors } = resolve({ autonomy: 'full', debate: { max_rounds: 3 } }, { autonomy: 'guided', tests: { suite: ['make test'] } })
+  const { config, errors } = resolve({ autonomy: 'full', budgets: { debate_rounds: 3 } }, { autonomy: 'guided', tests: { suite: ['make test'] } })
   expect(errors).toEqual([])
   expect(config.autonomy).toBe('guided')
-  expect(config.debate.max_rounds).toBe(3)
+  expect(config.budgets.debate_rounds).toBe(3)
   expect(config.debate.critic).toBe(DEFAULT_CONFIG.debate.critic)
   expect(config.tests.suite).toEqual(['make test'])
   expect(config.tests.e2e_runs).toBe('local')
@@ -88,4 +88,12 @@ test('risk paths pick the changed files that make a run high risk', async () => 
   expect(riskyFiles(files, ['**/migrations/**', 'infra/**'])).toEqual(['backend/priv/repo/migrations/1_add.exs', 'infra/main.tf'])
   expect(riskyFiles(files, [])).toEqual([])
   expect(validate({ risk_paths: ['a/**'], env: { set: { A: '1' }, unset: ['INST'] } })).toEqual([])
+})
+
+test('debate.max_rounds from an earlier config becomes budgets.debate_rounds, unless that is set', async () => {
+  const old = resolve({ debate: { max_rounds: 4, depth: 'deep' } }, {})
+  expect(old.errors).toEqual([])
+  expect(old.config.debate.depth).toBe('deep')
+  expect(old.config.budgets.debate_rounds).toBe(4)
+  expect(resolve({ debate: { max_rounds: 4 }, budgets: { debate_rounds: 1 } }, {}).config.budgets.debate_rounds).toBe(1)
 })

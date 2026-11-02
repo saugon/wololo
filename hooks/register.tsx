@@ -759,7 +759,9 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   await writePointer($)
   if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${run.id}` }).catch(() => undefined)
 
+  await exposeRunTools($)
   return ok({
+    tools: RUN_TOOLS_NOTE,
     run_id: id,
     run_dir: runDir(paths, id),
     header: header(run, run.status, ts),
@@ -793,6 +795,36 @@ async function riskyChange($: Engine, type: string, data: Record<string, unknown
   const files = riskyFiles(await changedFiles($, workdir(), run.project.base ?? config.pr.base), config.risk_paths)
   if (files.length === 0) return null
   return `The branch changes ${files.slice(0, 5).join(', ')}${files.length > 5 ? ` and ${files.length - 5} more` : ''}, in config.risk_paths: the run is high risk. Record risk.set {risk: "high", reason}${lowering ? ' instead' : ' before moving on'}.`
+}
+
+const LOG_KEEP_BYTES = 1024 * 1024
+
+// A finished run takes its servers down and leaves its logs readable: each server recorded in servers.json that is still running one of the
+// project's start commands is stopped, with its process group, and each log past 5 MB keeps its last megabyte.
+async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; trimmed: string[] }> {
+  const stopped: string[] = []
+  const recorded = parseJson(await readText($, `${dir}/servers.json`)).value
+  const entries = Array.isArray(recorded) ? recorded : isObject(recorded) ? Object.values(recorded) : []
+  // A start command as ps shows it: its first two words, without the VAR=value assignments before it.
+  const starts = config.commands.start.map(start => start.cmd.split(/\s+/).filter(word => !/^\w+=/.test(word)).slice(0, 2).join(' '))
+  for (const entry of entries) {
+    const pid = isObject(entry) ? Number(entry.pid) : NaN
+    if (!Number.isInteger(pid) || pid <= 1) continue
+    const shown = await $.process.run(['ps', '-o', 'pgid=,command=', '-p', String(pid)], { timeoutMs: 5_000 }).catch(() => undefined)
+    const [pgid, ...command] = (shown?.stdout ?? '').trim().split(/\s+/)
+    if (!pgid || !starts.some(start => start && command.join(' ').includes(start))) continue
+    await $.process.run(['kill', '-TERM', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    stopped.push(`${pid} (${command.join(' ').slice(0, 60)})`)
+  }
+  const trimmed: string[] = []
+  const found = await $.process.run(['find', dir, '-name', '*.log', '-size', '+5M'], { timeoutMs: 10_000 }).catch(() => undefined)
+  for (const file of (found?.stdout ?? '').split('\n').filter(Boolean)) {
+    const tail = await $.process.run(['tail', '-c', String(LOG_KEEP_BYTES), file], { timeoutMs: 10_000 }).catch(() => undefined)
+    if (!tail || tail.exitCode !== 0) continue
+    await writeAtomic($, file, `[wololo kept the last ${LOG_KEEP_BYTES / 1024 / 1024} MB of this log when the run finished]\n${tail.stdout}`)
+    trimmed.push(file.slice(dir.length + 1))
+  }
+  return { stopped, trimmed }
 }
 
 // The tree `git add -A && git commit` would make of the work tree now, built in a scratch index so the real one is left alone.
@@ -833,9 +865,13 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
     if (type === 'gate.resolved') data.snapshot = current
   }
   await emit($, type as EventType, data)
-  if (type === 'run.finished') await flush($)
+  let cleanup: { stopped: string[]; trimmed: string[] } | null = null
+  if (type === 'run.finished') {
+    await flush($)
+    cleanup = await cleanUp($, runDir(paths, run.id))
+  }
   const ts = await nowSeconds($)
-  return ok({ ok: true, header: header(run, run.status, ts), status: run.status, hint: hintFor(type, data, root) })
+  return ok({ ok: true, header: header(run, run.status, ts), status: run.status, hint: hintFor(type, data, root), ...(cleanup ? { cleanup } : {}) })
 }
 
 async function getState($: Engine, input: Record<string, unknown>): Promise<string> {
@@ -909,7 +945,9 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   if (run.paused || run.pause_requested_at) await emit($, 'resumed', {})
   await flush($)
   await writePointer($)
+  await exposeRunTools($)
   return ok({
+    tools: RUN_TOOLS_NOTE,
     header: header(run, run.status, ts),
     run_dir: dir,
     skill_root: root,
@@ -977,6 +1015,14 @@ async function togglePane($: Engine, input: Record<string, unknown>): Promise<st
   }
   const opened = await $.ui.open({ id: PANE, title: run ? `wololo · ${run.id}` : 'wololo' })
   return ok({ open: true, placed: opened })
+}
+
+// The tools only a run uses: deferred until one is active in the session.
+const RUN_TOOLS: ReadonlySet<string> = new Set(['event', 'tests', 'publish', 'external_turn'])
+const RUN_TOOLS_NOTE = `Until the next prompt, the run's own tools load with ToolSearch "select:${[...RUN_TOOLS].map(name => `${TOOL_PREFIX}${name}`).join(',')}".`
+
+async function exposeRunTools($: Engine): Promise<void> {
+  for (const tool of TOOLS) if (RUN_TOOLS.has(tool.name)) await $.tool.register({ ...tool, isDeferred: false }).catch(() => undefined)
 }
 
 const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Record<string, unknown> }> = [
@@ -1300,7 +1346,8 @@ export const register: Register = (on, options) => {
       sessionId = await $.session.id()
       await costDelta($)
 
-      for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: false })
+      // A session with no run keeps the run's own tools behind ToolSearch; they come forward once a run is active.
+      for (const tool of TOOLS) await $.tool.register({ ...tool, isDeferred: RUN_TOOLS.has(tool.name) })
       await $.command
         .register({ name: 'wololo-more', description: 'Expands or collapses the wololo card above the prompt' })
         .catch(() => undefined)
@@ -1333,6 +1380,7 @@ export const register: Register = (on, options) => {
         const loaded = await reviveRun($, pointer.run_id)
         if (loaded && !loaded.outcome && loaded.owner.session_id === sessionId) {
           run = loaded
+          await exposeRunTools($)
           recent = (await readEvents($, runDir(paths, loaded.id))).slice(-RECENT)
           config = (await loadConfig($, loaded.project.key)).config
           await settlePermission($, '', 'not_run')

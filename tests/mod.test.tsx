@@ -4,16 +4,22 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-type Host = { files: Map<string, string>; gh: string[] }
+type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; killed: string[] }
 
 function fakeHost(on: Parameters<TestBody>[1]): Host {
   const files = new Map<string, string>()
   const gh: string[] = []
+  const tools = new Map<string, boolean>()
+  const ps = new Map<string, string>()
+  const killed: string[] = []
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('session.id', () => ({ value: 's1' }))
   on('session.cwd', () => ({ value: REPO }))
-  on('tool.register', (_, e) => ({ value: { tool: `mcp__wololo__${e.name}` } }))
+  on('tool.register', (_, e) => {
+    tools.set(e.name, e.isDeferred === true)
+    return { value: { tool: `mcp__wololo__${e.name}` } }
+  })
   on('agent.register', (_, e) => ({ value: { agent: `wololo:${e.name}` } }))
   on('agent.list', () => ({ value: [] }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
@@ -62,6 +68,14 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
       files.set(path, (files.get(path) ?? '') + (e.init?.stdin ?? ''))
       return done()
     }
+    if (cmd === 'ps') {
+      const shown = ps.get(args[args.length - 1] ?? '')
+      return shown === undefined ? done('', 1) : done(shown)
+    }
+    if (cmd === 'kill') {
+      killed.push(args.join(' '))
+      return done()
+    }
     if (cmd === 'gh') {
       gh.push(args.join(' '))
       return done('https://github.com/acme/shop/issues/12\n')
@@ -79,7 +93,7 @@ function fakeHost(on: Parameters<TestBody>[1]): Host {
   let now = 1_800_000_000_000
   on('clock.now', () => ({ value: (now += 1_000) }))
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
-  return { files, gh }
+  return { files, gh, tools, ps, killed }
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -513,4 +527,31 @@ test('a permission wait left by an earlier load of the mod is cleared when the s
   const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { status: string; waiting: unknown }
   expect(got.waiting).toBe(null)
   expect(got.status).not.toBe('waiting_permission')
+})
+
+test("the run's tools wait behind ToolSearch until a run is active", async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  expect([host.tools.get('event'), host.tools.get('publish'), host.tools.get('start'), host.tools.get('get')]).toEqual([true, true, false, false])
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  expect(String(started.tools)).toContain('select:mcp__wololo__event')
+  expect([host.tools.get('event'), host.tools.get('tests'), host.tools.get('publish'), host.tools.get('external_turn')]).toEqual([false, false, false, false])
+})
+
+test('a finished run stops the servers it started, and only those', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ commands: { start: [{ name: 'backend', cmd: 'INST={slot} make backend.run', port: '4000' }] } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const dir = String(started.run_dir)
+  host.files.set(`${dir}/servers.json`, JSON.stringify([{ name: 'backend', pid: 4242, port: 4000 }, { name: 'other', pid: 5151, port: 4001 }]))
+  host.ps.set('4242', '4240 make backend.run')
+  host.ps.set('5151', '5150 vim notes.md')
+  const finished = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } } as never)).result,
+  )
+  expect(host.killed).toEqual(['-TERM -4240'])
+  expect((finished.cleanup as { stopped: string[] }).stopped).toEqual(['4242 (make backend.run)'])
 })

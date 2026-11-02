@@ -22,7 +22,7 @@ Goal: up to `config.screenshots.max` screenshots of what changed, saved in `run_
    - Record `screenshot.saved {file, caption}`, with a caption in `config.languages.pr`.
 6. **Stop everything you started, always, even after a failure.**
    - Close the browser.
-   - Kill the servers recorded in `servers.json`.
+   - Kill the servers recorded in `servers.json`. Record each with its `pid`: when the run finishes, wololo also stops any of them still running one of the project's start commands, in case one was missed.
    - Check that each port is free again.
    - Never stop a server you reused.
 7. `event stage.completed {stage: "evidence"}`, then go to `stages/gates.md` for gate_b.
