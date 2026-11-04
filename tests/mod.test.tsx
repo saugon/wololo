@@ -396,7 +396,7 @@ test('/wololo config edits a radio and a checkbox and saves the project file', a
   await ui.unmount()
 })
 
-test('the init review walks from what was detected to the chosen sections and saves', async ($, on) => {
+test('init shows what it found, asks the first-time questions and saves only what differs from the defaults', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))
   on('ui.close', () => ({ value: undefined }))
@@ -404,15 +404,47 @@ test('the init review walks from what was detected to the chosen sections and sa
   const answer = parse((await $.tool.call({ tool: 'mcp__wololo__review_config', proposal: { tests: { suite: ['make test'], suite_runs: 'ci' } } } as never)).result)
   expect(answer.opened).toBe(true)
   const ui = await $.ui.mount(CONFIG_PANE)
-  expect((await ui.find({ type: 'Text', text: /^tests\.suite_runs/ }))?.text).toBe('tests.suite_runs: ci')
-  await ui.press({ key: 'review' })
-  await ui.press({ key: 'choose-autonomy' })
-  await ui.press({ key: 'continue' })
-  await ui.press({ key: 'autonomy=guided' })
-  await ui.press({ key: 'next' })
+  expect((await ui.find({ type: 'Text', text: 'make test' }))?.text).toBe('make test')
+  expect((await ui.find({ type: 'Text', text: '¿Cuánto te pregunta el run?' }))).toBeDefined()
+  await ui.press({ key: 'init-autonomy-full' })
+  await ui.press({ key: 'back' })
+  await ui.press({ key: 'init-autonomy-guided' })
+  await ui.press({ key: 'init-isolation-worktree' })
+  await ui.press({ key: 'init-approval-pr' })
+  await ui.press({ key: 'init-pr-draft' })
+  // The proposal said CI, so CI is what is drawn as picked.
+  expect((await ui.find({ key: 'init-suite-ci' }))?.text).toMatch(/● en CI/)
+  await ui.press({ key: 'init-suite-ci' })
+  await ui.press({ key: 'init-spec-yes' })
+  await ui.press({ key: 'save-as-is' })
   expect(JSON.parse(host.files.get(`${DATA}/projects/acme__shop/config.json`) ?? '{}')).toEqual({
     tests: { suite: ['make test'], suite_runs: 'ci' },
     autonomy: 'guided',
+    review: { approval: 'pr' },
+  })
+  await ui.unmount()
+})
+
+test('init skips the suite question when the project has no suite, and adjusts more by section', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('ui.close', () => ({ value: undefined }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__review_config', proposal: { pr: { base: 'develop' } } } as never)
+  const ui = await $.ui.mount(CONFIG_PANE)
+  for (const key of ['init-autonomy-checkpoints', 'init-isolation-branch', 'init-approval-local', 'init-pr-none']) await ui.press({ key })
+  expect(await ui.find({ key: 'init-suite-local' })).toBeUndefined()
+  await ui.press({ key: 'init-spec-no' })
+  await ui.press({ key: 'review' })
+  await ui.press({ key: 'choose-autonomy' })
+  await ui.press({ key: 'continue' })
+  await ui.press({ key: 'autonomy=full' })
+  await ui.press({ key: 'next' })
+  expect(JSON.parse(host.files.get(`${DATA}/projects/acme__shop/config.json`) ?? '{}')).toEqual({
+    pr: { base: 'develop', enabled: false },
+    isolation: 'branch',
+    spec: { to_github: false },
+    autonomy: 'full',
   })
   await ui.unmount()
 })

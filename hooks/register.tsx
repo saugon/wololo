@@ -29,7 +29,7 @@ import {
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
 import { type PolicyContext, commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
-import { type Field, SECTIONS, fieldValue, parseInput, setAt, summarize } from './configui'
+import { type Field, type InitChoice, type InitQuestion, SECTIONS, applyChoice, chosenIndex, detectedRows, fieldValue, initQuestions, parseInput, setAt } from './configui'
 import { helpLangOf, helpNow, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { changedSinceApproval, checkEvent, hintFor, stageForFile } from './rules'
@@ -472,7 +472,7 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
     files: { project: proposal ?? (await readObject($, projectPath)), global: await readObject($, paths.globalConfig) },
     dirty: mode === 'review',
     message: '',
-    step: 'summary',
+    step: 'ask',
     chosen: [],
     cursor: 0,
   }
@@ -1355,7 +1355,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'review_config',
     description:
-      'Opens the config review for the person, as /wololo init asks: what was detected, which sections to review, one screen per section, then save. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person\'s save or cancel arrives as a message.',
+      'Opens the config review for the person, as /wololo init asks: what was detected, the first-time questions (autonomy, isolation, approval, PR, suite, spec in the issue), then save or adjust more by section. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person\'s save or cancel arrives as a message.',
     inputSchema: { type: 'object', properties: { proposal: { type: 'object' } }, required: ['proposal'] },
   },
   {
@@ -2234,46 +2234,148 @@ export const register: Register = (on, options) => {
     if (!dialog) return <Text dimColor>{es ? 'No hay nada abierto. /wololo config lo abre.' : 'Nothing open. /wololo config opens it.'}</Text>
     const effective = effectiveOf(dialog)
     const footer = dialog.message ? <Text color={dialog.message.startsWith(es ? 'Guardado' : 'Saved') ? 'success' : 'error'}>{dialog.message}</Text> : null
+    const repo = dialog.projectKey.replace('__', '/')
+    const close = (
+      <Box flexShrink={0}>
+        <Button
+          key="close"
+          hotkey="x"
+          plain
+          label={es ? '× cerrar' : '× close'}
+          onPress={async () => {
+            if (dialog.mode === 'review') await finishReview($, false)
+            else {
+              await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
+              await update($, dialogAtom, () => null)
+            }
+          }}
+        />
+      </Box>
+    )
     const header = (
       <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
         <Text bold color="claude" wrap="truncate-end">
-          {`wololo · ${dialog.mode === 'review' ? 'init' : 'config'} · ${dialog.projectKey.replace('__', '/')}${dialog.dirty ? (es ? ' · sin guardar' : ' · unsaved') : ''}`}
+          {`wololo · ${dialog.mode === 'review' ? 'init' : 'config'} · ${repo}${dialog.dirty ? (es ? ' · sin guardar' : ' · unsaved') : ''}`}
         </Text>
-        <Box flexShrink={0}>
-          <Button
-            key="close"
-            hotkey="x"
-            plain
-            label={es ? '× cerrar' : '× close'}
-            onPress={async () => {
-              if (dialog.mode === 'review') await finishReview($, false)
-              else {
-                await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
-                await update($, dialogAtom, () => null)
-              }
-            }}
-          />
-        </Box>
+        {close}
       </Box>
     )
 
     if (dialog.mode === 'review') {
-      if (dialog.step === 'summary') {
-        const lines = summarize(dialog.files.project)
+      if (dialog.step === 'ask') {
+        const questions = initQuestions(effective)
+        const at = Math.min(dialog.cursor, questions.length)
+        const inherited = merge(DEFAULT_CONFIG, dialog.files.global)
+        const pick = (question: InitQuestion, choice: InitChoice) =>
+          update($, dialogAtom, (d): ConfigDialog | null =>
+            d ? { ...d, files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) }, cursor: questions.indexOf(question) + 1, message: '' } : d,
+          )
+        const back = () => update($, dialogAtom, (d): ConfigDialog | null => (d && d.cursor > 0 ? { ...d, cursor: Math.min(d.cursor, questions.length) - 1, message: '' } : d))
+        const rows = detectedRows(dialog.files.project, repo, String((effective as Config).pr?.base ?? 'main'), lang)
+        const width = Math.max(...rows.map(([label]) => label.length))
         return (
           <Box flexDirection="column">
-            {header}
-            <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} marginTop={1}>
-              <Text bold>{es ? 'Config detectada' : 'Detected config'}</Text>
-              {lines.length === 0 && <Text color="subtle">{es ? 'Nada distinto de los defaults.' : 'Nothing differs from the defaults.'}</Text>}
-              {lines.map(line => (
-                <Text color="subtle">{line}</Text>
+            <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+              <Box flexDirection="column">
+                <Text bold color="claude">{'█ █ █ █▀█ █   █▀█ █   █▀█'}</Text>
+                <Box flexDirection="row" columnGap={2}>
+                  <Text bold color="claude">{'▀▄▀▄▀ █▄█ █▄▄ █▄█ █▄▄ █▄█'}</Text>
+                  <Text color="subtle" wrap="truncate-end">{`init · ${repo}`}</Text>
+                </Box>
+              </Box>
+              {close}
+            </Box>
+            <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} marginTop={1}>
+              <Text bold color="claude">{es ? 'Lo que encontré' : 'What I found'}</Text>
+              {rows.map(([label, value]) => (
+                <Box flexDirection="row" columnGap={2}>
+                  <Text color="subtle">{label.padEnd(width)}</Text>
+                  <Text wrap="truncate-end">{value}</Text>
+                </Box>
               ))}
             </Box>
-            <Box flexDirection="row" columnGap={3} marginTop={1}>
-              <Button key="save-as-is" hotkey="g" variant="primary" label={es ? 'Guardar así' : 'Save as is'} onPress={async () => (await saveConfig($, lang)) && finishReview($, true)} />
-              <Button key="review" hotkey="r" label={es ? 'Revisar por secciones' : 'Review by section'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose' } : d))} />
-              <Button key="cancel" hotkey="c" label={es ? 'Cancelar' : 'Cancel'} onPress={() => finishReview($, false)} />
+            <Box flexDirection="column" marginTop={1}>
+              <Text color="subtle">┌</Text>
+              {questions.map((question, index) => {
+                const current = chosenIndex(question, effective)
+                if (index < at)
+                  return (
+                    <Box flexDirection="row" columnGap={2}>
+                      <Text color="success">◇</Text>
+                      <Text wrap="truncate-end">
+                        {question.title[lang]}
+                        <Text color="subtle">{` · ${question.choices[current]?.label[lang] ?? ''}`}</Text>
+                      </Text>
+                    </Box>
+                  )
+                if (index > at)
+                  return (
+                    <Box flexDirection="row" columnGap={2}>
+                      <Text color="subtle">○</Text>
+                      <Text dimColor>{question.title[lang]}</Text>
+                    </Box>
+                  )
+                return (
+                  <Box flexDirection="column">
+                    <Text color="subtle">│</Text>
+                    <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+                      <Box flexDirection="row" columnGap={2}>
+                        <Text color="claude">◆</Text>
+                        <Text bold>{question.ask[lang]}</Text>
+                      </Box>
+                      <Text color="subtle">{`${index + 1}/${questions.length}`}</Text>
+                    </Box>
+                    {question.choices.map((choice, j) => (
+                      <Box flexDirection="row" columnGap={2}>
+                        <Text color="subtle">│</Text>
+                        <Button
+                          key={`init-${question.id}-${choice.id}`}
+                          hotkey={String(j + 1)}
+                          plain
+                          dimColor={j !== current}
+                          {...(j === current ? { autoFocus: true as const } : {})}
+                          label={`${j === current ? '●' : '○'} ${choice.label[lang]}`}
+                          onPress={() => pick(question, choice)}
+                        />
+                        {choice.help && <Text color="subtle" wrap="truncate-end">{choice.help[lang]}</Text>}
+                      </Box>
+                    ))}
+                    <Text color="subtle">│</Text>
+                  </Box>
+                )
+              })}
+              {at === questions.length && (
+                <Box flexDirection="column">
+                  <Text color="subtle">│</Text>
+                  <Box flexDirection="row" columnGap={2}>
+                    <Text color="claude">◆</Text>
+                    <Text bold>{es ? 'Listo para guardar' : 'Ready to save'}</Text>
+                  </Box>
+                  <Box flexDirection="row" columnGap={2}>
+                    <Text color="subtle">│</Text>
+                    <Text color="subtle" wrap="truncate-middle">{dialog.paths.project}</Text>
+                  </Box>
+                  <Box flexDirection="row" columnGap={3}>
+                    <Text color="subtle">│</Text>
+                    <Button key="save-as-is" hotkey="g" variant="primary" autoFocus label={es ? 'Guardar' : 'Save'} onPress={async () => (await saveConfig($, lang)) && finishReview($, true)} />
+                    <Button key="review" hotkey="a" label={es ? 'Ajustar más por sección' : 'Adjust more by section'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose' } : d))} />
+                    <Button key="cancel" hotkey="c" label={es ? 'Cancelar' : 'Cancel'} onPress={() => finishReview($, false)} />
+                  </Box>
+                </Box>
+              )}
+              <Text color="subtle">└</Text>
+            </Box>
+            <Box flexDirection="row" columnGap={2} marginTop={1}>
+              {at > 0 && <Button key="back" hotkey="b" plain dimColor label={es ? 'atrás' : 'back'} onPress={back} />}
+              <Text color="subtle">
+                {at === questions.length
+                  ? es
+                    ? 'g guarda · a ajusta más · c cancela'
+                    : 'g saves · a adjusts more · c cancels'
+                  : es
+                    ? `↑↓ recorre · Enter o 1-${questions[at]?.choices.length ?? 1} elige · Esc cancela`
+                    : `↑↓ move · Enter or 1-${questions[at]?.choices.length ?? 1} picks · Esc cancels`}
+              </Text>
             </Box>
             {footer}
           </Box>
@@ -2316,7 +2418,7 @@ export const register: Register = (on, options) => {
                   else if (await saveConfig($, lang)) await finishReview($, true)
                 }}
               />
-              <Button key="back" hotkey="b" label={es ? 'Atrás' : 'Back'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'summary' } : d))} />
+              <Button key="back" hotkey="b" label={es ? 'Atrás' : 'Back'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'ask', cursor: initQuestions(effective).length } : d))} />
             </Box>
             {footer}
           </Box>

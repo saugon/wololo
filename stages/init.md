@@ -27,8 +27,19 @@ Goal: a project config at `project_config_path` (from `get` scope `config`), out
    - `pr.base`;
    - `project_agents`: a role mapped to a repository agent;
    - `debate.risk_signals`: the risky domain words the project uses.
-4. **Let the person review it**: call `mcp__wololo__review_config {proposal}` with the JSON, then end your turn. The pane shows what was detected, lets them pick the sections to review, one screen per section, and saves the file itself. Their save or cancel reaches you as a message: on save, run `get` scope `config` and fix whatever `errors` lists; on cancel, ask them how to go on.
+4. **Let the person review it**: call `mcp__wololo__review_config {proposal}` with the JSON, then end your turn. The pane shows what was detected, asks the first-time questions below one after another (each with the current value picked), then offers to save, adjust more by section, or cancel, and saves the file itself. Their save or cancel reaches you as a message: on save, run `get` scope `config` and fix whatever `errors` lists; on cancel, ask them how to go on.
    - When init runs inside a `full` run, skip the review: Write the JSON at `project_config_path` yourself and record an `assumption`.
-   - If `review_config` answers with an error (the pane could not be shown: a narrow terminal, or none to draw on), never tell the person a pane is open. Say in one line that the run needs a config for this project before it starts, show the JSON in a code block with one line per part in plain words, ask with AskUserQuestion (**Guardar (Recomendado)** / **Ajustar** / **Cancelar**), and Write it at `project_config_path` on a yes.
+   - If `review_config` answers with an error (the pane could not be shown: a narrow terminal, or none to draw on), never tell the person a pane is open. Say in one line that the run needs a config for this project before it starts, and list what was detected in plain words. Then ask the same first-time questions with AskUserQuestion (two calls: the first four, then the last two), the current value first, labelled "(Recomendado)". Add the answers that differ from the defaults to the JSON, show it in a code block, ask **Guardar (Recomendado)** / **Ajustar** / **Cancelar**, and Write it at `project_config_path` on a yes.
+
+   The first-time questions (`INIT_QUESTIONS` in `hooks/configui.ts`):
+
+   | Question | Choices | Keys |
+   |---|---|---|
+   | ¿Cuánto te pregunta el run? | checkpoints · guided · full | `autonomy` |
+   | ¿Dónde trabaja cada run? | un worktree por run · una rama en el checkout | `isolation` |
+   | ¿Dónde aprobás el cambio? | en la sesión (Aprobar PR) · en el PR, con CI en verde | `review.approval` |
+   | ¿Cómo abre el PR? | como draft · listo para revisar · sin PR | `pr.enabled`, `pr.draft` |
+   | ¿Dónde corre la suite completa? (only with a `tests.suite`) | local · en CI | `tests.suite_runs` |
+   | ¿Publica el spec en el issue? | sí · no | `spec.to_github` |
 
 Never write the config into the repository.

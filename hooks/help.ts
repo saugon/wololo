@@ -69,7 +69,7 @@ export function helpSections(lang: string, config: Config = DEFAULT_CONFIG): Hel
       {
         title: 'Configure',
         lines: [
-          { key: '/wololo init', text: "detects this project's commands, ports and agents, and walks you through the proposal" },
+          { key: '/wololo init', text: "detects this project's commands, ports and agents, and asks the first-time defaults (autonomy, worktree, approval, PR, suite, spec)" },
           { key: '/wololo config', text: 'a dialog with every setting: radios, checkboxes, fields; saves here or everywhere' },
         ],
       },
@@ -153,7 +153,7 @@ export function helpSections(lang: string, config: Config = DEFAULT_CONFIG): Hel
     {
       title: 'Configurar',
       lines: [
-        { key: '/wololo init', text: 'detecta comandos, puertos y agentes, y te guía paso a paso por la propuesta' },
+        { key: '/wololo init', text: 'detecta comandos, puertos y agentes, y te pregunta los defaults de la primera vez (autonomía, worktree, aprobación, PR, suite, spec)' },
         { key: '/wololo config', text: 'un diálogo con cada opción: radios, checks y campos; guarda acá o para todos' },
       ],
     },
