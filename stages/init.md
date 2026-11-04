@@ -29,6 +29,6 @@ Goal: a project config at `project_config_path` (from `get` scope `config`), out
    - `debate.risk_signals`: the risky domain words the project uses.
 4. **Let the person review it**: call `mcp__wololo__review_config {proposal}` with the JSON, then end your turn. The pane shows what was detected, lets them pick the sections to review, one screen per section, and saves the file itself. Their save or cancel reaches you as a message: on save, run `get` scope `config` and fix whatever `errors` lists; on cancel, ask them how to go on.
    - When init runs inside a `full` run, skip the review: Write the JSON at `project_config_path` yourself and record an `assumption`.
-   - If `review_config` answers with an error (no terminal to draw on), show the JSON in a code block with one line per part, ask with AskUserQuestion (**Guardar (Recomendado)** / **Ajustar** / **Cancelar**), and Write it at `project_config_path` on a yes.
+   - If `review_config` answers with an error (the pane could not be shown: a narrow terminal, or none to draw on), never tell the person a pane is open. Say in one line that the run needs a config for this project before it starts, show the JSON in a code block with one line per part in plain words, ask with AskUserQuestion (**Guardar (Recomendado)** / **Ajustar** / **Cancelar**), and Write it at `project_config_path` on a yes.
 
 Never write the config into the repository.

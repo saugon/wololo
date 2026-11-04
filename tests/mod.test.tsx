@@ -6,7 +6,7 @@ const DATA = `${HOME}/.claude/wololo`
 
 type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
 
-function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}): Host {
+function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string } = {}): Host {
   const files = new Map<string, string>()
   const gh: string[] = []
   const tools = new Map<string, boolean>()
@@ -25,7 +25,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean } = {}
   })
   on('agent.register', (_, e) => ({ value: { agent: `wololo:${e.name}` } }))
   on('agent.list', () => ({ value: [] }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.open', () => ({ value: options.unplaced ? { isPlaced: false, reason: options.unplaced } : { isPlaced: true } }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: true, channel: 'terminal_bell' } }))
   on('fs.read', (_, e) => {
@@ -415,6 +415,21 @@ test('the init review walks from what was detected to the chosen sections and sa
     autonomy: 'guided',
   })
   await ui.unmount()
+})
+
+test('the init review says so when its pane cannot be shown, instead of claiming it opened', async ($, on) => {
+  const host = fakeHost(on, { unplaced: 'unasked pane below 144 columns (now 120)' })
+  const closed: string[] = []
+  on('ui.close', (_, e) => {
+    closed.push(e.id)
+    return { value: undefined }
+  })
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const answer = String((await $.tool.call({ tool: 'mcp__wololo__review_config', proposal: { tests: { suite: ['make test'] } } } as never)).result)
+  expect(answer).toMatch(/^ERROR: The config pane could not be shown \(unasked pane below 144 columns/)
+  expect(closed).toEqual(['wololo-config'])
+  expect(host.files.has(`${DATA}/projects/acme__shop/config.json`)).toBe(false)
 })
 
 test('the expanded card pages its tab instead of growing past its rows', async ($, on) => {

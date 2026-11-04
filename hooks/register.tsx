@@ -479,8 +479,14 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
   await update($, dialogAtom, () => dialog)
   const opened = await $.ui
     .open({ id: CONFIG_PANE, title: mode === 'review' ? 'wololo · init' : 'wololo · config', focus: true, closeOnEscape: true, holdToasts: true, rows: 32 })
-    .catch(() => undefined)
-  return ok({ opened: true, placed: opened, project_key: info.key, project_path: projectPath })
+    .catch((error: unknown) => ({ isPlaced: false as const, reason: error instanceof Error ? error.message : String(error) }))
+  if (!opened.isPlaced) {
+    // An undrawn pane would leave the person waiting on a dialog they cannot see.
+    await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
+    await update($, dialogAtom, () => null)
+    return fail(`The config pane could not be shown (${opened.reason}). Show the config in the chat instead.`)
+  }
+  return ok({ opened: true, project_key: info.key, project_path: projectPath })
 }
 
 function effectiveOf(dialog: ConfigDialog): unknown {
