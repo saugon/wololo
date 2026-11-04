@@ -458,6 +458,36 @@ async function readObject($: Engine, path: string): Promise<Record<string, unkno
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
 }
 
+// A /wololo that will run init (a run in a project without its config, or init itself) opens the init pane at once, while the
+// session detects the project: opened for the person's command it is drawn at any width, which review_config, opened from a tool
+// call, is not below 144 columns. review_config then fills the pane already open. A full run's init asks nothing, so nothing opens.
+const NOT_A_RUN = /^(help|status|history|pause|resume|panel|config|cancel)\b/
+async function openInitEarly($: Engine, args: string) {
+  if (!paths || args === '' || NOT_A_RUN.test(args)) return
+  const info = await projectInfo($, await $.session.cwd())
+  if (!info) return
+  const loaded = await loadConfig($, info.key)
+  const isInit = /^init\b/.test(args)
+  if (loaded.projectExists && !isInit) return
+  const full = /(^|\s)--full\b/.test(args) || (loaded.config.autonomy === 'full' && !/(^|\s)--(checkpoints|guided)\b/.test(args))
+  if (full && !isInit) return
+  const projectPath = projectConfigPath(paths, info.key)
+  await update($, dialogAtom, () => ({
+    mode: 'review' as const,
+    target: 'project' as const,
+    section: 0,
+    projectKey: info.key,
+    paths: { project: projectPath, global: paths?.globalConfig ?? '' },
+    files: { project: {}, global: {} },
+    dirty: false,
+    message: '',
+    step: 'detect' as const,
+    chosen: [],
+    cursor: 0,
+  }))
+  await $.ui.open({ id: CONFIG_PANE, title: 'wololo · init', holdToasts: true, rows: 32 }).catch(() => undefined)
+}
+
 async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Record<string, unknown>): Promise<string> {
   if (!paths) return fail('wololo is not ready yet.')
   const info = await projectInfo($, await $.session.cwd())
@@ -2121,7 +2151,9 @@ export const register: Register = (on, options) => {
     if (/^pause\b/.test(args)) return pauseRun($)
     if (/^config\b/.test(args)) return { text: configOpened(await openConfig($, 'config')) }
     const status = /^status\b\s*(.*)$/.exec(args)
-    return status ? statusOutput($, status[1] ?? '') : next(e)
+    if (status) return statusOutput($, status[1] ?? '')
+    await quietly(() => openInitEarly($, args))
+    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'CommandOutput' }, async ($, e, next) => {
@@ -2218,7 +2250,8 @@ export const register: Register = (on, options) => {
     if (e.id === CONFIG_PANE && e.origin.kind === 'person') {
       await quietly(async () => {
         const dialog = await read($, dialogAtom)
-        if (dialog?.mode === 'review') await finishReview($, false)
+        // Closed while the session still detects: nothing to answer yet, and review_config then asks in the chat.
+        if (dialog?.mode === 'review' && dialog.step !== 'detect') await finishReview($, false)
         else await update($, dialogAtom, () => null)
       })
     }
@@ -2262,17 +2295,18 @@ export const register: Register = (on, options) => {
     )
 
     if (dialog.mode === 'review') {
-      if (dialog.step === 'ask') {
+      if (dialog.step === 'ask' || dialog.step === 'detect') {
+        const detecting = dialog.step === 'detect'
         const questions = initQuestions(effective)
-        const at = Math.min(dialog.cursor, questions.length)
+        const at = detecting ? -1 : Math.min(dialog.cursor, questions.length)
         const inherited = merge(DEFAULT_CONFIG, dialog.files.global)
         const pick = (question: InitQuestion, choice: InitChoice) =>
           update($, dialogAtom, (d): ConfigDialog | null =>
             d ? { ...d, files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) }, cursor: questions.indexOf(question) + 1, message: '' } : d,
           )
         const back = () => update($, dialogAtom, (d): ConfigDialog | null => (d && d.cursor > 0 ? { ...d, cursor: Math.min(d.cursor, questions.length) - 1, message: '' } : d))
-        const rows = detectedRows(dialog.files.project, repo, String((effective as Config).pr?.base ?? 'main'), lang)
-        const width = Math.max(...rows.map(([label]) => label.length))
+        const rows = detecting ? [] : detectedRows(dialog.files.project, repo, String((effective as Config).pr?.base ?? 'main'), lang)
+        const width = Math.max(0, ...rows.map(([label]) => label.length))
         return (
           <Box flexDirection="column">
             <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
@@ -2287,6 +2321,12 @@ export const register: Register = (on, options) => {
             </Box>
             <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} marginTop={1}>
               <Text bold color="claude">{es ? 'Lo que encontré' : 'What I found'}</Text>
+              {detecting && (
+                <Box flexDirection="row" columnGap={1}>
+                  <Text color="warning">∴</Text>
+                  <Text wrap="truncate-end">{es ? 'Leyendo el repo: comandos, tests, agentes y rama base…' : 'Reading the repository: commands, tests, agents and base branch…'}</Text>
+                </Box>
+              )}
               {rows.map(([label, value]) => (
                 <Box flexDirection="row" columnGap={2}>
                   <Text color="subtle">{label.padEnd(width)}</Text>
@@ -2368,7 +2408,11 @@ export const register: Register = (on, options) => {
             <Box flexDirection="row" columnGap={2} marginTop={1}>
               {at > 0 && <Button key="back" hotkey="b" plain dimColor label={es ? 'atrás' : 'back'} onPress={back} />}
               <Text color="subtle">
-                {at === questions.length
+                {detecting
+                  ? es
+                    ? 'Las preguntas aparecen cuando termine de leer el repo · Esc cierra'
+                    : 'The questions show once the repository is read · Esc closes'
+                  : at === questions.length
                   ? es
                     ? 'g guarda · a ajusta más · c cancela'
                     : 'g saves · a adjusts more · c cancels'

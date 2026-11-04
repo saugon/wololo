@@ -46,7 +46,7 @@ export type ConfigDialog = {
   files: { project: Record<string, unknown>; global: Record<string, unknown> }
   dirty: boolean
   message: string
-  step: 'ask' | 'choose' | 'section'
+  step: 'detect' | 'ask' | 'choose' | 'section'
   chosen: string[]
   cursor: number
 }

@@ -4,9 +4,10 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-type Host = { files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
+type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
 
 function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string } = {}): Host {
+  const opens: Array<{ id: string; focus?: boolean }> = []
   const files = new Map<string, string>()
   const gh: string[] = []
   const tools = new Map<string, boolean>()
@@ -25,7 +26,10 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   })
   on('agent.register', (_, e) => ({ value: { agent: `wololo:${e.name}` } }))
   on('agent.list', () => ({ value: [] }))
-  on('ui.open', () => ({ value: options.unplaced ? { isPlaced: false, reason: options.unplaced } : { isPlaced: true } }))
+  on('ui.open', (_, e) => {
+    opens.push({ id: e.id, ...(e.focus ? { focus: true } : {}) })
+    return { value: options.unplaced ? { isPlaced: false, reason: options.unplaced } : { isPlaced: true } }
+  })
   on('ui.status', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: true, channel: 'terminal_bell' } }))
   on('fs.read', (_, e) => {
@@ -106,7 +110,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     on('clock.now', () => ({ value: (now += 1_000) }))
   }
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
-  return { files, gh, tools, ps, dead, killed, shells, answers }
+  return { opens, files, gh, tools, ps, dead, killed, shells, answers }
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -447,6 +451,35 @@ test('init skips the suite question when the project has no suite, and adjusts m
     autonomy: 'full',
   })
   await ui.unmount()
+})
+
+test('a /wololo run in a project without its config opens the init pane at once, and review_config fills it', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('ui.close', () => ({ value: undefined }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wololo', args: 'status' } as never)
+  expect(host.opens.filter(open => open.id === 'wololo-config')).toEqual([])
+  await $.command.run({ command: 'wololo', args: 'una app para ver los runs' } as never).catch(() => undefined)
+  expect(host.opens.filter(open => open.id === 'wololo-config')).toEqual([{ id: 'wololo-config' }])
+  const ui = await $.ui.mount(CONFIG_PANE)
+  expect(await ui.find({ type: 'Text', text: /^Leyendo el repo/ })).toBeDefined()
+  expect(await ui.find({ key: 'init-autonomy-checkpoints' })).toBeUndefined()
+  const answer = parse((await $.tool.call({ tool: 'mcp__wololo__review_config', proposal: { tests: { suite: ['make test'] } } } as never)).result)
+  expect(answer.opened).toBe(true)
+  expect(host.opens.at(-1)).toEqual({ id: 'wololo-config', focus: true })
+  expect(await ui.find({ key: 'init-autonomy-checkpoints' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a /wololo run opens no init pane when the project has its config, or when it runs in full', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'wololo', args: '#12 --full' } as never).catch(() => undefined)
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, '{}')
+  await $.command.run({ command: 'wololo', args: '#12' } as never).catch(() => undefined)
+  expect(host.opens.filter(open => open.id === 'wololo-config')).toEqual([])
 })
 
 test('the init review says so when its pane cannot be shown, instead of claiming it opened', async ($, on) => {
