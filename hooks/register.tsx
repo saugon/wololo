@@ -332,14 +332,17 @@ async function refresh($: Engine, ts?: number) {
   isDirty = true
 }
 
-async function emit($: Engine, type: EventType, data: Record<string, unknown> = {}) {
-  if (!run) return
+// Only the instance that owns the session records: an older load of the mod in it drops the event, and says so with false.
+async function emit($: Engine, type: EventType, data: Record<string, unknown> = {}): Promise<boolean> {
+  if (!run) return false
   const ts = await nowSeconds($)
+  if (!(await isOwner($)) || !run) return false
   const ev: RunEvent = { v: 1, seq: nextSeq(run), ts, run: run.id, type, data }
   run = apply(run, ev)
   pending.push(ev)
   recent = [...recent, ev].slice(-RECENT)
   await refresh($, ts)
+  return true
 }
 
 function closeTime(at: number) {
@@ -399,11 +402,20 @@ async function flushMeasures($: Engine) {
 
 async function flush($: Engine) {
   if (!run || !paths) return
+  // What an instance that no longer owns the session holds came from a run another one now writes.
+  if (!(await isOwner($))) {
+    pending = []
+    return
+  }
   const dir = runDir(paths, run.id)
   if (pending.length > 0) {
     const batch = pending
     pending = []
     await rotateIfLarge($, dir)
+    if (!(await isOwner($))) {
+      pending = []
+      return
+    }
     const ok = await appendLines(
       $,
       `${dir}/events.jsonl`,
@@ -413,6 +425,7 @@ async function flush($: Engine) {
     else await writeHistory($, dir)
   }
   if (isDirty) {
+    if (!(await isOwner($))) return
     isDirty = false
     await writeJson($, `${dir}/run.json`, run)
   }
@@ -422,6 +435,7 @@ async function writeHistory($: Engine, dir: string) {
   if (!run) return
   const entries = timeline(await readEvents($, dir), run.lang)
   historyCache = entries
+  if (!(await isOwner($))) return
   await writeAtomic($, `${dir}/history.md`, historyMarkdown(`wololo · ${run.title}`, entries))
 }
 
@@ -689,6 +703,7 @@ async function mirrorRuns($: Engine, cwd: string): Promise<MirrorRun[]> {
 
 async function writePointer($: Engine) {
   if (!run || !paths || !sessionId) return
+  if (!(await isOwner($))) return
   await writeJson($, `${paths.sessions}/${sessionId}.json`, {
     session_id: sessionId,
     run_id: run.id,
@@ -757,6 +772,7 @@ async function heartbeat($: Engine) {
   await reconcileAgents($, ts)
   await flushMeasures($)
   await inspectWorktree($)
+  if (!(await isOwner($))) return
   await writeJson($, `${runDir(paths, run.id)}/owner.json`, run.owner)
   await writePointer($)
   isDirty = true
@@ -778,6 +794,10 @@ function ok(value: unknown): string {
 
 function fail(message: string): string {
   return `ERROR: ${message}`
+}
+
+function notOwner(id?: string): string {
+  return fail(`Another wololo instance owns this run in this session. Take it back here with /wololo resume ${id ?? '<run>'}, or reload the session.`)
 }
 
 async function freeSlot($: Engine, ts: number): Promise<number> {
@@ -839,12 +859,13 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const review = input.review === 'pr' || input.review === 'local' ? input.review : (flags.review ?? config.review.approval)
 
   await costDelta($)
+  const before = { run, historyCache, recent, pending }
   run = emptyRun(id, ts)
   historyCache = undefined
   recent = []
   pending = []
   live = { isTurnRunning: true, question: null, permission: null }
-  await emit($, 'run.started', {
+  const isStarted = await emit($, 'run.started', {
     title,
     source: { kind: source.kind, ref: source.ref, url: source.url ?? null },
     project: { key: info.key, path: info.mainPath, worktree, branch, base: config.pr.base },
@@ -857,6 +878,14 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     session_id: sessionId,
     cwd,
   })
+  if (!isStarted) {
+    // Left in place, the run that was never recorded would hold the session against a resume.
+    run = before.run
+    historyCache = before.historyCache
+    recent = before.recent
+    pending = before.pending
+    return notOwner()
+  }
   run.last_user_at = ts
   await flush($)
   await writePointer($)
@@ -968,7 +997,7 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
     if (changed) return fail(changed)
     if (type === 'gate.resolved') data.snapshot = current
   }
-  await emit($, type as EventType, data)
+  if (!(await emit($, type as EventType, data))) return notOwner(run.id)
   let cleanup: { stopped: string[]; trimmed: string[] } | null = null
   if (type === 'run.finished') {
     await flush($)
@@ -1047,7 +1076,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   pending = []
   config = await runConfig($, target.project.key)
   live = { isTurnRunning: true, question: null, permission: null }
-  await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() })
+  if (!(await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() }))) return notOwner(id)
   if (run.paused || run.pause_requested_at) await emit($, 'resumed', {})
   await flush($)
   await writePointer($)
@@ -1903,6 +1932,7 @@ export const register: Register = (on, options) => {
       if (run.status !== 'stalled' || run.mode !== 'full' || e.isAborted) return
       if (run.counts.nudges < MAX_NUDGES) {
         await emit($, 'stalled', {})
+        if (!(await isOwner($))) return
         void $.prompt
           .submit({
             text: `wololo: run ${run.id} is still open and nothing is pending. Continue the current stage (${run.stage?.id ?? 'start'}); if you need the person, ask with AskUserQuestion; if you cannot go on, record blocked or run.finished with ${TOOL_PREFIX}event.`,
