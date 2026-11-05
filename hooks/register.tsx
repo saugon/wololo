@@ -92,8 +92,11 @@ let pending: RunEvent[] = []
 // Bumped each time run and pending are replaced (a start, a resume, a run loaded at session start, a restore): a flush that began on an
 // earlier load does not hand its events to this one's pending, nor number this one's from them.
 let loadGeneration = 0
-// Batches a flush could not write once their load was replaced, each with its run's directory: the next flush writes them first.
-let orphaned: Array<{ dir: string; events: RunEvent[] }> = []
+// Batches a flush could not write once their load was replaced, each with its run's directory and the run as that load left it: the next
+// flush writes them first.
+let orphaned: Array<{ dir: string; events: RunEvent[]; of: Run }> = []
+// Events a flush took out of pending and has not settled yet: written, put back or dropped.
+let inFlight = 0
 let isDirty = false
 let isWriting = false
 let ticks = 0
@@ -419,8 +422,6 @@ function flush($: Engine): Promise<boolean> {
 // True when every event of the run that was pending at the start is in its events.jsonl.
 async function flushOnce($: Engine): Promise<boolean> {
   if (!paths || (!run && orphaned.length === 0)) return false
-  const id = run?.id
-  const generation = loadGeneration
   // What an instance that no longer owns the session holds came from a run another one now writes.
   if (!(await isOwner($))) {
     pending = []
@@ -428,55 +429,26 @@ async function flushOnce($: Engine): Promise<boolean> {
     return false
   }
   await flushOrphaned($)
-  if (!id) return false
+  // The run, its load and its batch are taken together, with no wait between them.
+  const held = run
+  if (!held) return false
+  const id = held.id
+  const generation = loadGeneration
   const dir = runDir(paths, id)
+  // Older events of this run still wait to be written: newer ones do not go in front of them.
+  if (orphaned.some(kept => kept.dir === dir)) return false
   const isSameLoad = () => run?.id === id && loadGeneration === generation
   let isAppended = true
   const batch = pending.filter(ev => ev.run === id)
   if (batch.length > 0) {
     pending = pending.filter(ev => ev.run !== id)
-    // Nothing of it can have been written: back to pending while the session holds the same load of the run, kept apart with its
-    // directory once another load replaced it.
-    const putBack = () => {
-      if (isSameLoad()) pending = [...batch, ...pending]
-      else orphaned.push({ dir, events: batch })
-    }
-    let diskLast: number
+    inFlight += batch.length
     try {
-      await rotateIfLarge($, dir)
-      diskLast = await lastSeqOnDisk($, dir)
-    } catch {
-      putBack()
-      return false
+      isAppended = await writeBatch($, held, dir, batch, isSameLoad)
+    } finally {
+      inFlight -= batch.length
     }
-    if (!(await isOwner($))) {
-      pending = []
-      orphaned = []
-      return false
-    }
-    if (diskLast >= (batch[0]?.seq ?? Infinity)) {
-      // What is pending of the same load goes after the batch; a load that replaced it numbers its own events.
-      const last = renumber(isSameLoad() ? [...batch, ...pending.filter(ev => ev.run === id)] : batch, diskLast)
-      if (isSameLoad() && run) {
-        run.last_seq = Math.max(run.last_seq, last)
-        isDirty = true
-      }
-    }
-    try {
-      isAppended = await appendLines(
-        $,
-        `${dir}/events.jsonl`,
-        batch.map(ev => JSON.stringify(ev)),
-      )
-    } catch {
-      // Launched, the append may have written the batch: tried again, it could write it twice.
-      return false
-    }
-    if (!isAppended) {
-      putBack()
-      return false
-    }
-    if (run?.id === id) await writeHistory($, dir)
+    if (!isAppended) return false
   }
   if (isDirty && run?.id === id) {
     if (!(await isOwner($)) || run?.id !== id) return isAppended
@@ -484,6 +456,64 @@ async function flushOnce($: Engine): Promise<boolean> {
     await writeJson($, `${dir}/run.json`, run)
   }
   return isAppended
+}
+
+// Appends a batch taken from pending to its run's events, then the history; true once it is written. A batch whose load was replaced
+// meanwhile writes that load's run.json too: nothing writes it after.
+async function writeBatch($: Engine, held: Run, dir: string, batch: RunEvent[], isSameLoad: () => boolean): Promise<boolean> {
+  const id = held.id
+  // Nothing of it can have been written: back to pending while the session holds the same load of the run, kept apart with its
+  // directory once another load replaced it.
+  const putBack = () => {
+    if (isSameLoad()) pending = [...batch, ...pending]
+    else orphaned.push({ dir, events: batch, of: held })
+  }
+  let diskLast: number
+  try {
+    await rotateIfLarge($, dir)
+    diskLast = await lastSeqOnDisk($, dir)
+  } catch {
+    putBack()
+    return false
+  }
+  if (!(await isOwner($))) {
+    pending = []
+    orphaned = []
+    return false
+  }
+  if (diskLast >= (batch[0]?.seq ?? Infinity)) {
+    // What is pending of the same load goes after the batch; a load that replaced it numbers its own events.
+    const last = renumber(isSameLoad() ? [...batch, ...pending.filter(ev => ev.run === id)] : batch, diskLast)
+    held.last_seq = Math.max(held.last_seq, last)
+    if (isSameLoad() && run) {
+      run.last_seq = Math.max(run.last_seq, last)
+      isDirty = true
+    }
+  }
+  let isAppended: boolean
+  try {
+    isAppended = await appendLines(
+      $,
+      `${dir}/events.jsonl`,
+      batch.map(ev => JSON.stringify(ev)),
+    )
+  } catch {
+    // Launched, the append may have written the batch: tried again, it could write it twice.
+    return false
+  }
+  if (!isAppended) {
+    putBack()
+    return false
+  }
+  await writeHistory($, dir, held)
+  if (run?.id !== id) await writeReplaced($, dir, held)
+  return true
+}
+
+// The run.json of a run this instance no longer holds, as its load left it.
+async function writeReplaced($: Engine, dir: string, of: Run) {
+  if (!(await isOwner($))) return
+  await writeJson($, `${dir}/run.json`, of)
 }
 
 // Another load of the mod that wrote after this one took the events, or before it took the session, used their seqs: they move past the
@@ -498,36 +528,49 @@ function renumber(events: readonly RunEvent[], diskLast: number): number {
 async function flushOrphaned($: Engine) {
   const waiting = orphaned
   orphaned = []
-  for (const [i, { dir, events }] of waiting.entries()) {
+  // A batch that cannot be written yet holds back the later ones of its run, never another run's.
+  const blocked = new Set<string>()
+  for (const kept of waiting) {
+    const { dir, events, of } = kept
     const keep = () => {
-      orphaned = [...orphaned, ...waiting.slice(i)]
+      orphaned.push(kept)
+      blocked.add(dir)
+    }
+    if (blocked.has(dir)) {
+      keep()
+      continue
     }
     let diskLast: number
     try {
       diskLast = await lastSeqOnDisk($, dir)
     } catch {
       keep()
+      continue
+    }
+    if (!(await isOwner($))) {
+      orphaned = []
       return
     }
-    if (!(await isOwner($))) return
-    if (diskLast >= (events[0]?.seq ?? Infinity)) renumber(events, diskLast)
+    if (diskLast >= (events[0]?.seq ?? Infinity)) of.last_seq = Math.max(of.last_seq, renumber(events, diskLast))
     try {
       if (!(await appendLines($, `${dir}/events.jsonl`, events.map(ev => JSON.stringify(ev))))) {
         keep()
-        return
+        continue
       }
     } catch {
       // Launched, the append may have written them: tried again, it could write them twice.
+      continue
     }
+    await writeHistory($, dir, of)
+    if (run?.id !== of.id) await writeReplaced($, dir, of)
   }
 }
 
-async function writeHistory($: Engine, dir: string) {
-  if (!run) return
-  const entries = timeline(await readEvents($, dir), run.lang)
-  historyCache = entries
+async function writeHistory($: Engine, dir: string, of: Run) {
+  const entries = timeline(await readEvents($, dir), of.lang)
+  if (run?.id === of.id) historyCache = entries
   if (!(await isOwner($))) return
-  await writeAtomic($, `${dir}/history.md`, historyMarkdown(`wololo · ${run.title}`, entries))
+  await writeAtomic($, `${dir}/history.md`, historyMarkdown(`wololo · ${of.title}`, entries))
 }
 
 async function reviveRun($: Engine, id: string): Promise<Run | undefined> {
@@ -863,10 +906,17 @@ async function heartbeat($: Engine) {
   const ts = await nowSeconds($)
   run.owner.heartbeat_at = ts
   config = await runConfig($, run.project.key)
-  if (run.items.total > 0 && (run.items.list ?? []).length < run.items.total && pending.length === 0) {
-    const revived = await reviveRun($, run.id)
-    if (revived) run = { ...revived, owner: run.owner, status: run.status, last_user_at: run.last_user_at }
+  const id = run.id
+  const isOnDisk = pending.length === 0 && inFlight === 0 && !orphaned.some(kept => kept.of.id === id)
+  if (run.items.total > 0 && (run.items.list ?? []).length < run.items.total && isOnDisk) {
+    const before = run
+    const revived = await reviveRun($, id)
+    // An event recorded while the run was read is not in what was read: the run in memory stays.
+    if (revived && run === before && revived.last_seq >= before.last_seq) {
+      run = { ...revived, owner: before.owner, status: before.status, last_user_at: before.last_user_at }
+    }
   }
+  if (!run) return
   await reconcileAgents($, ts)
   await flushMeasures($)
   await inspectWorktree($)
@@ -1182,6 +1232,8 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   }
   await update($, ownerAtom, () => INSTANCE)
   startTicking($)
+  // What this instance still holds of the run goes to disk first, so the rebuild reads it.
+  await flush($)
   // Rebuilt again now that this instance owns the session: the one that owned it may have written, even finished the run, meanwhile.
   const target = await reviveRun($, id)
   if (!target) return fail(`No run ${id} in ${paths.runs}.`)

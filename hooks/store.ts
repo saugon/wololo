@@ -62,8 +62,9 @@ export async function writeJson($: Engine, path: string, value: unknown): Promis
   await writeAtomic($, path, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-// False when nothing was written: the check before the append failed, or the file could not be opened for it (the script's exit 3). An
-// append that fails once launched may have written part of the lines, so it throws instead, and the caller does not write them again.
+// False when nothing was written: the check before the append failed, or the file is not writable (the script's `[ -w ]`, its only exit
+// 3). Any other failure, a `cat >>` whose redirect fails (exit 1 or 2) included, may have written part of the lines: it throws instead,
+// and the caller does not write them again.
 export async function appendLines($: Engine, path: string, lines: readonly string[]): Promise<boolean> {
   if (lines.length === 0) return true
   const text = lines.map(line => `${line}\n`).join('')

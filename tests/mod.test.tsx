@@ -1341,7 +1341,13 @@ test('a batch tried again after the events were rotated away never repeats a seq
   expect(new Set(seqs).size).toBe(seqs.length)
 })
 
-test("starting another run while the last one's flush is under way keeps each run's events in its own file", async ($, on) => {
+// The last run is finished and, while its flush is held (at its append, or where it reads the last seq on disk), another run starts; the
+// held call then answers answer, and with theirs another load of the mod has just appended two events to the finished run's file.
+async function startingWhileFinishing(
+  $: Parameters<TestBody>[0],
+  on: Parameters<TestBody>[1],
+  { at, answer, theirs: isTheirs }: { at: 'append' | 'fs.read'; answer?: number; theirs?: boolean },
+) {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))
   const held = gate()
@@ -1356,10 +1362,11 @@ test("starting another run while the last one's flush is under way keeps each ru
   const firstLog = `${String(first.run_dir)}/events.jsonl`
   let isArmed = true
   host.before = async (kind, what) => {
-    if (kind !== 'append' || what !== firstLog || !isArmed) return undefined
+    if (kind !== at || what !== firstLog || !isArmed) return undefined
     isArmed = false
     await held.hold()
-    return 3
+    if (isTheirs) host.files.set(firstLog, `${host.files.get(firstLog)}${theirs(String(first.run_id), Math.max(...eventLines(host, String(first.run_id)).map(line => line.seq)), 2)}`)
+    return answer
   }
   const finishing = $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } } as never)
   await held.reached
@@ -1370,38 +1377,235 @@ test("starting another run while the last one's flush is under way keeps each ru
   const runs = (id: unknown) => [...new Set(eventLines(host, String(id)).map(line => (line as unknown as { run: string }).run))]
   expect(runs(first.run_id)).toEqual([String(first.run_id)])
   expect(runs(second.run_id)).toEqual([String(second.run_id)])
+  const seqs = eventLines(host, String(first.run_id)).map(line => line.seq)
+  const snapshot = JSON.parse(host.files.get(`${String(first.run_dir)}/run.json`) ?? '{}') as { outcome?: unknown; last_seq?: number }
   expect(eventLines(host, String(first.run_id)).at(-1)?.type).toBe('run.finished')
+  expect(new Set(seqs).size).toBe(seqs.length)
+  expect(snapshot.outcome).toBe('cancelled')
+  expect(snapshot.last_seq).toBe(Math.max(...seqs))
+}
+
+test("starting another run while the last one's flush is under way keeps each run's events and run.json in its own files", async ($, on) => {
+  await startingWhileFinishing($, on, { at: 'append' })
 })
 
-test('a batch of a run resumed while its flush was under way is written once, with seqs of its own', async ($, on) => {
+test("the last run's events its flush could not write when another run started are written to its files later", async ($, on) => {
+  await startingWhileFinishing($, on, { at: 'append', answer: 3, theirs: true })
+})
+
+test("the last run's events are numbered after another load's, and its run.json follows them, once another run started", async ($, on) => {
+  await startingWhileFinishing($, on, { at: 'fs.read', theirs: true })
+})
+
+// Runs that finish while their flush is held at the append, the next one started meanwhile: the held append finds the file not writable,
+// and so does any append to a file in blocked.
+async function finishingRuns($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]) {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))
-  const held = gate()
-  let isResuming = false
-  // The resume is under way once it records owner.changed and draws the card.
+  let opening: (() => void) | undefined
+  // The next run is under way once its start draws the card.
   on('state.set', (_, e, next) => {
-    if (e.key === 'view' && isResuming) held.open()
+    if (e.key === 'view' && opening) {
+      opening()
+      opening = undefined
+    }
     return next(e)
   })
-  const { runId, log, flush, mine } = await withPending($, host)
-  let isArmed = true
+  const blocked = new Set<string>()
+  const holds = new Map<string, ReturnType<typeof gate>>()
   host.before = async (kind, what) => {
-    if (kind !== 'append' || what !== log || !isArmed) return undefined
-    isArmed = false
-    await held.hold()
-    return 3
+    if (kind !== 'append') return undefined
+    const held = holds.get(what)
+    if (held) {
+      holds.delete(what)
+      await held.hold()
+      return 3
+    }
+    return blocked.has(what) ? 3 : undefined
   }
-  const flushing = flush()
-  await held.reached
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const start = async (ref: string) => {
+    const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref }, title: ref } as never)).result)
+    return { id: String(started.run_id), log: `${String(started.run_dir)}/events.jsonl` }
+  }
+  const finish = () => $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } } as never)
+  const finishThenStart = async (log: string, ref: string) => {
+    const held = gate()
+    holds.set(log, held)
+    const finishing = finish()
+    await held.reached
+    opening = held.open
+    const next = await start(ref)
+    await finishing
+    return next
+  }
+  const types = (id: string) => eventLines(host, id).map(line => line.type)
+  return { host, blocked, start, finish, finishThenStart, types }
+}
+
+test("a kept batch of one finished run that cannot be written holds back no other run's", async ($, on) => {
+  const { blocked, start, finishThenStart, types } = await finishingRuns($, on)
+  const x = await start('x')
+  blocked.add(x.log)
+  const y = await finishThenStart(x.log, 'y')
+  await finishThenStart(y.log, 'z')
+  expect(types(y.id).at(-1)).toBe('run.finished')
+  expect(types(x.id)).not.toContain('run.finished')
+})
+
+test('a resume writes what was kept of the run before rebuilding it, so a finish kept there is read', async ($, on) => {
+  const { blocked, start, finish, finishThenStart } = await finishingRuns($, on)
+  const x = await start('x')
+  blocked.add(x.log)
+  await finishThenStart(x.log, 'y')
+  parse((await finish()).result)
+  blocked.delete(x.log)
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: x.id } as never)).result)).toContain('already finished')
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { id: string; outcome: unknown }
+  expect([got.id, got.outcome]).toEqual([x.id, 'cancelled'])
+})
+
+test('the heartbeat keeps the run in memory when it is ahead of what the disk holds', async ($, on) => {
+  const { host, clock, log, doing } = await withRunToRevive($, on)
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'mine' } } as never)).result)
+  // The append is launched and fails, so "mine" stays in memory and never reaches the disk.
+  let fails = 1
+  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? 'the disk is full' : undefined)
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  expect(fails).toBe(0)
+  await clock.advance(1_000)
+  expect(await doing()).toBe('mine')
+})
+
+
+// A resume of the active run, held where it rebuilds the run from disk (after it took the session and wrote what was pending). Meanwhile
+// an event, "mine", is recorded and a flush takes it, held at its append until the rebuilt run draws the card; the appends to the run's
+// events answer answers, in turn, then write.
+async function resumeWithFlushInFlight($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], answers: ReadonlyArray<number | undefined>) {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const rebuilding = gate()
+  const appending = gate()
+  let isClaimed = false
+  let isResuming = false
+  let isRebuilt = false
+  on('state.set', (_, e, next) => {
+    if (e.key === 'owner' && isResuming) isClaimed = true
+    if (e.key === 'view' && isRebuilt) appending.open()
+    return next(e)
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const runId = String(started.run_id)
+  const dir = String(started.run_dir)
+  const log = `${dir}/events.jsonl`
+  let isRebuildArmed = true
+  let appends = 0
+  host.before = async (kind, what) => {
+    if (kind === 'fs.read' && what === `${dir}/run.json` && isClaimed && isRebuildArmed) {
+      isRebuildArmed = false
+      await rebuilding.hold()
+    }
+    if (kind !== 'append' || what !== log) return undefined
+    appends += 1
+    if (appends === 1) await appending.hold()
+    return answers[appends - 1]
+  }
   isResuming = true
-  parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: runId } as never)).result)
+  const resuming = $.tool.call({ tool: 'mcp__wololo__resume', run_id: runId } as never)
+  await rebuilding.reached
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'mine' } } as never)).result)
+  const flushing = $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  await appending.reached
+  isRebuilt = true
+  rebuilding.open()
+  parse((await resuming).result)
   await flushing
-  await flush()
-  const seqs = eventLines(host, runId).map(line => line.seq)
-  expect(mine()).toHaveLength(1)
-  expect(eventLines(host, runId).filter(line => line.type === 'owner.changed')).toHaveLength(1)
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  const lines = eventLines(host, runId)
+  return { appends, lines, types: lines.map(line => (line.data.text === 'mine' ? 'mine' : line.type)) }
+}
+
+test('a batch whose load a resume replaced while it was being written is written once, with seqs of its own', async ($, on) => {
+  const { lines, types } = await resumeWithFlushInFlight($, on, [3])
+  const seqs = lines.map(line => line.seq)
+  expect(types.filter(type => type === 'mine')).toHaveLength(1)
+  expect(types.filter(type => type === 'owner.changed')).toHaveLength(1)
   expect(new Set(seqs).size).toBe(seqs.length)
 })
+
+test('newer events of a run wait while older ones of an earlier load of it cannot be written', async ($, on) => {
+  const { appends, lines, types } = await resumeWithFlushInFlight($, on, [3, 3])
+  expect(appends).toBeGreaterThanOrEqual(3)
+  expect(types.indexOf('mine')).toBeGreaterThan(-1)
+  expect(types.indexOf('mine')).toBeLessThan(types.indexOf('owner.changed'))
+  expect(isRising(lines.map(line => line.seq))).toBe(true)
+})
+
+// A run an earlier version of the mod left with a plan that says how many items it has but not which, so the heartbeat reads it again from
+// disk; the session takes it back, and the clock stands one tick before that heartbeat.
+async function withRunToRevive($: Parameters<TestBody>[0], on: Parameters<TestBody>[1]) {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  const runId = 'repo-txt-revive'
+  const dir = `${DATA}/runs/${runId}`
+  const project = { key: 'acme__shop', path: REPO, worktree: `${REPO}/.claude/worktrees/wololo-${runId}`, branch: 'wololo/txt-x', base: 'main' }
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: runId, type, data })
+  host.files.set(`${dir}/events.jsonl`, [ev(1, 'run.started', { title: 'X', source: { kind: 'text', ref: 'x', url: null }, project, mode: 'checkpoints', session_id: 's1', cwd: REPO }), ev(2, 'plan.ready', { total: 3 })].join('\n') + '\n')
+  const owner = { session_id: 's1', cwd: REPO, heartbeat_at: 1_800_000_000 }
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id: runId, status: 'running', outcome: null, owner }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: runId, heartbeat_at: owner.heartbeat_at }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await clock.advance(14_000)
+  const doing = async () => (parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { doing: { text: string } | null }).doing?.text
+  return { host, clock, runId, dir, log: `${dir}/events.jsonl`, doing }
+}
+
+test('an event recorded while the heartbeat reads the run again from disk is kept', async ($, on) => {
+  const { host, clock, runId, dir, doing } = await withRunToRevive($, on)
+  const held = gate()
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind === 'fs.read' && what === `${dir}/run.json` && isArmed) {
+      isArmed = false
+      await held.hold()
+    }
+    return undefined
+  }
+  const beating = clock.advance(1_000)
+  await held.reached
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'during' } } as never)).result)
+  held.open()
+  await beating
+  expect(await doing()).toBe('during')
+  const seqs = eventLines(host, runId).map(line => line.seq)
+  expect(new Set(seqs).size).toBe(seqs.length)
+})
+
+test('the heartbeat does not read the run again from disk while a batch of it is being written', async ($, on) => {
+  const { host, clock, runId, log, doing } = await withRunToRevive($, on)
+  const last = Math.max(...eventLines(host, runId).map(line => line.seq))
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'mine' } } as never)).result)
+  host.files.set(log, `${host.files.get(log)}${theirs(runId, last, 2)}`)
+  // The flush is held where it reads the last seq on disk, its batch taken; the heartbeat lets it go once it is past its revive.
+  const held = gate()
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind === 'git' && what.startsWith('log -1')) held.open()
+    if (kind === 'fs.read' && what === log && isArmed) {
+      isArmed = false
+      await held.hold()
+    }
+    return undefined
+  }
+  const flushing = $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  await held.reached
+  await clock.advance(1_000)
+  await flushing
+  expect(await doing()).toBe('mine')
+})
+
 
 test('a batch is written by the next flush, once, when the rotated files cannot be listed', async ($, on) => {
   const host = fakeHost(on)
