@@ -4,9 +4,11 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-// before runs ahead of a git command (its arguments), a clock read, a file write, stat or append (its path), to act in the middle of a call;
-// a reason it returns refuses the call. A hook that throws is skipped, so a refusal is the way to fail one.
-type Before = (kind: 'git' | 'clock.now' | 'fs.write' | 'fs.stat' | 'append', what: string) => string | undefined | Promise<string | undefined>
+// before runs ahead of a git command (its arguments), a clock read, or a file read, existence check, listing, write, stat or append (its
+// path), to act in the middle of a call. A reason it returns refuses the call (a hook that throws is skipped, so a refusal is the way to fail
+// one); an exit code ends a git command or an append with it, nothing written.
+type BeforeKind = 'git' | 'clock.now' | 'fs.read' | 'fs.exists' | 'fs.list' | 'fs.write' | 'fs.stat' | 'append'
+type Before = (kind: BeforeKind, what: string) => string | number | undefined | Promise<string | number | undefined>
 // commands holds every process the plugin ran, its argv joined.
 type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; commands: string[]; before: Before }
 
@@ -39,26 +41,34 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   })
   on('ui.status', () => ({ value: undefined }))
   on('ui.notify', () => ({ value: { isSent: true, channel: 'terminal_bell' } }))
-  on('fs.read', (_, e) => {
+  on('fs.read', async (_, e) => {
+    const refused = await host.before('fs.read', e.path)
+    if (typeof refused === 'string') return { deny: refused }
     const text = files.get(e.path)
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: text }
   })
   on('fs.write', async (_, e) => {
     const refused = await host.before('fs.write', e.path)
-    if (refused) return { deny: refused }
+    if (typeof refused === 'string') return { deny: refused }
     files.set(e.path, e.text)
     return { value: undefined }
   })
-  on('fs.exists', (_, e) => ({ value: files.has(e.path) || [...files.keys()].some(k => k.startsWith(`${e.path}/`)) }))
+  on('fs.exists', async (_, e) => {
+    const refused = await host.before('fs.exists', e.path)
+    if (typeof refused === 'string') return { deny: refused }
+    return { value: files.has(e.path) || [...files.keys()].some(k => k.startsWith(`${e.path}/`)) }
+  })
   on('fs.stat', async (_, e) => {
     const refused = await host.before('fs.stat', e.path)
-    if (refused) return { deny: refused }
+    if (typeof refused === 'string') return { deny: refused }
     const text = files.get(e.path)
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: { kind: 'file', size: text.length, mtimeMs: 0, isLink: false } }
   })
-  on('fs.list', (_, e) => {
+  on('fs.list', async (_, e) => {
+    const refused = await host.before('fs.list', e.path)
+    if (typeof refused === 'string') return { deny: refused }
     const names = new Map<string, 'file' | 'dir'>()
     for (const key of files.keys()) {
       if (!key.startsWith(`${e.path}/`)) continue
@@ -85,7 +95,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     if (cmd === '/bin/sh') {
       const path = args[3] ?? ''
       const refused = await host.before('append', path)
-      if (refused) return { deny: refused }
+      if (typeof refused === 'string') return { deny: refused }
+      if (typeof refused === 'number') return done('', refused)
       files.set(path, (files.get(path) ?? '') + (e.init?.stdin ?? ''))
       return done()
     }
@@ -111,7 +122,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     if (cmd === 'git') {
       const line = args.join(' ')
       const refused = await host.before('git', line)
-      if (refused) return { deny: refused }
+      if (typeof refused === 'string') return { deny: refused }
+      if (typeof refused === 'number') return done('', refused)
       const known = git.get(line)
       if (known !== undefined) return done(known)
       if (line === 'rev-parse --show-toplevel') return done(REPO)
@@ -127,11 +139,39 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     let now = 1_800_000_000_000
     on('clock.now', async () => {
       const refused = await host.before('clock.now', '')
-      return refused ? { deny: refused } : { value: (now += 1_000) }
+      return typeof refused === 'string' ? { deny: refused } : { value: (now += 1_000) }
     })
   }
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
   return host
+}
+
+// Holds a call where a before hook awaits hold: reached settles once it got there, and open lets it go on.
+function gate(): { hold: () => Promise<void>; reached: Promise<void>; open: () => void } {
+  let open = () => undefined as void
+  let arrive = () => undefined as void
+  const opened = new Promise<void>(resolve => {
+    open = resolve
+  })
+  const reached = new Promise<void>(resolve => {
+    arrive = resolve
+  })
+  return {
+    hold: async () => {
+      arrive()
+      await opened
+    },
+    reached,
+    open: () => open(),
+  }
+}
+
+// Real time passing, for work in flight to move on; the tests' types leave the runtime's timers out.
+function pause(ms: number): Promise<void> {
+  const timers = globalThis as unknown as { setTimeout: (done: () => void, ms: number) => unknown }
+  return new Promise(resolve => {
+    timers.setTimeout(resolve, ms)
+  })
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -561,8 +601,8 @@ test('/wololo pause asks the run to pause, and resume clears it', async ($, on) 
 // The tool's input arrives frozen, so these tests freeze the data the way the engine hands it over.
 const eventLines = (host: Host, runId: string) =>
   (host.files.get(`${DATA}/runs/${runId}/events.jsonl`) ?? '')
-    .trim()
     .split('\n')
+    .filter(Boolean)
     .map(line => JSON.parse(line) as { seq: number; type: string; data: Record<string, unknown> })
 
 test('an approved gate is recorded with its snapshot when its data arrives frozen', async ($, on) => {
@@ -1132,6 +1172,268 @@ test('a finished run whose line was written before its instance lost the session
   expect((parse(finished).cleanup as { stopped: string[] }).stopped).toEqual(['4242 (make backend.run)'])
   expect(host.killed).toEqual(['-TERM -4240'])
   expect(types).toContain('run.finished')
+})
+
+// A run whose start is on disk and one doing event, "mine", pending: no tool writes it until the next flush.
+async function withPending($: Parameters<TestBody>[0], host: Host) {
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const runId = String(started.run_id)
+  const dir = String(started.run_dir)
+  const last = Math.max(...eventLines(host, runId).map(line => line.seq))
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'mine' } } as never)).result)
+  const flush = async () => parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  const mine = () => eventLines(host, runId).filter(line => line.data.text === 'mine')
+  return { runId, dir, log: `${dir}/events.jsonl`, last, flush, mine }
+}
+
+// Lines another load of the mod appended to the run's events, with the seqs after `from`.
+function theirs(runId: string, from: number, count: number): string {
+  return Array.from({ length: count }, (_, i) => JSON.stringify({ v: 1, seq: from + i + 1, ts: 1_800_000_500 + i, run: runId, type: 'doing', data: { text: `theirs ${i + 1}` } })).join('\n') + '\n'
+}
+
+const isRising = (seqs: readonly number[]) => seqs.every((seq, i) => i === 0 || seq > (seqs[i - 1] ?? 0))
+
+test('a batch goes after the seqs another load of the mod appended meanwhile, and no seq repeats', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { runId, log, last, flush, mine } = await withPending($, host)
+  host.files.set(log, `${host.files.get(log)}${theirs(runId, last, 2)}`)
+  const got = (await flush()).run as { last_seq: number }
+  expect(mine().map(line => line.seq)).toEqual([last + 3])
+  expect(got.last_seq).toBe(last + 3)
+  expect(isRising(eventLines(host, runId).map(line => line.seq))).toBe(true)
+})
+
+test('a batch whose file an append could not open is written by the next flush, once', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { log, flush, mine } = await withPending($, host)
+  let fails = 1
+  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? 3 : undefined)
+  await flush()
+  expect(mine()).toHaveLength(0)
+  await flush()
+  expect(mine()).toHaveLength(1)
+})
+
+// A flush whose kind call on the run's events fails once, the nth time, before the append is launched: nothing written, then written once.
+async function failingBefore($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], kind: 'fs.exists' | 'fs.read', nth: number) {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { log, flush, mine } = await withPending($, host)
+  let calls = 0
+  host.before = (at, what) => (at === kind && what === log && ++calls === nth ? 'the disk is gone' : undefined)
+  await flush()
+  expect(mine()).toHaveLength(0)
+  await flush()
+  expect(mine()).toHaveLength(1)
+}
+
+test("a batch is written by the next flush, once, when the append's own check fails", async ($, on) => {
+  // The flush checks events.jsonl first to read the last seq on disk; the append's check is the second.
+  await failingBefore($, on, 'fs.exists', 2)
+})
+
+test('a batch is written by the next flush, once, when the last seq on disk cannot be read', async ($, on) => {
+  await failingBefore($, on, 'fs.read', 1)
+})
+
+// A flush whose append to the run's events fails once it was launched, as failure answers: never tried again.
+async function launchedFailing($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], failure: string | number) {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { log, flush, mine } = await withPending($, host)
+  let fails = 1
+  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? failure : undefined)
+  await flush()
+  await flush()
+  expect(fails).toBe(0)
+  expect(mine()).toHaveLength(0)
+}
+
+test('a batch whose append was refused once launched is not tried again', async ($, on) => {
+  await launchedFailing($, on, 'the disk is full')
+})
+
+test('a batch whose append failed after it opened the file is not tried again', async ($, on) => {
+  await launchedFailing($, on, 1)
+})
+
+test('two flushes at once write each event once, in seq order', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { runId, log, flush, mine } = await withPending($, host)
+  const held = gate()
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind === 'append' && what === log && isArmed) {
+      isArmed = false
+      await held.hold()
+    }
+    return undefined
+  }
+  const first = flush()
+  await held.reached
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'second' } } as never)).result)
+  const second = flush()
+  // Time for the second flush to get as far as it can while the first is held: nothing in the kit says when a call is waiting.
+  await pause(50)
+  held.open()
+  await Promise.all([first, second])
+  const lines = eventLines(host, runId)
+  expect(mine()).toHaveLength(1)
+  expect(lines.filter(line => line.data.text === 'second')).toHaveLength(1)
+  expect(isRising(lines.map(line => line.seq))).toBe(true)
+})
+
+test("an agent's turn that ends while a flush renumbers its batch gets a seq of its own", async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }))
+  const dir = `${DATA}/runs/repo-txt-agent2`
+  const log = `${dir}/events.jsonl`
+  seedRun(host, 'repo-txt-agent2', { waiting: false })
+  const agent = { id: 'a1', role: 'critic', description: 'critic', model: null, background: true }
+  host.files.set(log, `${host.files.get(log)}${JSON.stringify({ v: 1, seq: 4, ts: 1_800_000_004, run: 'repo-txt-agent2', type: 'agent.started', data: agent })}\n`)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'mine' } } as never)).result)
+  host.files.set(log, `${host.files.get(log)}${theirs('repo-txt-agent2', 4, 2)}`)
+  // Held where the flush reads the last seq on disk, after it took the batch.
+  const held = gate()
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind === 'fs.read' && what === log && isArmed) {
+      isArmed = false
+      await held.hold()
+    }
+    return undefined
+  }
+  const flushing = $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  await held.reached
+  await $.turn.complete({ turnId: 't1', agentId: 'a1', reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+  held.open()
+  await flushing
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  const lines = eventLines(host, 'repo-txt-agent2')
+  expect(lines.filter(line => line.type === 'agent.finished')).toHaveLength(1)
+  expect(lines.find(line => line.data.text === 'mine')?.seq).toBe(7)
+  expect(isRising(lines.map(line => line.seq))).toBe(true)
+})
+
+test('a batch tried again after the events were rotated away never repeats a seq of the rotated file', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { runId, dir, log, last, flush, mine } = await withPending($, host)
+  // Another load of the mod appended two events and the file reached the size it is rotated at.
+  host.files.set(log, `${host.files.get(log)}${theirs(runId, last, 2)}${'x'.repeat(2 * 1024 * 1024)}\n`)
+  // The flush checks events.jsonl first to read the last seq on disk; the append's own check, after the rotation, is the second.
+  let checks = 0
+  host.before = (kind, what) => (kind === 'fs.exists' && what === log && ++checks === 2 ? 'the disk is gone' : undefined)
+  await flush()
+  expect(checks).toBe(2)
+  expect(host.files.has(`${dir}/events.1.jsonl`)).toBe(true)
+  expect(mine()).toHaveLength(0)
+  await flush()
+  const rotated = (host.files.get(`${dir}/events.1.jsonl`) ?? '').split('\n').filter(line => line.startsWith('{')).map(line => (JSON.parse(line) as { seq: number }).seq)
+  const seqs = [...rotated, ...eventLines(host, runId).map(line => line.seq)]
+  expect(mine().map(line => line.seq)).toEqual([last + 3])
+  expect(new Set(seqs).size).toBe(seqs.length)
+})
+
+test("starting another run while the last one's flush is under way keeps each run's events in its own file", async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const held = gate()
+  let isStarting = false
+  // The next run is under way once its start draws the card.
+  on('state.set', (_, e, next) => {
+    if (e.key === 'view' && isStarting) held.open()
+    return next(e)
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const first = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const firstLog = `${String(first.run_dir)}/events.jsonl`
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind !== 'append' || what !== firstLog || !isArmed) return undefined
+    isArmed = false
+    await held.hold()
+    return 3
+  }
+  const finishing = $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } } as never)
+  await held.reached
+  isStarting = true
+  const second = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'y' }, title: 'Y' } as never)).result)
+  await finishing
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  const runs = (id: unknown) => [...new Set(eventLines(host, String(id)).map(line => (line as unknown as { run: string }).run))]
+  expect(runs(first.run_id)).toEqual([String(first.run_id)])
+  expect(runs(second.run_id)).toEqual([String(second.run_id)])
+  expect(eventLines(host, String(first.run_id)).at(-1)?.type).toBe('run.finished')
+})
+
+test('a batch of a run resumed while its flush was under way is written once, with seqs of its own', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const held = gate()
+  let isResuming = false
+  // The resume is under way once it records owner.changed and draws the card.
+  on('state.set', (_, e, next) => {
+    if (e.key === 'view' && isResuming) held.open()
+    return next(e)
+  })
+  const { runId, log, flush, mine } = await withPending($, host)
+  let isArmed = true
+  host.before = async (kind, what) => {
+    if (kind !== 'append' || what !== log || !isArmed) return undefined
+    isArmed = false
+    await held.hold()
+    return 3
+  }
+  const flushing = flush()
+  await held.reached
+  isResuming = true
+  parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: runId } as never)).result)
+  await flushing
+  await flush()
+  const seqs = eventLines(host, runId).map(line => line.seq)
+  expect(mine()).toHaveLength(1)
+  expect(eventLines(host, runId).filter(line => line.type === 'owner.changed')).toHaveLength(1)
+  expect(new Set(seqs).size).toBe(seqs.length)
+})
+
+test('a batch is written by the next flush, once, when the rotated files cannot be listed', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { runId, dir, log, last, flush, mine } = await withPending($, host)
+  host.files.set(log, `${host.files.get(log)}${theirs(runId, last, 2)}${'x'.repeat(2 * 1024 * 1024)}\n`)
+  // Once events.jsonl is rotated away, the last seq is in the rotated files, and listing them fails once.
+  let fails = 1
+  host.before = (kind, what) => (kind === 'fs.list' && what === dir && !host.files.has(log) && fails-- > 0 ? 'the disk is gone' : undefined)
+  await flush()
+  expect(fails).toBe(0)
+  expect(mine()).toHaveLength(0)
+  await flush()
+  expect(mine().map(line => line.seq)).toEqual([last + 3])
+})
+
+test('an instance that loses the session during the append writes neither the history nor run.json after it', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  const { dir, log, flush, mine } = await withPending($, host)
+  const history = host.files.get(`${dir}/history.md`)
+  const snapshot = host.files.get(`${dir}/run.json`)
+  expect([history, snapshot].every(text => text !== undefined)).toBe(true)
+  host.before = (kind, what) => {
+    if (kind === 'append' && what === log) owner.set('newer')
+    return undefined
+  }
+  await flush()
+  expect(mine()).toHaveLength(1)
+  expect(host.files.get(`${dir}/history.md`)).toBe(history)
+  expect(host.files.get(`${dir}/run.json`)).toBe(snapshot)
 })
 
 test("the run's tools wait behind ToolSearch until a run is active", async ($, on) => {

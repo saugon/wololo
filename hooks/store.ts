@@ -62,15 +62,24 @@ export async function writeJson($: Engine, path: string, value: unknown): Promis
   await writeAtomic($, path, `${JSON.stringify(value, null, 2)}\n`)
 }
 
+// False when nothing was written: the check before the append failed, or the file could not be opened for it (the script's exit 3). An
+// append that fails once launched may have written part of the lines, so it throws instead, and the caller does not write them again.
 export async function appendLines($: Engine, path: string, lines: readonly string[]): Promise<boolean> {
   if (lines.length === 0) return true
   const text = lines.map(line => `${line}\n`).join('')
-  if (!(await $.fs.exists(path))) {
+  const exists = await $.fs.exists(path).catch(() => undefined)
+  if (exists === undefined) return false
+  if (!exists) {
     await $.fs.write(path, text)
     return true
   }
-  const appended = await $.process.run(['/bin/sh', '-c', 'cat >> "$1"', 'wololo-append', path], { stdin: text, timeoutMs: 5_000 })
-  return appended.exitCode === 0
+  const appended = await $.process.run(['/bin/sh', '-c', '[ -w "$1" ] || exit 3; exec cat >> "$1"', 'wololo-append', path], {
+    stdin: text,
+    timeoutMs: 5_000,
+  })
+  if (appended.exitCode === 3) return false
+  if (appended.exitCode !== 0) throw new Error(`appending to ${path} failed (exit ${appended.exitCode})`)
+  return true
 }
 
 export async function rotateIfLarge($: Engine, dir: string): Promise<void> {
@@ -94,6 +103,21 @@ export function parseEvents(text: string): RunEvent[] {
     }
   }
   return events
+}
+
+// The highest seq in a run's event files: events.jsonl read whole, or the newest rotated file when events.jsonl was just rotated away; 0 when
+// the run has none, its directory not made yet included. A file or a listing that cannot be read throws, so nothing is numbered on a guess.
+export async function lastSeqOnDisk($: Engine, dir: string): Promise<number> {
+  const current = `${dir}/events.jsonl`
+  if (await $.fs.exists(current)) return maxSeq(await $.fs.read(current))
+  if (!(await $.fs.exists(dir))) return 0
+  const entries = await $.fs.list(dir)
+  const newest = Math.max(0, ...entries.map(e => Number(/^events\.(\d+)\.jsonl$/.exec(e.name)?.[1] ?? 0)))
+  return newest === 0 ? 0 : maxSeq(await $.fs.read(`${dir}/events.${newest}.jsonl`))
+}
+
+function maxSeq(text: string): number {
+  return parseEvents(text).reduce((max, ev) => (typeof ev.seq === 'number' && ev.seq > max ? ev.seq : max), 0)
 }
 
 export async function readEvents($: Engine, dir: string): Promise<RunEvent[]> {
