@@ -51,50 +51,53 @@ export type Status =
 
 export type Outcome = 'done' | 'failed' | 'cancelled'
 
-export type EventType =
-  | 'run.started'
-  | 'owner.changed'
-  | 'risk.set'
-  | 'stage.entered'
-  | 'stage.completed'
-  | 'gate.requested'
-  | 'gate.resolved'
-  | 'question.asked'
-  | 'question.answered'
-  | 'permission.asked'
-  | 'permission.resolved'
-  | 'agent.started'
-  | 'agent.finished'
-  | 'task.started'
-  | 'task.finished'
-  | 'plan.ready'
-  | 'item.started'
-  | 'item.verified'
-  | 'item.reviewed'
-  | 'item.committed'
-  | 'debate.turn'
-  | 'assumption'
-  | 'decision'
-  | 'corrected'
-  | 'doing'
-  | 'blocked'
-  | 'unblocked'
-  | 'stalled'
-  | 'pause.requested'
-  | 'paused'
-  | 'resumed'
-  | 'ci.updated'
-  | 'pr.opened'
-  | 'pr.ready'
-  | 'signing.deferred'
-  | 'signing.done'
-  | 'github.published'
-  | 'adapter.ran'
-  | 'adapter.started'
-  | 'screenshot.saved'
-  | 'usage'
-  | 'time'
-  | 'run.finished'
+export const EVENT_TYPES = [
+  'run.started',
+  'owner.changed',
+  'risk.set',
+  'stage.entered',
+  'stage.completed',
+  'gate.requested',
+  'gate.resolved',
+  'question.asked',
+  'question.answered',
+  'permission.asked',
+  'permission.resolved',
+  'agent.started',
+  'agent.finished',
+  'task.started',
+  'task.finished',
+  'plan.ready',
+  'item.started',
+  'item.verified',
+  'item.reviewed',
+  'item.committed',
+  'debate.turn',
+  'assumption',
+  'decision',
+  'corrected',
+  'doing',
+  'blocked',
+  'unblocked',
+  'stalled',
+  'pause.requested',
+  'paused',
+  'resumed',
+  'ci.updated',
+  'pr.opened',
+  'pr.ready',
+  'signing.deferred',
+  'signing.done',
+  'github.published',
+  'adapter.ran',
+  'adapter.started',
+  'screenshot.saved',
+  'usage',
+  'time',
+  'run.finished',
+] as const
+
+export type EventType = (typeof EVENT_TYPES)[number]
 
 export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'risk.set',

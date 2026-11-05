@@ -140,6 +140,7 @@ Every run is a directory any app can read. Several terminals and projects write 
 
 - **Listing runs**: read `runs/*/run.json`. A run whose status is not final and whose `owner.heartbeat_at` is more than 90 s old has lost its session: show it as orphaned. `/wololo resume <run>` takes it over.
 - **Timelines and durations**: read `events.jsonl`; `seq` orders it, and `ts` is in seconds since the epoch.
+- **One writer**: only the mod instance that owns the session writes a run. Files written before that rule may repeat a `seq`, so sort by `seq` stably, keeping file order among equals.
 - **Live updates**: watch the directory (FSEvents, inotify). Snapshots are renamed into place, so a reader never sees half a file.
 - **Compatibility**: within `schema_version` 1, fields are only added.
 

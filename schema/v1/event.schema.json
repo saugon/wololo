@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "wololo/v1/event.schema.json",
   "title": "wololo event (one line of runs/<id>/events.jsonl)",
-  "description": "Append-only; the source of truth of a run. `seq` increases by one per run. Rotated files events.1.jsonl, events.2.jsonl, … hold older lines, oldest first.",
+  "description": "Append-only; the source of truth of a run. Rotated files events.1.jsonl, events.2.jsonl, … hold older lines, oldest first.",
   "type": "object",
   "required": [
     "v",
@@ -18,7 +18,8 @@
     },
     "seq": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "description": "Orders the run's events. One instance at a time writes a run: the one that owns its session. Files written before that rule may repeat a seq, so readers sort by seq stably, keeping file order among equals."
     },
     "ts": {
       "type": "number",
@@ -53,6 +54,7 @@
         "assumption",
         "decision",
         "corrected",
+        "doing",
         "blocked",
         "unblocked",
         "stalled",
@@ -65,6 +67,8 @@
         "signing.done",
         "signing.deferred",
         "github.published",
+        "adapter.started",
+        "adapter.ran",
         "screenshot.saved",
         "usage",
         "time",

@@ -1,0 +1,82 @@
+export default {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wololo/v1/event.schema.json",
+  "title": "wololo event (one line of runs/<id>/events.jsonl)",
+  "description": "Append-only; the source of truth of a run. Rotated files events.1.jsonl, events.2.jsonl, … hold older lines, oldest first.",
+  "type": "object",
+  "required": [
+    "v",
+    "seq",
+    "ts",
+    "run",
+    "type",
+    "data"
+  ],
+  "properties": {
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Orders the run's events. One instance at a time writes a run: the one that owns its session. Files written before that rule may repeat a seq, so readers sort by seq stably, keeping file order among equals."
+    },
+    "ts": {
+      "type": "number",
+      "description": "Seconds since the Unix epoch."
+    },
+    "run": {
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "run.started",
+        "owner.changed",
+        "risk.set",
+        "stage.entered",
+        "stage.completed",
+        "gate.requested",
+        "gate.resolved",
+        "question.asked",
+        "question.answered",
+        "permission.asked",
+        "permission.resolved",
+        "agent.started",
+        "agent.finished",
+        "task.started",
+        "task.finished",
+        "plan.ready",
+        "item.started",
+        "item.verified",
+        "item.reviewed",
+        "item.committed",
+        "debate.turn",
+        "assumption",
+        "decision",
+        "corrected",
+        "doing",
+        "blocked",
+        "unblocked",
+        "stalled",
+        "pause.requested",
+        "paused",
+        "resumed",
+        "ci.updated",
+        "pr.opened",
+        "pr.ready",
+        "signing.done",
+        "signing.deferred",
+        "github.published",
+        "adapter.started",
+        "adapter.ran",
+        "screenshot.saved",
+        "usage",
+        "time",
+        "run.finished"
+      ]
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}
