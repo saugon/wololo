@@ -8,8 +8,19 @@ public func activityLine(_ run: Run, now: TimeInterval) -> String {
     }
     // The mod's run.finished leaves blocked, paused and the current item behind, so they would be stale here.
     if status.isTerminal { return run.summary ?? "" }
-    let candidates = [run.waiting?.question, run.blocked?.reason, run.doing?.text, run.paused?.note]
-    if let text = candidates.compactMap({ $0 }).first(where: { !$0.isEmpty }) { return text }
+    let es = run.lang == .es
+    // A bare dot in the widget does not tell a permission request, a block or a pause apart, so the line says it.
+    let permission = run.waiting?.on == "permission" ? (es ? "Pide permiso" : "Needs permission") : nil
+    let candidates: [(prefix: String?, text: String?)] = [
+        (permission, run.waiting?.question),
+        (es ? "Bloqueado" : "Blocked", run.blocked?.reason),
+        (nil, run.doing?.text),
+        (es ? "En pausa" : "Paused", run.paused?.note),
+    ]
+    for candidate in candidates {
+        guard let text = candidate.text, !text.isEmpty else { continue }
+        return candidate.prefix.map { "\($0): \(text)" } ?? text
+    }
     if let item = run.items.current {
         return "\(run.lang == .es ? "Ítem" : "Item") \(item.n): \(item.title)"
     }
@@ -20,6 +31,11 @@ public func activityLine(_ run: Run, now: TimeInterval) -> String {
 public func ago(_ time: TimeInterval, now: TimeInterval, lang: Lang) -> String {
     let span = elapsed(now - time, lang: lang)
     return lang == .es ? "hace \(span)" : "\(span) ago"
+}
+
+/// "45s", "12m", "3 d": `ago` without the "hace", for the widget's rows, where the corner is narrower.
+public func shortAgo(_ time: TimeInterval, now: TimeInterval, lang: Lang) -> String {
+    elapsed(now - time, lang: lang)
 }
 
 /// The largest whole unit of a span: "45s", "12m", "5h", "3 d" ("3d" in English).

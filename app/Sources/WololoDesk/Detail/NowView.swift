@@ -60,7 +60,8 @@ struct NowView: View {
         let text: String
     }
 
-    /// The run's open notes other than the one already shown as the activity.
+    /// The run's open notes other than the one already shown as the activity, which may carry a prefix such as
+    /// "Bloqueado: ".
     private func notes(except activity: String) -> [Note] {
         [
             Note(label: "Pregunta", text: run.waiting?.question ?? ""),
@@ -68,7 +69,7 @@ struct NowView: View {
             Note(label: "Haciendo", text: run.doing?.text ?? ""),
             Note(label: "Pausa", text: run.paused?.note ?? ""),
         ]
-        .filter { !$0.text.isEmpty && $0.text != activity }
+        .filter { !$0.text.isEmpty && $0.text != activity && !activity.hasSuffix(": \($0.text)") }
     }
 
     @ViewBuilder

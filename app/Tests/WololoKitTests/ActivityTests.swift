@@ -12,12 +12,40 @@ final class ActivityTests: XCTestCase {
             "paused": ["note": "falta la credencial", "since": 0],
             "items": ["done": 4, "total": 7, "current": ["n": 5, "title": "Animación al soltar"]],
         ]
-        let expected = ["¿Aprobás el spec?", "un test parece estar mal", "Escribiendo el CSV", "falta la credencial", "Ítem 5: Animación al soltar"]
+        let expected = ["¿Aprobás el spec?", "Bloqueado: un test parece estar mal", "Escribiendo el CSV", "En pausa: falta la credencial", "Ítem 5: Animación al soltar"]
         for (key, line) in zip(["waiting", "blocked", "doing", "paused", "items"], expected) {
             XCTAssertEqual(activityLine(try makeRun("r", fields), now: now), line)
             fields.removeValue(forKey: key)
         }
         XCTAssertEqual(activityLine(try makeRun("r", fields), now: now), "")
+    }
+
+    func testAPermissionRequestSaysSo() throws {
+        let fields: [String: Any] = ["waiting": ["on": "permission", "question": "Bash · npm run db:migrate", "since": 0]]
+        XCTAssertEqual(activityLine(try makeRun("r", status: "waiting_permission", fields), now: now), "Pide permiso: Bash · npm run db:migrate")
+        var english = fields
+        english["lang"] = "en"
+        XCTAssertEqual(activityLine(try makeRun("r", status: "waiting_permission", english), now: now), "Needs permission: Bash · npm run db:migrate")
+    }
+
+    func testBlockAndPauseSayWhatTheyAre() throws {
+        let blocked: [String: Any] = ["blocked": ["reason": "un test parece estar mal", "since": 0]]
+        XCTAssertEqual(activityLine(try makeRun("r", status: "blocked", blocked), now: now), "Bloqueado: un test parece estar mal")
+        XCTAssertEqual(activityLine(try makeRun("r", status: "blocked", blocked.merging(["lang": "en"]) { $1 }), now: now),
+                       "Blocked: un test parece estar mal")
+
+        let paused: [String: Any] = ["paused": ["note": "falta la credencial", "since": 0]]
+        XCTAssertEqual(activityLine(try makeRun("r", status: "paused", paused), now: now), "En pausa: falta la credencial")
+        XCTAssertEqual(activityLine(try makeRun("r", status: "paused", paused.merging(["lang": "en"]) { $1 }), now: now),
+                       "Paused: falta la credencial")
+    }
+
+    func testAPermissionRequestWithoutQuestionFallsThrough() throws {
+        let run = try makeRun("r", status: "waiting_permission", [
+            "waiting": ["on": "permission", "question": "", "since": 0],
+            "doing": ["text": "Migrando la base", "since": 0],
+        ])
+        XCTAssertEqual(activityLine(run, now: now), "Migrando la base")
     }
 
     func testFinishedRunsShowTheirSummary() throws {
@@ -78,6 +106,13 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(ago(now - 259_200, now: now, lang: .es), "hace 3 d")
         XCTAssertEqual(ago(now - 259_200, now: now, lang: .en), "3d ago")
         XCTAssertEqual(ago(now + 30, now: now, lang: .es), "hace 0s")
+    }
+
+    func testShortAgoDropsTheWord() {
+        XCTAssertEqual(shortAgo(now - 45, now: now, lang: .es), "45s")
+        XCTAssertEqual(shortAgo(now - 720, now: now, lang: .en), "12m")
+        XCTAssertEqual(shortAgo(now - 259_200, now: now, lang: .es), "3 d")
+        XCTAssertEqual(shortAgo(now - 259_200, now: now, lang: .en), "3d")
     }
 
     func testItemsChip() throws {

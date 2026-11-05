@@ -18,7 +18,8 @@ enum TerminalAction {
     /// Terminals whose denied permission was already explained with an alert; afterwards a toast reminds it.
     private static var explained: Set<String> = []
 
-    static func go(to run: Run, now: TimeInterval, state: AppState) {
+    /// `origin` is where the person asked, for the toasts to show there.
+    static func go(to run: Run, now: TimeInterval, state: AppState, origin: Toast.Origin = .window) {
         guard !pending.contains(run.id) else { return }
         pending.insert(run.id)
         let plan = TerminalPlan(run, now: now)
@@ -40,7 +41,7 @@ enum TerminalAction {
             }
             let steps = plan.steps(focused: focused)
             guard steps.contains(.open) else {
-                state.showToast(notes)
+                state.showToast(notes, origin: origin)
                 return
             }
             // The pasteboard and the toast come first: once the terminal opens it covers the window.
@@ -51,9 +52,9 @@ enum TerminalAction {
                 NSPasteboard.general.setString(command, forType: .string)
                 notes.append("Copié \(command): pegalo en la terminal")
             }
-            state.showToast(notes, holdsUntilActive: true)
+            state.showToast(notes, holdsUntilActive: true, origin: origin)
             if let failure = await target.open() {
-                state.showToast(notes + [failure], holdsUntilActive: true)
+                state.showToast(notes + [failure], holdsUntilActive: true, origin: origin)
             }
         }
     }

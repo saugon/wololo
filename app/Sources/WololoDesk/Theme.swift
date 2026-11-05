@@ -35,6 +35,11 @@ enum Theme {
     static let pendingMark = Color(hex: 0x585F6B)
     static let rowDivider = Color(hex: 0x1D2027)
 
+    /// The floating widget's panel, its edge and a row under the pointer.
+    static let widget = Color(hex: 0x121418)
+    static let widgetBorder = Color(hex: 0x2F343E)
+    static let widgetHover = Color(hex: 0x1C1F26)
+
     static let groundColor = NSColor(hex: 0x0B0C0F)
 
     /// The status badge and the activity line of a card, as in the mockup's status table.

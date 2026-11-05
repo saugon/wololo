@@ -62,6 +62,14 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(menuBarHeader([runs[0]], now: now), "1 te espera · 1 activo")
     }
 
+    func testWaitingAndActiveLabels() {
+        XCTAssertEqual(waitingLabel(1), "1 te espera")
+        XCTAssertEqual(waitingLabel(3), "3 te esperan")
+        XCTAssertEqual(waitingLabel(0), "0 te esperan")
+        XCTAssertEqual(activeLabel(1), "1 activo")
+        XCTAssertEqual(activeLabel(9), "9 activos")
+    }
+
     func testOrphanedAndPausedRunsAreOnHold() throws {
         let orphan = try makeRun("orphan", status: "running", updatedAt: now - 120,
                                  ["owner": ["heartbeat_at": now - 120]])

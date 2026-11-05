@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let state: AppState
     private var statusItem: StatusItemController?
     private var mainWindow: MainWindowController?
+    private var widgetPanel: WidgetPanelController?
     private var settingsWindow: SettingsWindowController?
 
     private var isSnapshot: Bool { options.snapshotURL != nil }
@@ -121,6 +122,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWindow: { [weak self] in self?.openWindow() },
             openSettings: { [weak self] in self?.openSettings() }
         ))
+        widgetPanel = WidgetPanelController(
+            state: state,
+            remembersFrame: !isSnapshot,
+            openWindow: { [weak self] in self?.openWindow() },
+            openRun: { [weak self] id in self?.openRun(id) }
+        )
 
         if let url = options.snapshotURL {
             open(options.open ?? .window)
@@ -161,6 +168,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func toggleWidget() {
         state.setWidgetVisible(!state.isWidgetVisible)
+    }
+
+    /// From the widget: the window, in front and active, on the run's detail.
+    private func openRun(_ id: String) {
+        state.showRun(id)
+        openWindow()
     }
 
     private func openWindow() {
@@ -209,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch options.open ?? .window {
         case .window, .run: return mainWindow?.window
         case .settings: return settingsWindow?.window
-        case .widget: return nil // item 9 adds the widget panel
+        case .widget: return widgetPanel?.window
         }
     }
 }

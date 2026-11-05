@@ -30,7 +30,7 @@ struct MainView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .toast(state.toast)
+            .toast(state.toast(from: .window))
         }
         .background(Theme.ground)
         .overlay(alignment: .top) {
@@ -129,17 +129,32 @@ private struct ModePicker: View {
 }
 
 /// Empty chrome that moves the window, as a title bar would: the strip under the transparent title bar and the
-/// header's title area. Double-click zooms, following the system setting.
+/// header's title area. Double-click zooms, following the system setting, unless `zooms` is false (the widget).
 struct WindowDragArea: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { DragView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    var zooms = true
+
+    func makeNSView(context: Context) -> NSView {
+        let view = DragView()
+        view.zooms = zooms
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? DragView)?.zooms = zooms
+    }
 
     private final class DragView: NSView {
+        var zooms = true
+
         override var mouseDownCanMoveWindow: Bool { true }
+
+        /// The widget's panel is never active, so a drag must start on the first click.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }
             if event.clickCount == 2 {
+                guard zooms else { return }
                 let action = UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") ?? "Maximize"
                 if action == "Minimize" {
                     window.performMiniaturize(nil)

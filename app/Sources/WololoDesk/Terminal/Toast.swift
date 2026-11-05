@@ -3,8 +3,15 @@ import SwiftUI
 
 /// A short message shown for a moment over the window's content, as "Copié /wololo resume …: pegalo en la terminal".
 struct Toast: Identifiable, Equatable {
+    /// Where the action that said it was taken; the toast shows there only.
+    enum Origin {
+        case window
+        case widget
+    }
+
     let id = UUID()
     let lines: [String]
+    var origin: Origin = .window
     /// For what is said while another app comes to the front (a new terminal): it stays at least 8 s, and until this
     /// app is active again, so the person sees it on coming back.
     var holdsUntilActive = false
@@ -23,10 +30,11 @@ struct Toast: Identifiable, Equatable {
 }
 
 extension AppState {
-    /// Shows the lines in a toast that goes away by itself; a newer toast replaces the one on screen.
-    func showToast(_ lines: [String], holdsUntilActive: Bool = false) {
+    /// Shows the lines in a toast that goes away by itself; a newer toast replaces the one on screen. A toast from
+    /// the widget never waits for the app to be active: clicks on the widget do not activate it.
+    func showToast(_ lines: [String], holdsUntilActive: Bool = false, origin: Toast.Origin = .window) {
         guard !lines.isEmpty else { return }
-        let toast = Toast(lines: lines, holdsUntilActive: holdsUntilActive)
+        let toast = Toast(lines: lines, origin: origin, holdsUntilActive: holdsUntilActive && origin == .window)
         self.toast = toast
         AccessibilityNotification.Announcement(lines.joined(separator: ". ")).post()
         Task { @MainActor [weak self] in
@@ -42,10 +50,19 @@ extension AppState {
             if self?.toast?.id == toast.id { self?.toast = nil }
         }
     }
+
+    /// The toast on screen if it came from `origin`.
+    func toast(from origin: Toast.Origin) -> Toast? {
+        toast?.origin == origin ? toast : nil
+    }
+
+    func dismissToast(_ id: UUID) {
+        if toast?.id == id { toast = nil }
+    }
 }
 
 extension View {
-    /// The state's toast at the bottom of this view, fading in and out. The window and the widget both use it.
+    /// The state's toast at the bottom of this view, fading in and out, over the content but letting clicks through.
     func toast(_ toast: Toast?) -> some View {
         overlay(alignment: .bottom) {
             ZStack {
@@ -58,6 +75,7 @@ extension View {
             .padding(.horizontal, 24)
             .padding(.bottom, 24)
             .animation(.easeOut(duration: 0.2), value: toast)
+            .allowsHitTesting(false)
         }
     }
 }
