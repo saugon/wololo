@@ -59,9 +59,25 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(activityLine(try makeRun("r", english), now: now), "no signal for 14m")
     }
 
+    func testOrphanedSilenceUsesTheCompactUnitOfAgo() throws {
+        let fields: [String: Any] = ["owner": ["heartbeat_at": now - 3900], "doing": ["text": "x", "since": 0]]
+        XCTAssertEqual(activityLine(try makeRun("r", fields), now: now), "sin señal hace 1h")
+        var english = fields
+        english["lang"] = "en"
+        XCTAssertEqual(activityLine(try makeRun("r", english), now: now), "no signal for 1h")
+        var days = fields
+        days["owner"] = ["heartbeat_at": now - 259_200]
+        XCTAssertEqual(activityLine(try makeRun("r", days), now: now), "sin señal hace 3 d")
+    }
+
     func testAgo() {
         XCTAssertEqual(ago(now - 45, now: now, lang: .es), "hace 45s")
-        XCTAssertEqual(ago(now - 3900, now: now, lang: .en), "1h05 ago")
+        XCTAssertEqual(ago(now - 3900, now: now, lang: .en), "1h ago")
+        XCTAssertEqual(ago(now - 720, now: now, lang: .es), "hace 12m")
+        XCTAssertEqual(ago(now - 7200, now: now, lang: .es), "hace 2h")
+        XCTAssertEqual(ago(now - 259_200, now: now, lang: .es), "hace 3 d")
+        XCTAssertEqual(ago(now - 259_200, now: now, lang: .en), "3d ago")
+        XCTAssertEqual(ago(now + 30, now: now, lang: .es), "hace 0s")
     }
 
     func testItemsChip() throws {

@@ -22,7 +22,71 @@ enum Theme {
     static let red = Color(hex: 0xE5484D)
     static let gray = Color(hex: 0xA1A7B3)
 
+    /// Rows and cards under the pointer, and the selected project's rounded background.
+    static let hover = Color(hex: 0x1A1D23)
+    static let selection = Color(hex: 0x202329)
+    static let field = Color(hex: 0x1A1C21)
+    static let track = Color(hex: 0x2A2F3A)
+    static let cardDivider = Color(hex: 0x22262E)
+    static let hoverBorder = Color(hex: 0x3A404C)
+    static let heading = Color(hex: 0xD5D8DD)
+    static let agent = Color(hex: 0xB9A5FF)
+
     static let groundColor = NSColor(hex: 0x0B0C0F)
+
+    /// The status badge and the activity line of a card, as in the mockup's status table.
+    struct StatusStyle {
+        let badgeBackground: Color
+        let badgeForeground: Color
+        let activity: Color
+    }
+
+    static func style(_ status: RunStatus) -> StatusStyle {
+        let dark = Color(hex: 0x0B0C0F)
+        let neutral = StatusStyle(badgeBackground: Color(hex: 0x333844), badgeForeground: text, activity: secondary)
+        switch status {
+        case .waitingUser, .waitingPermission, .stalled:
+            return StatusStyle(badgeBackground: amber, badgeForeground: dark, activity: Color(hex: 0xF7C46C))
+        case .blocked:
+            return StatusStyle(badgeBackground: Color(hex: 0xC9373D), badgeForeground: .white, activity: Color(hex: 0xFF8A8E))
+        case .running, .waitingTests, .waitingCI:
+            return StatusStyle(badgeBackground: Color(hex: 0x1F3A66), badgeForeground: Color(hex: 0xDCE8FF), activity: secondary)
+        case .waitingAgents:
+            return StatusStyle(badgeBackground: Color(hex: 0x3A2F66), badgeForeground: Color(hex: 0xE6DEFF), activity: secondary)
+        case .pausing, .unknown:
+            return neutral
+        case .paused, .cancelled:
+            return StatusStyle(badgeBackground: neutral.badgeBackground, badgeForeground: text, activity: muted)
+        case .orphaned:
+            return StatusStyle(badgeBackground: Color(hex: 0x5A3A1A), badgeForeground: Color(hex: 0xFFE2C2), activity: Color(hex: 0xE9B98A))
+        case .done:
+            return StatusStyle(badgeBackground: Color(hex: 0x1E4D2B), badgeForeground: Color(hex: 0xD7F5DD), activity: muted)
+        case .failed:
+            return StatusStyle(badgeBackground: Color(hex: 0x8E2A2E), badgeForeground: .white, activity: Color(hex: 0xFF8A8E))
+        }
+    }
+
+    /// The small status dot of the sidebar and the archive: the progress bar's color, so a run reads the same
+    /// everywhere; a cancelled run is gray rather than green.
+    static func dot(_ status: RunStatus) -> Color {
+        if status == .cancelled { return gray }
+        if status == .blocked { return red }
+        switch StatusGroup(status) {
+        case .waiting: return amber
+        case .working: return blue
+        case .onHold: return gray
+        case .finished: return status == .failed ? red : green
+        }
+    }
+
+    static func color(_ ci: CIRole?) -> Color {
+        switch ci {
+        case .pending: return amber
+        case .passing: return green
+        case .failing: return Color(hex: 0xFF8A8E)
+        case nil: return muted
+        }
+    }
 
     static func color(_ group: StatusGroup) -> Color {
         switch group {

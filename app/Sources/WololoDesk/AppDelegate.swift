@@ -16,6 +16,13 @@ final class AppState {
     private(set) var model: RunsModel
     private(set) var isWidgetVisible: Bool
 
+    /// The board's filters, shared so the widget and the menu can open the window on a run.
+    var search = ""
+    /// A project key, or nil for every project.
+    var project: String?
+    var boardMode: BoardMode = .byStatus
+    var selectedRunID: String?
+
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let persists: Bool
 
@@ -39,6 +46,13 @@ final class AppState {
 
     func start() {
         model.start()
+    }
+
+    /// The board filters `WOLOLO_DESK_SEARCH`, `_PROJECT` and `_COLUMNS` ask for.
+    func apply(_ options: LaunchOptions) {
+        if let search = options.search { self.search = search }
+        if let project = options.project { self.project = project }
+        if let columns = options.columns { boardMode = columns }
     }
 
     /// Saves the setting (empty goes back to the default) and reads the runs from where it now points.
@@ -84,6 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = MainMenu.make(openSettings: #selector(openSettings), target: self)
 
+        state.apply(options)
         state.start()
         statusItem = StatusItemController(state: state, actions: .init(
             toggleWidget: { [weak self] in self?.toggleWidget() },
@@ -131,9 +146,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openWindow() {
         if mainWindow == nil {
-            mainWindow = MainWindowController(state: state, remembersFrame: !isSnapshot) { [weak self] window in
-                self?.regularWindowDidClose(window)
-            }
+            mainWindow = MainWindowController(
+                state: state,
+                remembersFrame: !isSnapshot,
+                openSettings: { [weak self] in self?.openSettings() },
+                onClose: { [weak self] window in self?.regularWindowDidClose(window) }
+            )
         }
         show(mainWindow)
     }

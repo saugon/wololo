@@ -74,6 +74,7 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(column(board, "onHold"), ["orphan", "paused"])
         XCTAssertEqual(column(board, "working"), [])
         XCTAssertEqual(activityLine(orphan, now: now), "sin señal hace 2m")
+        XCTAssertEqual(ago(orphan.updatedAt, now: now, lang: orphan.lang), "hace 2m")
     }
 
     func testOldFinishedRunsGoToTheArchive() throws {

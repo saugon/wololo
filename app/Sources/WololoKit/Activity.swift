@@ -3,7 +3,7 @@ import Foundation
 public func activityLine(_ run: Run, now: TimeInterval) -> String {
     let status = effectiveStatus(run, now: now)
     if status == .orphaned {
-        let silence = duration(now - run.owner.heartbeatAt)
+        let silence = elapsed(now - run.owner.heartbeatAt, lang: run.lang)
         return run.lang == .es ? "sin señal hace \(silence)" : "no signal for \(silence)"
     }
     // The mod's run.finished leaves blocked, paused and the current item behind, so they would be stale here.
@@ -16,9 +16,21 @@ public func activityLine(_ run: Run, now: TimeInterval) -> String {
     return ""
 }
 
+/// "hace 45s", "hace 12m", "hace 5h", "hace 3 d": one unit, compact enough for a card's corner.
 public func ago(_ time: TimeInterval, now: TimeInterval, lang: Lang) -> String {
-    let elapsed = duration(now - time)
-    return lang == .es ? "hace \(elapsed)" : "\(elapsed) ago"
+    let span = elapsed(now - time, lang: lang)
+    return lang == .es ? "hace \(span)" : "\(span) ago"
+}
+
+/// The largest whole unit of a span: "45s", "12m", "5h", "3 d" ("3d" in English).
+func elapsed(_ span: TimeInterval, lang: Lang) -> String {
+    let seconds = span.isFinite ? Int(min(max(0, span.rounded()), Double(Int32.max))) : 0
+    switch seconds {
+    case ..<60: return "\(seconds)s"
+    case ..<3600: return "\(seconds / 60)m"
+    case ..<86400: return "\(seconds / 3600)h"
+    default: return lang == .es ? "\(seconds / 86400) d" : "\(seconds / 86400)d"
+    }
 }
 
 public struct MetaChip: Equatable, Sendable {
