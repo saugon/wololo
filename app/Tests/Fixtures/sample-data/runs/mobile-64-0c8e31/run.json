@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "id": "mobile-64-0c8e31",
+  "title": "Modo offline en la app",
+  "source": {
+    "kind": "github_issue",
+    "ref": "64",
+    "url": "https://github.com/acme/mobile/issues/64"
+  },
+  "project": {
+    "key": "acme__mobile",
+    "path": "/Users/demo/code/acme/mobile",
+    "worktree": "/Users/demo/code/acme/mobile/.claude/worktrees/mobile-mobile-64-0c8e31",
+    "branch": "wololo/64-modo-offline",
+    "base": "main"
+  },
+  "mode": "guided",
+  "risk": "high",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "definition",
+    "index": 1,
+    "total": 8,
+    "since": "@now-900"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-1320",
+      "finished_at": "@now-905"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-900",
+      "finished_at": null
+    }
+  ],
+  "gates": {},
+  "status": "running",
+  "waiting": null,
+  "blocked": null,
+  "agents": [
+    {
+      "id": "acac30e76c4dae6db",
+      "role": "critic",
+      "description": "Revisar el spec",
+      "model": "claude-opus-5-5",
+      "status": "running",
+      "started_at": "@now-300",
+      "finished_at": null
+    }
+  ],
+  "tasks": [],
+  "items": {
+    "done": 0,
+    "total": 0,
+    "current": null,
+    "list": []
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "71b45f42-7cfe-4bc7-85d3-a9c43bfdb8f0",
+    "cwd": "/Users/demo/code/acme/mobile",
+    "heartbeat_at": "@now-5"
+  },
+  "last_seq": 8,
+  "created_at": "@now-1326",
+  "updated_at": "@now-45",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": {
+    "text": "Debate del spec: respondiendo al crítico, ronda 2",
+    "since": "@now-300"
+  },
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 252.0
+      },
+      "work": 168.0,
+      "agents": 210.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 360.0,
+      "agents": 450.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4680,
+      "cache_read": 326000,
+      "cache_write": 13200,
+      "usd": 0.4333,
+      "roles": {
+        "main": {
+          "usd": 0.4333,
+          "tokens": 343880
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 6600,
+      "cache_read": 470000,
+      "cache_write": 18000,
+      "usd": 0.7,
+      "roles": {
+        "main": {
+          "usd": 0.7,
+          "tokens": 494600
+        }
+      }
+    }
+  }
+}

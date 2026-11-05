@@ -1,0 +1,26 @@
+{"v":1,"seq":1,"ts":"@now-5466","run":"infra-19-9a3b7f","type":"run.started","data":{"title":"Caché de imágenes en el CDN","source":{"kind":"github_issue","ref":"19","url":"https://github.com/acme/infra/issues/19"},"project":{"key":"acme__infra","path":"/Users/demo/code/acme/infra","worktree":"/Users/demo/code/acme/infra/.claude/worktrees/infra-infra-19-9a3b7f","branch":"wololo/19-cache-imagenes","base":"main"},"mode":"full","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"ca1f0ecf-4f85-410d-881a-51aaf9dd5817","cwd":"/Users/demo/code/acme/infra"}}
+{"v":1,"seq":2,"ts":"@now-5464","run":"infra-19-9a3b7f","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-5460","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-5457","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-5105","run":"infra-19-9a3b7f","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-5100","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-5097","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-4505","run":"infra-19-9a3b7f","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-4500","run":"infra-19-9a3b7f","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-4500","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-4497","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-3905","run":"infra-19-9a3b7f","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-3905","run":"infra-19-9a3b7f","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-3900","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-3897","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-3305","run":"infra-19-9a3b7f","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-3300","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-3297","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-605","run":"infra-19-9a3b7f","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":20,"ts":"@now-600","run":"infra-19-9a3b7f","type":"stage.entered","data":{"stage":"evidence"}}
+{"v":1,"seq":21,"ts":"@now-597","run":"infra-19-9a3b7f","type":"doing","data":{"text":"Trabajando en evidence"}}
+{"v":1,"seq":22,"ts":"@now-540","run":"infra-19-9a3b7f","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"aa121a37281bd6bb1fe2d15a16e0c54b2e3dd584"}}
+{"v":1,"seq":23,"ts":"@now-480","run":"infra-19-9a3b7f","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"9ef5835785a33c4e9b4bc0e17b23f9b1dba833e6"}}
+{"v":1,"seq":24,"ts":"@now-420","run":"infra-19-9a3b7f","type":"item.committed","data":{"n":3,"title":"Ítem 3","sha":"c4880c39ccddc72b526d450cf2748e9068f2e0ae"}}
+{"v":1,"seq":25,"ts":"@now-360","run":"infra-19-9a3b7f","type":"item.committed","data":{"n":4,"title":"Ítem 4","sha":"ac402662a4dde9b8b4c413e9416573b428531f32"}}
+{"v":1,"seq":26,"ts":"@now-300","run":"infra-19-9a3b7f","type":"item.committed","data":{"n":5,"title":"Ítem 5","sha":"3087b01f071cb007aea3fb4bbdf93e44e44eaacb"}}

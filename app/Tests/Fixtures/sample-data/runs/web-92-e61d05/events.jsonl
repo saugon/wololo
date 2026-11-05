@@ -1,0 +1,35 @@
+{"v":1,"seq":1,"ts":"@now-10906","run":"web-92-e61d05","type":"run.started","data":{"title":"Login con SSO de Google","source":{"kind":"github_issue","ref":"92","url":"https://github.com/acme/web/issues/92"},"project":{"key":"acme__web","path":"/Users/demo/code/acme/web","worktree":"/Users/demo/code/acme/web/.claude/worktrees/web-web-92-e61d05","branch":"wololo/92-sso-google","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"d79f65c4-d866-421b-8870-244a68654288","cwd":"/Users/demo/code/acme/web"}}
+{"v":1,"seq":2,"ts":"@now-10904","run":"web-92-e61d05","type":"risk.set","data":{"risk":"high"}}
+{"v":1,"seq":3,"ts":"@now-10900","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-10897","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-10405","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-10400","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-10397","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-9605","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-9600","run":"web-92-e61d05","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-9600","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-9597","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-8805","run":"web-92-e61d05","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-8805","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-8800","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-8797","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-7905","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-7900","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-7897","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-3605","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":20,"ts":"@now-3600","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"evidence"}}
+{"v":1,"seq":21,"ts":"@now-3597","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en evidence"}}
+{"v":1,"seq":22,"ts":"@now-2405","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"evidence"}}
+{"v":1,"seq":23,"ts":"@now-2400","run":"web-92-e61d05","type":"gate.requested","data":{"gate":"gate_b"}}
+{"v":1,"seq":24,"ts":"@now-2400","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"gate_b"}}
+{"v":1,"seq":25,"ts":"@now-2397","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en gate_b"}}
+{"v":1,"seq":26,"ts":"@now-605","run":"web-92-e61d05","type":"gate.resolved","data":{"gate":"gate_b","outcome":"approved"}}
+{"v":1,"seq":27,"ts":"@now-605","run":"web-92-e61d05","type":"stage.completed","data":{"stage":"gate_b"}}
+{"v":1,"seq":28,"ts":"@now-600","run":"web-92-e61d05","type":"stage.entered","data":{"stage":"pr"}}
+{"v":1,"seq":29,"ts":"@now-597","run":"web-92-e61d05","type":"doing","data":{"text":"Trabajando en pr"}}
+{"v":1,"seq":30,"ts":"@now-570","run":"web-92-e61d05","type":"pr.opened","data":{"url":"https://github.com/acme/web/pull/120","number":120,"draft":true}}
+{"v":1,"seq":31,"ts":"@now-540","run":"web-92-e61d05","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"3526c47dcb151bd04bf003dc13a059a367ed3460"}}
+{"v":1,"seq":32,"ts":"@now-480","run":"web-92-e61d05","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"3e4a311e619a2b1088718cc8d0c4946f34c3e70b"}}
+{"v":1,"seq":33,"ts":"@now-420","run":"web-92-e61d05","type":"item.committed","data":{"n":3,"title":"Ítem 3","sha":"481393132d68b2924961abe8981374a070832c92"}}
+{"v":1,"seq":34,"ts":"@now-360","run":"web-92-e61d05","type":"item.committed","data":{"n":4,"title":"Ítem 4","sha":"87053ae861f7892cb66ac21e0e2805889b4e7e79"}}
+{"v":1,"seq":35,"ts":"@now-241","run":"web-92-e61d05","type":"ci.updated","data":{"state":"pending"}}

@@ -1,0 +1,22 @@
+{"v":1,"seq":1,"ts":"@now-6706","run":"billing-212-5e1c0a","type":"run.started","data":{"title":"Reintentar webhooks fallidos","source":{"kind":"github_issue","ref":"212","url":"https://github.com/acme/billing/issues/212"},"project":{"key":"acme__billing","path":"/Users/demo/code/acme/billing","worktree":"/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-212-5e1c0a","branch":"wololo/212-reintentos-webhooks","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"f43f49e8-6f58-448e-820c-cf1ee667c24e","cwd":"/Users/demo/code/acme/billing"}}
+{"v":1,"seq":2,"ts":"@now-6704","run":"billing-212-5e1c0a","type":"risk.set","data":{"risk":"high"}}
+{"v":1,"seq":3,"ts":"@now-6700","run":"billing-212-5e1c0a","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-6697","run":"billing-212-5e1c0a","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-6305","run":"billing-212-5e1c0a","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-6300","run":"billing-212-5e1c0a","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-6297","run":"billing-212-5e1c0a","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-5205","run":"billing-212-5e1c0a","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-5200","run":"billing-212-5e1c0a","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-5200","run":"billing-212-5e1c0a","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-5197","run":"billing-212-5e1c0a","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-4405","run":"billing-212-5e1c0a","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-4405","run":"billing-212-5e1c0a","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-4400","run":"billing-212-5e1c0a","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-4397","run":"billing-212-5e1c0a","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-3105","run":"billing-212-5e1c0a","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-3100","run":"billing-212-5e1c0a","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-3097","run":"billing-212-5e1c0a","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-3040","run":"billing-212-5e1c0a","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"aa78054c38cef133c6cc0b05482500d9bb9da340"}}
+{"v":1,"seq":20,"ts":"@now-2980","run":"billing-212-5e1c0a","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"2d4abf010b615585ad56b1964683c8db05c9571f"}}
+{"v":1,"seq":21,"ts":"@now-700","run":"billing-212-5e1c0a","type":"agent.started","data":{"id":"af1811aab3db3440e","role":"implementer","description":"Ítem 3: backoff exponencial","model":"claude-opus-5-5"}}
+{"v":1,"seq":22,"ts":"@now-60","run":"billing-212-5e1c0a","type":"permission.asked","data":{"tool":"Bash","what":"npm run db:migrate"}}

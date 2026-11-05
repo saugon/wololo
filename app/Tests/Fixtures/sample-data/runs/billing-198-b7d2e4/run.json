@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "id": "billing-198-b7d2e4",
+  "title": "Exportar facturas a CSV",
+  "source": {
+    "kind": "github_issue",
+    "ref": "198",
+    "url": "https://github.com/acme/billing/issues/198"
+  },
+  "project": {
+    "key": "acme__billing",
+    "path": "/Users/demo/code/acme/billing",
+    "worktree": "/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-198-b7d2e4",
+    "branch": "wololo/198-export-csv",
+    "base": "main"
+  },
+  "mode": "full",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "implement",
+    "index": 4,
+    "total": 8,
+    "since": "@now-1900"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-3900",
+      "finished_at": "@now-3605"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-3600",
+      "finished_at": "@now-3005"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-3000",
+      "finished_at": "@now-2605"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-2600",
+      "finished_at": "@now-1905"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-1900",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-3000",
+      "resolved_at": "@now-2610",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "blocked",
+  "waiting": null,
+  "blocked": {
+    "reason": "Un test parece estar mal (invoices.test.ts:142)",
+    "since": "@now-360"
+  },
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 3,
+    "total": 5,
+    "current": {
+      "n": 4,
+      "title": "Ítem 4",
+      "since": "@now-300"
+    },
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "4331b4e2deeefe037a154ecfe1c2638997e75a2c"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "1232241c05e52b9c73050ef6b4d0b394fd98958b"
+      },
+      {
+        "n": 3,
+        "title": "Ítem 3",
+        "state": "done",
+        "sha": "635679161f27e39dcf3f3ff21fc515b6ed69802a"
+      },
+      {
+        "n": 4,
+        "title": "Ítem 4",
+        "state": "active",
+        "sha": null
+      },
+      {
+        "n": 5,
+        "title": "Ítem 5",
+        "state": "pending",
+        "sha": null
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "57a56bf5-c94d-49c6-8d58-c3cd9037e75d",
+    "cwd": "/Users/demo/code/acme/billing",
+    "heartbeat_at": "@now-5"
+  },
+  "last_seq": 22,
+  "created_at": "@now-3906",
+  "updated_at": "@now-360",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 180.0
+      },
+      "work": 120.0,
+      "agents": 150.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 40.0,
+      "you": 340.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 280.0,
+      "agents": 350.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 950.0,
+        "verifier": 190.0
+      },
+      "work": 760.0,
+      "agents": 950.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4200,
+      "cache_read": 290000,
+      "cache_write": 12000,
+      "usd": 0.3667,
+      "roles": {
+        "main": {
+          "usd": 0.3667,
+          "tokens": 306200
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 5800,
+      "cache_read": 410000,
+      "cache_write": 16000,
+      "usd": 0.5889,
+      "roles": {
+        "main": {
+          "usd": 0.5889,
+          "tokens": 431800
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 10600,
+      "cache_read": 770000,
+      "cache_write": 28000,
+      "usd": 1.2556,
+      "roles": {
+        "main": {
+          "usd": 1.2556,
+          "tokens": 808600
+        }
+      }
+    }
+  }
+}

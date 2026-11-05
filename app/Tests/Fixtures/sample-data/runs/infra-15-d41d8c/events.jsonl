@@ -1,0 +1,21 @@
+{"v":1,"seq":1,"ts":"@now-81606","run":"infra-15-d41d8c","type":"run.started","data":{"title":"Migrar a Node 24","source":{"kind":"github_issue","ref":"15","url":"https://github.com/acme/infra/issues/15"},"project":{"key":"acme__infra","path":"/Users/demo/code/acme/infra","worktree":"/Users/demo/code/acme/infra/.claude/worktrees/infra-infra-15-d41d8c","branch":"wololo/15-node-24","base":"main"},"mode":"full","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"a64201b3-8a8c-4a66-87c4-bfd79f7420f9","cwd":"/Users/demo/code/acme/infra"}}
+{"v":1,"seq":2,"ts":"@now-81604","run":"infra-15-d41d8c","type":"risk.set","data":{"risk":"high"}}
+{"v":1,"seq":3,"ts":"@now-81600","run":"infra-15-d41d8c","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-81597","run":"infra-15-d41d8c","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-81005","run":"infra-15-d41d8c","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-81000","run":"infra-15-d41d8c","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-80997","run":"infra-15-d41d8c","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-79805","run":"infra-15-d41d8c","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-79800","run":"infra-15-d41d8c","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-79800","run":"infra-15-d41d8c","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-79797","run":"infra-15-d41d8c","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-78605","run":"infra-15-d41d8c","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-78605","run":"infra-15-d41d8c","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-78600","run":"infra-15-d41d8c","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-78597","run":"infra-15-d41d8c","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-76805","run":"infra-15-d41d8c","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-76800","run":"infra-15-d41d8c","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-76797","run":"infra-15-d41d8c","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-76740","run":"infra-15-d41d8c","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"ad2673f36b24db57851718c27f2188f54dca32d0"}}
+{"v":1,"seq":20,"ts":"@now-72000","run":"infra-15-d41d8c","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":21,"ts":"@now-72000","run":"infra-15-d41d8c","type":"run.finished","data":{"outcome":"failed","summary":"Falló: se agotó el presupuesto de reversiones del ítem 2"}}

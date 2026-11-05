@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "id": "billing-175-2f4a90",
+  "title": "Limpiar migraciones viejas",
+  "source": {
+    "kind": "github_issue",
+    "ref": "175",
+    "url": "https://github.com/acme/billing/issues/175"
+  },
+  "project": {
+    "key": "acme__billing",
+    "path": "/Users/demo/code/acme/billing",
+    "worktree": "/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-175-2f4a90",
+    "branch": "wololo/175-migraciones",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "high",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "implement",
+    "index": 4,
+    "total": 8,
+    "since": "@now-2400"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-4300",
+      "finished_at": "@now-4005"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-4000",
+      "finished_at": "@now-3505"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-3500",
+      "finished_at": "@now-3005"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-3000",
+      "finished_at": "@now-2405"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-2400",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-3500",
+      "resolved_at": "@now-3010",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "running",
+  "waiting": null,
+  "blocked": null,
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 2,
+    "total": 5,
+    "current": {
+      "n": 3,
+      "title": "Ítem 3",
+      "since": "@now-300"
+    },
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "079a89b656a6f864229f67038f2d3025d446dc8c"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "8f9ff7a625c123f1d76725d307d516cf14361182"
+      },
+      {
+        "n": 3,
+        "title": "Ítem 3",
+        "state": "active",
+        "sha": null
+      },
+      {
+        "n": 4,
+        "title": "Ítem 4",
+        "state": "pending",
+        "sha": null
+      },
+      {
+        "n": 5,
+        "title": "Ítem 5",
+        "state": "pending",
+        "sha": null
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "7ecb10bf-6b80-4c5c-8e8a-4bcfe04be03c",
+    "cwd": "/Users/demo/code/acme/billing",
+    "heartbeat_at": "@now-840"
+  },
+  "last_seq": 20,
+  "created_at": "@now-4306",
+  "updated_at": "@now-840",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": {
+    "text": "Borrando las migraciones de 2023",
+    "since": "@now-900"
+  },
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 180.0
+      },
+      "work": 120.0,
+      "agents": 150.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 200.0,
+      "agents": 250.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 50.0,
+      "you": 425.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 1200.0,
+        "verifier": 240.0
+      },
+      "work": 960.0,
+      "agents": 1200.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4200,
+      "cache_read": 290000,
+      "cache_write": 12000,
+      "usd": 0.3667,
+      "roles": {
+        "main": {
+          "usd": 0.3667,
+          "tokens": 306200
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 5000,
+      "cache_read": 350000,
+      "cache_write": 14000,
+      "usd": 0.4778,
+      "roles": {
+        "main": {
+          "usd": 0.4778,
+          "tokens": 369000
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 5000,
+      "cache_read": 350000,
+      "cache_write": 14000,
+      "usd": 0.4778,
+      "roles": {
+        "main": {
+          "usd": 0.4778,
+          "tokens": 369000
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 12600,
+      "cache_read": 920000,
+      "cache_write": 33000,
+      "usd": 1.5333,
+      "roles": {
+        "main": {
+          "usd": 1.5333,
+          "tokens": 965600
+        }
+      }
+    }
+  }
+}

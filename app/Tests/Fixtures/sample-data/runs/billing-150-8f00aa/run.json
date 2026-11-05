@@ -1,0 +1,298 @@
+{
+  "schema_version": 1,
+  "id": "billing-150-8f00aa",
+  "title": "Paginación en la API de clientes",
+  "source": {
+    "kind": "github_issue",
+    "ref": "150",
+    "url": "https://github.com/acme/billing/issues/150"
+  },
+  "project": {
+    "key": "acme__billing",
+    "path": "/Users/demo/code/acme/billing",
+    "worktree": "/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-150-8f00aa",
+    "branch": "wololo/150-paginacion",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "pr",
+    "index": 7,
+    "total": 8,
+    "since": "@now-261600"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-266400",
+      "finished_at": "@now-266005"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-266000",
+      "finished_at": "@now-265205"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-265200",
+      "finished_at": "@now-264605"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-264600",
+      "finished_at": "@now-264005"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-264000",
+      "finished_at": "@now-262805"
+    },
+    {
+      "id": "evidence",
+      "started_at": "@now-262800",
+      "finished_at": "@now-262405"
+    },
+    {
+      "id": "gate_b",
+      "started_at": "@now-262400",
+      "finished_at": "@now-261605"
+    },
+    {
+      "id": "pr",
+      "started_at": "@now-261600",
+      "finished_at": "@now-259200"
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-265200",
+      "resolved_at": "@now-264610",
+      "outcome": "approved",
+      "by": "user"
+    },
+    "gate_b": {
+      "requested_at": "@now-262400",
+      "resolved_at": "@now-261610",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "done",
+  "waiting": null,
+  "blocked": null,
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 3,
+    "total": 3,
+    "current": null,
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "fc953f770b43adde86d83947c82e44a548cb7307"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "52d4ac3c74d09c991b575f934d5055d12afdff04"
+      },
+      {
+        "n": 3,
+        "title": "Ítem 3",
+        "state": "done",
+        "sha": "beb3c0ff3da25c32e9503f6ec649553ba0e45410"
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": {
+    "url": "https://github.com/acme/billing/pull/151",
+    "number": 151,
+    "state": "ready",
+    "ci": "passing"
+  },
+  "screenshots": [],
+  "owner": {
+    "session_id": "eb049777-ec19-40e6-8745-7c33f8204298",
+    "cwd": "/Users/demo/code/acme/billing",
+    "heartbeat_at": "@now-259200"
+  },
+  "last_seq": 36,
+  "created_at": "@now-266406",
+  "updated_at": "@now-259200",
+  "finished_at": "@now-259200",
+  "outcome": "done",
+  "summary": "PR #151 abierto, CI en verde",
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 240.0
+      },
+      "work": 160.0,
+      "agents": 200.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 320.0,
+      "agents": 400.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 60.0,
+      "you": 510.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 600.0,
+        "verifier": 120.0
+      },
+      "work": 480.0,
+      "agents": 600.0
+    },
+    "evidence": {
+      "roles": {},
+      "work": 160.0,
+      "agents": 200.0
+    },
+    "gate_b": {
+      "roles": {},
+      "work": 80.0,
+      "you": 680.0
+    },
+    "pr": {
+      "roles": {},
+      "work": 960.0,
+      "agents": 1200.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 6200,
+      "cache_read": 440000,
+      "cache_write": 17000,
+      "usd": 0.6444,
+      "roles": {
+        "main": {
+          "usd": 0.6444,
+          "tokens": 463200
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 7800,
+      "cache_read": 560000,
+      "cache_write": 21000,
+      "usd": 0.8667,
+      "roles": {
+        "main": {
+          "usd": 0.8667,
+          "tokens": 588800
+        }
+      }
+    },
+    "evidence": {
+      "input": 75,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "gate_b": {
+      "input": 82,
+      "output": 6200,
+      "cache_read": 440000,
+      "cache_write": 17000,
+      "usd": 0.6444,
+      "roles": {
+        "main": {
+          "usd": 0.6444,
+          "tokens": 463200
+        }
+      }
+    },
+    "pr": {
+      "input": 89,
+      "output": 12600,
+      "cache_read": 920000,
+      "cache_write": 33000,
+      "usd": 1.5333,
+      "roles": {
+        "main": {
+          "usd": 1.5333,
+          "tokens": 965600
+        }
+      }
+    }
+  }
+}

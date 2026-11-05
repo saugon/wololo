@@ -1,0 +1,35 @@
+{"v":1,"seq":1,"ts":"@now-20906","run":"web-80-3b9e12","type":"run.started","data":{"title":"Atajos de teclado en el editor","source":{"kind":"github_issue","ref":"80","url":"https://github.com/acme/web/issues/80"},"project":{"key":"acme__web","path":"/Users/demo/code/acme/web","worktree":"/Users/demo/code/acme/web/.claude/worktrees/web-web-80-3b9e12","branch":"wololo/80-atajos","base":"main"},"mode":"full","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"d5ec26c9-fece-4bbe-86bf-1cc74a252b9c","cwd":"/Users/demo/code/acme/web"}}
+{"v":1,"seq":2,"ts":"@now-20904","run":"web-80-3b9e12","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-20900","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-20897","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-20605","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-20600","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-20597","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-20205","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-20200","run":"web-80-3b9e12","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-20200","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-20197","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-19905","run":"web-80-3b9e12","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-19905","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-19900","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-19897","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-19505","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-19500","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-19497","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-19005","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":20,"ts":"@now-19000","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"evidence"}}
+{"v":1,"seq":21,"ts":"@now-18997","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en evidence"}}
+{"v":1,"seq":22,"ts":"@now-18805","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"evidence"}}
+{"v":1,"seq":23,"ts":"@now-18800","run":"web-80-3b9e12","type":"gate.requested","data":{"gate":"gate_b"}}
+{"v":1,"seq":24,"ts":"@now-18800","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"gate_b"}}
+{"v":1,"seq":25,"ts":"@now-18797","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en gate_b"}}
+{"v":1,"seq":26,"ts":"@now-18405","run":"web-80-3b9e12","type":"gate.resolved","data":{"gate":"gate_b","outcome":"approved"}}
+{"v":1,"seq":27,"ts":"@now-18405","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"gate_b"}}
+{"v":1,"seq":28,"ts":"@now-18400","run":"web-80-3b9e12","type":"stage.entered","data":{"stage":"pr"}}
+{"v":1,"seq":29,"ts":"@now-18397","run":"web-80-3b9e12","type":"doing","data":{"text":"Trabajando en pr"}}
+{"v":1,"seq":30,"ts":"@now-18370","run":"web-80-3b9e12","type":"pr.opened","data":{"url":"https://github.com/acme/web/pull/118","number":118,"draft":false}}
+{"v":1,"seq":31,"ts":"@now-18340","run":"web-80-3b9e12","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"8b85f785eb5e07eba8331a05cbd1d47d869adad8"}}
+{"v":1,"seq":32,"ts":"@now-18280","run":"web-80-3b9e12","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"65433e6064d572f47f8ed415eff7cdaf91719d5e"}}
+{"v":1,"seq":33,"ts":"@now-18001","run":"web-80-3b9e12","type":"ci.updated","data":{"state":"passing"}}
+{"v":1,"seq":34,"ts":"@now-18000","run":"web-80-3b9e12","type":"stage.completed","data":{"stage":"pr"}}
+{"v":1,"seq":35,"ts":"@now-18000","run":"web-80-3b9e12","type":"run.finished","data":{"outcome":"done","summary":"PR #118 abierto, CI en verde"}}

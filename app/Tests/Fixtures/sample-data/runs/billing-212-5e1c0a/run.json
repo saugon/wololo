@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "id": "billing-212-5e1c0a",
+  "title": "Reintentar webhooks fallidos",
+  "source": {
+    "kind": "github_issue",
+    "ref": "212",
+    "url": "https://github.com/acme/billing/issues/212"
+  },
+  "project": {
+    "key": "acme__billing",
+    "path": "/Users/demo/code/acme/billing",
+    "worktree": "/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-212-5e1c0a",
+    "branch": "wololo/212-reintentos-webhooks",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "high",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "implement",
+    "index": 4,
+    "total": 8,
+    "since": "@now-3100"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-6700",
+      "finished_at": "@now-6305"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-6300",
+      "finished_at": "@now-5205"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-5200",
+      "finished_at": "@now-4405"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-4400",
+      "finished_at": "@now-3105"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-3100",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-5200",
+      "resolved_at": "@now-4410",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "waiting_permission",
+  "waiting": {
+    "on": "permission",
+    "question": "Bash · npm run db:migrate",
+    "since": "@now-60"
+  },
+  "blocked": null,
+  "agents": [
+    {
+      "id": "af1811aab3db3440e",
+      "role": "implementer",
+      "description": "Ítem 3: backoff exponencial",
+      "model": "claude-opus-5-5",
+      "status": "running",
+      "started_at": "@now-700",
+      "finished_at": null
+    }
+  ],
+  "tasks": [],
+  "items": {
+    "done": 2,
+    "total": 6,
+    "current": {
+      "n": 3,
+      "title": "Ítem 3",
+      "since": "@now-300"
+    },
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "aa78054c38cef133c6cc0b05482500d9bb9da340"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "2d4abf010b615585ad56b1964683c8db05c9571f"
+      },
+      {
+        "n": 3,
+        "title": "Ítem 3",
+        "state": "active",
+        "sha": null
+      },
+      {
+        "n": 4,
+        "title": "Ítem 4",
+        "state": "pending",
+        "sha": null
+      },
+      {
+        "n": 5,
+        "title": "Ítem 5",
+        "state": "pending",
+        "sha": null
+      },
+      {
+        "n": 6,
+        "title": "Ítem 6",
+        "state": "pending",
+        "sha": null
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "f43f49e8-6f58-448e-820c-cf1ee667c24e",
+    "cwd": "/Users/demo/code/acme/billing",
+    "heartbeat_at": "@now-5"
+  },
+  "last_seq": 22,
+  "created_at": "@now-6706",
+  "updated_at": "@now-60",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 240.0
+      },
+      "work": 160.0,
+      "agents": 200.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 440.0,
+      "agents": 550.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 80.0,
+      "you": 680.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 520.0,
+      "agents": 650.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 1550.0,
+        "verifier": 310.0
+      },
+      "work": 1240.0,
+      "agents": 1550.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 7400,
+      "cache_read": 530000,
+      "cache_write": 20000,
+      "usd": 0.8111,
+      "roles": {
+        "main": {
+          "usd": 0.8111,
+          "tokens": 557400
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 6200,
+      "cache_read": 440000,
+      "cache_write": 17000,
+      "usd": 0.6444,
+      "roles": {
+        "main": {
+          "usd": 0.6444,
+          "tokens": 463200
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 8200,
+      "cache_read": 590000,
+      "cache_write": 22000,
+      "usd": 0.9222,
+      "roles": {
+        "main": {
+          "usd": 0.9222,
+          "tokens": 620200
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 15400,
+      "cache_read": 1130000,
+      "cache_write": 40000,
+      "usd": 1.9222,
+      "roles": {
+        "main": {
+          "usd": 1.9222,
+          "tokens": 1185400
+        }
+      }
+    }
+  }
+}

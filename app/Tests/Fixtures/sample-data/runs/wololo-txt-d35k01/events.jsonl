@@ -1,0 +1,12 @@
+{"v":1,"seq":1,"ts":"@now-2466","run":"wololo-txt-d35k01","type":"run.started","data":{"title":"Wololo Desk: app para ver el estado de los runs","source":{"kind":"text","ref":"app para ver los runs","url":null},"project":{"key":"saugon__wololo","path":"/Users/demo/code/saugon/wololo","worktree":"/Users/demo/code/saugon/wololo/.claude/worktrees/wololo-wololo-txt-d35k01","branch":"wololo/txt-app-para-ver-el-estado","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"5a28df51-9221-4b0a-8a38-59a028ae45be","cwd":"/Users/demo/code/saugon/wololo"}}
+{"v":1,"seq":2,"ts":"@now-2464","run":"wololo-txt-d35k01","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-2460","run":"wololo-txt-d35k01","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-2457","run":"wololo-txt-d35k01","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-2285","run":"wololo-txt-d35k01","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-2280","run":"wololo-txt-d35k01","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-2277","run":"wololo-txt-d35k01","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-605","run":"wololo-txt-d35k01","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-600","run":"wololo-txt-d35k01","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-600","run":"wololo-txt-d35k01","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-597","run":"wololo-txt-d35k01","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-40","run":"wololo-txt-d35k01","type":"question.asked","data":{"question":"¿Aprobás el spec de Wololo Desk?"}}

@@ -1,0 +1,36 @@
+{"v":1,"seq":1,"ts":"@now-11606","run":"wololo-41-c0ffee","type":"run.started","data":{"title":"Agrupar runs por proyecto","source":{"kind":"github_issue","ref":"41","url":"https://github.com/saugon/wololo/issues/41"},"project":{"key":"saugon__wololo","path":"/Users/demo/code/saugon/wololo","worktree":"/Users/demo/code/saugon/wololo/.claude/worktrees/wololo-wololo-41-c0ffee","branch":"wololo/41-agrupar-runs","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"90403eff-de47-4b23-8f7a-b2318be1496f","cwd":"/Users/demo/code/saugon/wololo"}}
+{"v":1,"seq":2,"ts":"@now-11604","run":"wololo-41-c0ffee","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-11600","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-11597","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-11305","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-11300","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-11297","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-10805","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-10800","run":"wololo-41-c0ffee","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-10800","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-10797","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-10205","run":"wololo-41-c0ffee","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-10205","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-10200","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-10197","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-9605","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-9600","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-9597","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-8405","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":20,"ts":"@now-8400","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"evidence"}}
+{"v":1,"seq":21,"ts":"@now-8397","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en evidence"}}
+{"v":1,"seq":22,"ts":"@now-8005","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"evidence"}}
+{"v":1,"seq":23,"ts":"@now-8000","run":"wololo-41-c0ffee","type":"gate.requested","data":{"gate":"gate_b"}}
+{"v":1,"seq":24,"ts":"@now-8000","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"gate_b"}}
+{"v":1,"seq":25,"ts":"@now-7997","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en gate_b"}}
+{"v":1,"seq":26,"ts":"@now-7605","run":"wololo-41-c0ffee","type":"gate.resolved","data":{"gate":"gate_b","outcome":"approved"}}
+{"v":1,"seq":27,"ts":"@now-7605","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"gate_b"}}
+{"v":1,"seq":28,"ts":"@now-7600","run":"wololo-41-c0ffee","type":"stage.entered","data":{"stage":"pr"}}
+{"v":1,"seq":29,"ts":"@now-7597","run":"wololo-41-c0ffee","type":"doing","data":{"text":"Trabajando en pr"}}
+{"v":1,"seq":30,"ts":"@now-7570","run":"wololo-41-c0ffee","type":"pr.opened","data":{"url":"https://github.com/saugon/wololo/pull/43","number":43,"draft":false}}
+{"v":1,"seq":31,"ts":"@now-7540","run":"wololo-41-c0ffee","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"f6e145b1b914f0b9b9d99c3e0657ebf244115d66"}}
+{"v":1,"seq":32,"ts":"@now-7480","run":"wololo-41-c0ffee","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"1b137d96ef4cce5176a58b3affda50bdbd935add"}}
+{"v":1,"seq":33,"ts":"@now-7420","run":"wololo-41-c0ffee","type":"item.committed","data":{"n":3,"title":"Ítem 3","sha":"d89965ea3bb2fdd4fb05e1a60e1041de8fac0baf"}}
+{"v":1,"seq":34,"ts":"@now-7201","run":"wololo-41-c0ffee","type":"ci.updated","data":{"state":"passing"}}
+{"v":1,"seq":35,"ts":"@now-7200","run":"wololo-41-c0ffee","type":"stage.completed","data":{"stage":"pr"}}
+{"v":1,"seq":36,"ts":"@now-7200","run":"wololo-41-c0ffee","type":"run.finished","data":{"outcome":"done","summary":"PR #43 abierto, CI en verde"}}

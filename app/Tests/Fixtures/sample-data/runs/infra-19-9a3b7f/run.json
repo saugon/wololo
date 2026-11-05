@@ -1,0 +1,265 @@
+{
+  "schema_version": 1,
+  "id": "infra-19-9a3b7f",
+  "title": "Caché de imágenes en el CDN",
+  "source": {
+    "kind": "github_issue",
+    "ref": "19",
+    "url": "https://github.com/acme/infra/issues/19"
+  },
+  "project": {
+    "key": "acme__infra",
+    "path": "/Users/demo/code/acme/infra",
+    "worktree": "/Users/demo/code/acme/infra/.claude/worktrees/infra-infra-19-9a3b7f",
+    "branch": "wololo/19-cache-imagenes",
+    "base": "main"
+  },
+  "mode": "full",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "evidence",
+    "index": 5,
+    "total": 8,
+    "since": "@now-600"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-5460",
+      "finished_at": "@now-5105"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-5100",
+      "finished_at": "@now-4505"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-4500",
+      "finished_at": "@now-3905"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-3900",
+      "finished_at": "@now-3305"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-3300",
+      "finished_at": "@now-605"
+    },
+    {
+      "id": "evidence",
+      "started_at": "@now-600",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-4500",
+      "resolved_at": "@now-3910",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "waiting_tests",
+  "waiting": null,
+  "blocked": null,
+  "agents": [],
+  "tasks": [
+    {
+      "id": "t1",
+      "label": "npm test",
+      "kind": "tests",
+      "started_at": "@now-180",
+      "finished_at": null,
+      "status": null
+    }
+  ],
+  "items": {
+    "done": 5,
+    "total": 5,
+    "current": null,
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "aa121a37281bd6bb1fe2d15a16e0c54b2e3dd584"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "9ef5835785a33c4e9b4bc0e17b23f9b1dba833e6"
+      },
+      {
+        "n": 3,
+        "title": "Ítem 3",
+        "state": "done",
+        "sha": "c4880c39ccddc72b526d450cf2748e9068f2e0ae"
+      },
+      {
+        "n": 4,
+        "title": "Ítem 4",
+        "state": "done",
+        "sha": "ac402662a4dde9b8b4c413e9416573b428531f32"
+      },
+      {
+        "n": 5,
+        "title": "Ítem 5",
+        "state": "done",
+        "sha": "3087b01f071cb007aea3fb4bbdf93e44e44eaacb"
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "ca1f0ecf-4f85-410d-881a-51aaf9dd5817",
+    "cwd": "/Users/demo/code/acme/infra",
+    "heartbeat_at": "@now-5"
+  },
+  "last_seq": 26,
+  "created_at": "@now-5466",
+  "updated_at": "@now-180",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": {
+    "text": "Corriendo la suite completa",
+    "since": "@now-180"
+  },
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 216.0
+      },
+      "work": 144.0,
+      "agents": 180.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 60.0,
+      "you": 510.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 1350.0,
+        "verifier": 270.0
+      },
+      "work": 1080.0,
+      "agents": 1350.0
+    },
+    "evidence": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4440,
+      "cache_read": 308000,
+      "cache_write": 12600,
+      "usd": 0.4,
+      "roles": {
+        "main": {
+          "usd": 0.4,
+          "tokens": 325040
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 13800,
+      "cache_read": 1010000,
+      "cache_write": 36000,
+      "usd": 1.7,
+      "roles": {
+        "main": {
+          "usd": 1.7,
+          "tokens": 1059800
+        }
+      }
+    },
+    "evidence": {
+      "input": 75,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    }
+  }
+}

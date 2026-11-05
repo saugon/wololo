@@ -1,0 +1,16 @@
+{"v":1,"seq":1,"ts":"@now-5706","run":"billing-file-71c3d8","type":"run.started","data":{"title":"Reporte mensual de uso","source":{"kind":"file","ref":"docs/plan-reporte.md","url":null},"project":{"key":"acme__billing","path":"/Users/demo/code/acme/billing","worktree":"/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-file-71c3d8","branch":"wololo/plan-reporte","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"e334f607-298f-40b7-818a-330322851395","cwd":"/Users/demo/code/acme/billing"}}
+{"v":1,"seq":2,"ts":"@now-5704","run":"billing-file-71c3d8","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-5700","run":"billing-file-71c3d8","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-5697","run":"billing-file-71c3d8","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-5405","run":"billing-file-71c3d8","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-5400","run":"billing-file-71c3d8","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-5397","run":"billing-file-71c3d8","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-4805","run":"billing-file-71c3d8","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-4800","run":"billing-file-71c3d8","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-4800","run":"billing-file-71c3d8","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-4797","run":"billing-file-71c3d8","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-4205","run":"billing-file-71c3d8","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-4205","run":"billing-file-71c3d8","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-4200","run":"billing-file-71c3d8","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-4197","run":"billing-file-71c3d8","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-3600","run":"billing-file-71c3d8","type":"paused","data":{"note":"Falta la credencial de staging"}}

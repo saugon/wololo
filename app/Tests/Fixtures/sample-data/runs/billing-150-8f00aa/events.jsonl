@@ -1,0 +1,36 @@
+{"v":1,"seq":1,"ts":"@now-266406","run":"billing-150-8f00aa","type":"run.started","data":{"title":"Paginación en la API de clientes","source":{"kind":"github_issue","ref":"150","url":"https://github.com/acme/billing/issues/150"},"project":{"key":"acme__billing","path":"/Users/demo/code/acme/billing","worktree":"/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-150-8f00aa","branch":"wololo/150-paginacion","base":"main"},"mode":"checkpoints","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"eb049777-ec19-40e6-8745-7c33f8204298","cwd":"/Users/demo/code/acme/billing"}}
+{"v":1,"seq":2,"ts":"@now-266404","run":"billing-150-8f00aa","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-266400","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-266397","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-266005","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-266000","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-265997","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-265205","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-265200","run":"billing-150-8f00aa","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-265200","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-265197","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-264605","run":"billing-150-8f00aa","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-264605","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-264600","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-264597","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-264005","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-264000","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-263997","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-262805","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"implement"}}
+{"v":1,"seq":20,"ts":"@now-262800","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"evidence"}}
+{"v":1,"seq":21,"ts":"@now-262797","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en evidence"}}
+{"v":1,"seq":22,"ts":"@now-262405","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"evidence"}}
+{"v":1,"seq":23,"ts":"@now-262400","run":"billing-150-8f00aa","type":"gate.requested","data":{"gate":"gate_b"}}
+{"v":1,"seq":24,"ts":"@now-262400","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"gate_b"}}
+{"v":1,"seq":25,"ts":"@now-262397","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en gate_b"}}
+{"v":1,"seq":26,"ts":"@now-261605","run":"billing-150-8f00aa","type":"gate.resolved","data":{"gate":"gate_b","outcome":"approved"}}
+{"v":1,"seq":27,"ts":"@now-261605","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"gate_b"}}
+{"v":1,"seq":28,"ts":"@now-261600","run":"billing-150-8f00aa","type":"stage.entered","data":{"stage":"pr"}}
+{"v":1,"seq":29,"ts":"@now-261597","run":"billing-150-8f00aa","type":"doing","data":{"text":"Trabajando en pr"}}
+{"v":1,"seq":30,"ts":"@now-261570","run":"billing-150-8f00aa","type":"pr.opened","data":{"url":"https://github.com/acme/billing/pull/151","number":151,"draft":false}}
+{"v":1,"seq":31,"ts":"@now-261540","run":"billing-150-8f00aa","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"fc953f770b43adde86d83947c82e44a548cb7307"}}
+{"v":1,"seq":32,"ts":"@now-261480","run":"billing-150-8f00aa","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"52d4ac3c74d09c991b575f934d5055d12afdff04"}}
+{"v":1,"seq":33,"ts":"@now-261420","run":"billing-150-8f00aa","type":"item.committed","data":{"n":3,"title":"Ítem 3","sha":"beb3c0ff3da25c32e9503f6ec649553ba0e45410"}}
+{"v":1,"seq":34,"ts":"@now-259201","run":"billing-150-8f00aa","type":"ci.updated","data":{"state":"passing"}}
+{"v":1,"seq":35,"ts":"@now-259200","run":"billing-150-8f00aa","type":"stage.completed","data":{"stage":"pr"}}
+{"v":1,"seq":36,"ts":"@now-259200","run":"billing-150-8f00aa","type":"run.finished","data":{"outcome":"done","summary":"PR #151 abierto, CI en verde"}}

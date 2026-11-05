@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "id": "billing-file-71c3d8",
+  "title": "Reporte mensual de uso",
+  "source": {
+    "kind": "file",
+    "ref": "docs/plan-reporte.md",
+    "url": null
+  },
+  "project": {
+    "key": "acme__billing",
+    "path": "/Users/demo/code/acme/billing",
+    "worktree": "/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-file-71c3d8",
+    "branch": "wololo/plan-reporte",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "plan",
+    "index": 3,
+    "total": 8,
+    "since": "@now-4200"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-5700",
+      "finished_at": "@now-5405"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-5400",
+      "finished_at": "@now-4805"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-4800",
+      "finished_at": "@now-4205"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-4200",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-4800",
+      "resolved_at": "@now-4210",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "paused",
+  "waiting": null,
+  "blocked": null,
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 0,
+    "total": 0,
+    "current": null,
+    "list": []
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "e334f607-298f-40b7-818a-330322851395",
+    "cwd": "/Users/demo/code/acme/billing",
+    "heartbeat_at": "@now-3600"
+  },
+  "last_seq": 16,
+  "created_at": "@now-5706",
+  "updated_at": "@now-3600",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": {
+    "note": "Falta la credencial de staging",
+    "since": "@now-3600"
+  },
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 180.0
+      },
+      "work": 120.0,
+      "agents": 150.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 60.0,
+      "you": 510.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 1680.0,
+      "agents": 2100.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4200,
+      "cache_read": 290000,
+      "cache_write": 12000,
+      "usd": 0.3667,
+      "roles": {
+        "main": {
+          "usd": 0.3667,
+          "tokens": 306200
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 19800,
+      "cache_read": 1460000,
+      "cache_write": 51000,
+      "usd": 2.5333,
+      "roles": {
+        "main": {
+          "usd": 2.5333,
+          "tokens": 1530800
+        }
+      }
+    }
+  }
+}

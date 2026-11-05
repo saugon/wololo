@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "id": "wololo-txt-d35k01",
+  "title": "Wololo Desk: app para ver el estado de los runs",
+  "source": {
+    "kind": "text",
+    "ref": "app para ver los runs",
+    "url": null
+  },
+  "project": {
+    "key": "saugon__wololo",
+    "path": "/Users/demo/code/saugon/wololo",
+    "worktree": "/Users/demo/code/saugon/wololo/.claude/worktrees/wololo-wololo-txt-d35k01",
+    "branch": "wololo/txt-app-para-ver-el-estado",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "gate_a",
+    "index": 2,
+    "total": 8,
+    "since": "@now-600"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-2460",
+      "finished_at": "@now-2285"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-2280",
+      "finished_at": "@now-605"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-600",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-600",
+      "resolved_at": null,
+      "outcome": null,
+      "by": null
+    }
+  },
+  "status": "waiting_user",
+  "waiting": {
+    "on": "user",
+    "question": "¿Aprobás el spec de Wololo Desk?",
+    "since": "@now-40"
+  },
+  "blocked": null,
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 0,
+    "total": 0,
+    "current": null,
+    "list": []
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [],
+  "owner": {
+    "session_id": "5a28df51-9221-4b0a-8a38-59a028ae45be",
+    "cwd": "/Users/demo/code/saugon/wololo",
+    "heartbeat_at": "@now-6"
+  },
+  "last_seq": 12,
+  "created_at": "@now-2466",
+  "updated_at": "@now-40",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 108.0
+      },
+      "work": 72.0,
+      "agents": 90.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 672.0,
+      "agents": 840.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 60.0,
+      "you": 510.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 3720,
+      "cache_read": 254000,
+      "cache_write": 10800,
+      "usd": 0.3,
+      "roles": {
+        "main": {
+          "usd": 0.3,
+          "tokens": 268520
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 9720,
+      "cache_read": 704000,
+      "cache_write": 25800,
+      "usd": 1.1333,
+      "roles": {
+        "main": {
+          "usd": 1.1333,
+          "tokens": 739520
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    }
+  }
+}

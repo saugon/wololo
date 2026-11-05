@@ -1,0 +1,22 @@
+{"v":1,"seq":1,"ts":"@now-3906","run":"billing-198-b7d2e4","type":"run.started","data":{"title":"Exportar facturas a CSV","source":{"kind":"github_issue","ref":"198","url":"https://github.com/acme/billing/issues/198"},"project":{"key":"acme__billing","path":"/Users/demo/code/acme/billing","worktree":"/Users/demo/code/acme/billing/.claude/worktrees/billing-billing-198-b7d2e4","branch":"wololo/198-export-csv","base":"main"},"mode":"full","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"57a56bf5-c94d-49c6-8d58-c3cd9037e75d","cwd":"/Users/demo/code/acme/billing"}}
+{"v":1,"seq":2,"ts":"@now-3904","run":"billing-198-b7d2e4","type":"risk.set","data":{"risk":"low"}}
+{"v":1,"seq":3,"ts":"@now-3900","run":"billing-198-b7d2e4","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-3897","run":"billing-198-b7d2e4","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-3605","run":"billing-198-b7d2e4","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-3600","run":"billing-198-b7d2e4","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-3597","run":"billing-198-b7d2e4","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-3005","run":"billing-198-b7d2e4","type":"stage.completed","data":{"stage":"definition"}}
+{"v":1,"seq":9,"ts":"@now-3000","run":"billing-198-b7d2e4","type":"gate.requested","data":{"gate":"gate_a"}}
+{"v":1,"seq":10,"ts":"@now-3000","run":"billing-198-b7d2e4","type":"stage.entered","data":{"stage":"gate_a"}}
+{"v":1,"seq":11,"ts":"@now-2997","run":"billing-198-b7d2e4","type":"doing","data":{"text":"Trabajando en gate_a"}}
+{"v":1,"seq":12,"ts":"@now-2605","run":"billing-198-b7d2e4","type":"gate.resolved","data":{"gate":"gate_a","outcome":"approved"}}
+{"v":1,"seq":13,"ts":"@now-2605","run":"billing-198-b7d2e4","type":"stage.completed","data":{"stage":"gate_a"}}
+{"v":1,"seq":14,"ts":"@now-2600","run":"billing-198-b7d2e4","type":"stage.entered","data":{"stage":"plan"}}
+{"v":1,"seq":15,"ts":"@now-2597","run":"billing-198-b7d2e4","type":"doing","data":{"text":"Trabajando en plan"}}
+{"v":1,"seq":16,"ts":"@now-1905","run":"billing-198-b7d2e4","type":"stage.completed","data":{"stage":"plan"}}
+{"v":1,"seq":17,"ts":"@now-1900","run":"billing-198-b7d2e4","type":"stage.entered","data":{"stage":"implement"}}
+{"v":1,"seq":18,"ts":"@now-1897","run":"billing-198-b7d2e4","type":"doing","data":{"text":"Trabajando en implement"}}
+{"v":1,"seq":19,"ts":"@now-1840","run":"billing-198-b7d2e4","type":"item.committed","data":{"n":1,"title":"Ítem 1","sha":"4331b4e2deeefe037a154ecfe1c2638997e75a2c"}}
+{"v":1,"seq":20,"ts":"@now-1780","run":"billing-198-b7d2e4","type":"item.committed","data":{"n":2,"title":"Ítem 2","sha":"1232241c05e52b9c73050ef6b4d0b394fd98958b"}}
+{"v":1,"seq":21,"ts":"@now-1720","run":"billing-198-b7d2e4","type":"item.committed","data":{"n":3,"title":"Ítem 3","sha":"635679161f27e39dcf3f3ff21fc515b6ed69802a"}}
+{"v":1,"seq":22,"ts":"@now-360","run":"billing-198-b7d2e4","type":"blocked","data":{"reason":"Un test parece estar mal (invoices.test.ts:142)"}}

@@ -1,0 +1,8 @@
+{"v":1,"seq":1,"ts":"@now-1326","run":"mobile-64-0c8e31","type":"run.started","data":{"title":"Modo offline en la app","source":{"kind":"github_issue","ref":"64","url":"https://github.com/acme/mobile/issues/64"},"project":{"key":"acme__mobile","path":"/Users/demo/code/acme/mobile","worktree":"/Users/demo/code/acme/mobile/.claude/worktrees/mobile-mobile-64-0c8e31","branch":"wololo/64-modo-offline","base":"main"},"mode":"guided","review":"local","overrides":{},"risk":"unknown","lang":"es","slot":1,"session_id":"71b45f42-7cfe-4bc7-85d3-a9c43bfdb8f0","cwd":"/Users/demo/code/acme/mobile"}}
+{"v":1,"seq":2,"ts":"@now-1324","run":"mobile-64-0c8e31","type":"risk.set","data":{"risk":"high"}}
+{"v":1,"seq":3,"ts":"@now-1320","run":"mobile-64-0c8e31","type":"stage.entered","data":{"stage":"context"}}
+{"v":1,"seq":4,"ts":"@now-1317","run":"mobile-64-0c8e31","type":"doing","data":{"text":"Trabajando en context"}}
+{"v":1,"seq":5,"ts":"@now-905","run":"mobile-64-0c8e31","type":"stage.completed","data":{"stage":"context"}}
+{"v":1,"seq":6,"ts":"@now-900","run":"mobile-64-0c8e31","type":"stage.entered","data":{"stage":"definition"}}
+{"v":1,"seq":7,"ts":"@now-897","run":"mobile-64-0c8e31","type":"doing","data":{"text":"Trabajando en definition"}}
+{"v":1,"seq":8,"ts":"@now-300","run":"mobile-64-0c8e31","type":"agent.started","data":{"id":"acac30e76c4dae6db","role":"critic","description":"Revisar el spec","model":"claude-opus-5-5"}}

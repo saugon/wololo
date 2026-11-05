@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "id": "web-4312-a4f9c2",
+  "title": "Arrastrar y soltar tarjetas en el tablero",
+  "source": {
+    "kind": "github_issue",
+    "ref": "4312",
+    "url": "https://github.com/acme/web/issues/4312"
+  },
+  "project": {
+    "key": "acme__web",
+    "path": "/Users/demo/code/acme/web",
+    "worktree": "/Users/demo/code/acme/web/.claude/worktrees/web-web-4312-a4f9c2",
+    "branch": "wololo/4312-drag-and-drop",
+    "base": "main"
+  },
+  "mode": "checkpoints",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "implement",
+    "index": 4,
+    "total": 8,
+    "since": "@now-4800"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-8040",
+      "finished_at": "@now-7705"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-7700",
+      "finished_at": "@now-6505"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-6500",
+      "finished_at": "@now-5405"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-5400",
+      "finished_at": "@now-4805"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-4800",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-6500",
+      "resolved_at": "@now-5410",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "waiting_agents",
+  "waiting": null,
+  "blocked": null,
+  "agents": [
+    {
+      "id": "a5bc1dcd4d706646b",
+      "role": "implementer",
+      "description": "Ítem 5: animación al soltar",
+      "model": "claude-opus-5-5",
+      "status": "running",
+      "started_at": "@now-400",
+      "finished_at": null
+    },
+    {
+      "id": "a896b19aed8bc8c0b",
+      "role": "verifier",
+      "description": "Verificar ítem 4",
+      "model": "claude-opus-5-5",
+      "status": "running",
+      "started_at": "@now-380",
+      "finished_at": null
+    },
+    {
+      "id": "a68433fdeeb56958b",
+      "role": "explorer",
+      "description": "Dónde vive el tablero",
+      "model": "claude-opus-5-5",
+      "status": "completed",
+      "started_at": "@now-8000",
+      "finished_at": "@now-7820"
+    },
+    {
+      "id": "a3dd47777451a3484",
+      "role": "architect",
+      "description": "Plan del drag and drop",
+      "model": "claude-opus-5-5",
+      "status": "completed",
+      "started_at": "@now-5380",
+      "finished_at": "@now-5000"
+    }
+  ],
+  "tasks": [],
+  "items": {
+    "done": 4,
+    "total": 7,
+    "current": {
+      "n": 5,
+      "title": "Animación al soltar la tarjeta",
+      "since": "@now-420"
+    },
+    "list": [
+      {
+        "n": 1,
+        "title": "Estado de arrastre en el store",
+        "state": "done",
+        "sha": "8ada11ce9ec9fed06b00c9ea21a9e121d122ba9b"
+      },
+      {
+        "n": 2,
+        "title": "Resaltar la columna destino",
+        "state": "done",
+        "sha": "2edb869703e3ced79ca083f19bbca1c00f5ee4b9"
+      },
+      {
+        "n": 3,
+        "title": "Soltar y reordenar",
+        "state": "done",
+        "sha": "2f82d4f16989abe4516dfc3eb8924d4dc591c594"
+      },
+      {
+        "n": 4,
+        "title": "Persistir el orden",
+        "state": "done",
+        "sha": "fb6e0747cc798222be520b5ffe275ce99d618812"
+      },
+      {
+        "n": 5,
+        "title": "Animación al soltar la tarjeta",
+        "state": "active",
+        "sha": null
+      },
+      {
+        "n": 6,
+        "title": "Tests del reordenamiento",
+        "state": "pending",
+        "sha": null
+      },
+      {
+        "n": 7,
+        "title": "Captura del tablero",
+        "state": "pending",
+        "sha": null
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": null,
+  "screenshots": [
+    {
+      "file": "screenshots/01-tablero.png",
+      "caption": "El tablero con una tarjeta en movimiento"
+    }
+  ],
+  "owner": {
+    "session_id": "7cbc95be-bdd5-4dd3-8e41-d048b2a85375",
+    "cwd": "/Users/demo/code/acme/web",
+    "heartbeat_at": "@now-5"
+  },
+  "last_seq": 627,
+  "created_at": "@now-8046",
+  "updated_at": "@now-20",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": {
+    "text": "Implementando ítem 5: animación al soltar la tarjeta",
+    "since": "@now-420"
+  },
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "local",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 204.0
+      },
+      "work": 136.0,
+      "agents": 170.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 480.0,
+      "agents": 600.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 110.0,
+      "you": 935.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 240.0,
+      "agents": 300.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 2400.0,
+        "verifier": 480.0
+      },
+      "work": 1920.0,
+      "agents": 2400.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4360,
+      "cache_read": 302000,
+      "cache_write": 12400,
+      "usd": 0.3889,
+      "roles": {
+        "main": {
+          "usd": 0.3889,
+          "tokens": 318760
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 7800,
+      "cache_read": 560000,
+      "cache_write": 21000,
+      "usd": 0.8667,
+      "roles": {
+        "main": {
+          "usd": 0.8667,
+          "tokens": 588800
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 7400,
+      "cache_read": 530000,
+      "cache_write": 20000,
+      "usd": 0.8111,
+      "roles": {
+        "main": {
+          "usd": 0.8111,
+          "tokens": 557400
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 5400,
+      "cache_read": 380000,
+      "cache_write": 15000,
+      "usd": 0.5333,
+      "roles": {
+        "main": {
+          "usd": 0.5333,
+          "tokens": 400400
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 22200,
+      "cache_read": 1640000,
+      "cache_write": 57000,
+      "usd": 2.8667,
+      "roles": {
+        "main": {
+          "usd": 2.8667,
+          "tokens": 1719200
+        }
+      }
+    }
+  }
+}

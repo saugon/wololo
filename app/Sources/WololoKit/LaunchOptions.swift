@@ -1,0 +1,65 @@
+import Foundation
+
+/// What the app shows at launch, from `WOLOLO_DESK_*`. Used to draw one view to a PNG and quit, so the UI can be
+/// checked without screen recording.
+public struct LaunchOptions: Equatable, Sendable {
+    public enum DetailTab: String, CaseIterable, Sendable {
+        case timeline
+        case documents
+        case screenshots
+        case cost
+    }
+
+    public enum Target: Equatable, Sendable {
+        case window
+        case widget
+        case settings
+        case run(id: String, tab: DetailTab?)
+    }
+
+    public var open: Target?
+    public var search: String?
+    public var project: String?
+    public var columns: BoardMode?
+    public var snapshotURL: URL?
+
+    public init(open: Target? = nil, search: String? = nil, project: String? = nil, columns: BoardMode? = nil, snapshotURL: URL? = nil) {
+        self.open = open
+        self.search = search
+        self.project = project
+        self.columns = columns
+        self.snapshotURL = snapshotURL
+    }
+
+    public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+        open = Self.value(environment["WOLOLO_DESK_OPEN"]).flatMap(Self.target)
+        search = Self.value(environment["WOLOLO_DESK_SEARCH"])
+        project = Self.value(environment["WOLOLO_DESK_PROJECT"])
+        switch Self.value(environment["WOLOLO_DESK_COLUMNS"]) {
+        case "status": columns = .byStatus
+        case "stage": columns = .byStage
+        default: columns = nil
+        }
+        snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map { path in
+            URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        }
+    }
+
+    private static func value(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
+    }
+
+    /// `window`, `widget`, `settings` or `run:<id>[:<tab>]`; an unknown tab opens the run on its default tab.
+    private static func target(_ raw: String) -> Target? {
+        switch raw {
+        case "window": return .window
+        case "widget": return .widget
+        case "settings": return .settings
+        default:
+            let parts = raw.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 2, parts[0] == "run", !parts[1].isEmpty else { return nil }
+            return .run(id: parts[1], tab: parts.count == 3 ? DetailTab(rawValue: parts[2]) : nil)
+        }
+    }
+}
