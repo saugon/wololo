@@ -2164,11 +2164,6 @@ export const register: Register = (on, options) => {
     return next(input)
   }).catch(($, e, next) => next(e))
 
-  on('prompt.attachment', async ($, e, next) => {
-    await quietly(() => noteNotifications($, e.text))
-    return next(e)
-  }).catch(($, e, next) => next(e))
-
   on('session.compact', async ($, e, next) => {
     if (!run || run.outcome || e.agentId !== undefined || !paths) return next(e)
     const keep = `Keep in the summary that wololo run ${run.id} is active (stage ${run.stage?.id ?? 'none'}, run files in ${runDir(paths, run.id)}), and that after compaction the next step is to call ${TOOL_PREFIX}get with scope "run".`
