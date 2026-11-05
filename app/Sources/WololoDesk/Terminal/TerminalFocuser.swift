@@ -4,11 +4,9 @@ import WololoKit
 /// Brings to the front the terminal a session runs in, looked for by its directory, as Megadesk's `focusByCwd`: every
 /// running iTerm2 and Ghostty lists its sessions, `matchPane` picks one (the exact directory first, in either
 /// terminal), and that one is selected. Only terminals already running are asked, through AppleScript, which needs
-/// the Automation permission for each.
-///
-/// TODO(item 10): the bundled app's Info.plist needs `NSAppleEventsUsageDescription`, and, if it is ever signed with
-/// the hardened runtime, the `com.apple.security.automation.apple-events` entitlement; without them macOS denies these
-/// scripts without asking.
+/// the Automation permission for each: macOS asks for it with `NSAppleEventsUsageDescription` (`Resources/Info.plist`),
+/// and denies the scripts without asking when that key, or under the hardened runtime the
+/// `com.apple.security.automation.apple-events` entitlement, is missing.
 enum TerminalFocuser {
     enum FocusResult: Equatable, Sendable {
         case found

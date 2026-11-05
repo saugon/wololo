@@ -143,12 +143,42 @@ Every run is a directory any app can read. Several terminals and projects write 
 - **Live updates**: watch the directory (FSEvents, inotify). Snapshots are renamed into place, so a reader never sees half a file.
 - **Compatibility**: within `schema_version` 1, fields are only added.
 
+## Desktop app
+
+**Wololo Desk** (`app/`) shows the runs of every terminal and project in one place:
+
+- **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
+- **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first.
+- **Window**: a sidebar by project and a board of cards by status or by stage, with search.
+- **Detail**: a run's stages, what it is doing or waiting on, items, agents, PR and CI, timeline, documents, screenshots and cost. **Ir a la terminal** (also on each widget row) brings the iTerm2 or Ghostty tab of its session to the front, or opens one in its directory and copies `/wololo resume <run>`.
+
+It only reads the store. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.
+
+```sh
+app/scripts/build-app.sh             # app/dist/Wololo Desk.app, signed ad hoc
+app/scripts/build-app.sh --install   # and copies it to ~/Applications
+```
+
+`--install` replaces an existing `~/Applications/Wololo Desk.app` only if it is a Wololo Desk build. The first **Ir a la terminal** asks for the Automation permission for each terminal; if it was denied, allow it in System Settings → Privacy & Security → Automation. Requires macOS 14 and Swift 5.9 or later.
+
+To develop:
+
+```sh
+cd app && swift build && swift test           # WololoKit has the tests
+scripts/sample-data.sh /tmp/wololo-sample     # a data directory with sample runs
+WOLOLO_DATA_DIR=/tmp/wololo-sample .build/debug/WololoDesk
+```
+
+To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings` or `run:<id>[:timeline|documents|screenshots|cost]`) and quits; `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status` or `stage`) set the board's filters. The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
+
 ## Develop
 
 ```sh
 tsc -p .                 # type-check (types in .claude-plugin/types)
 claude plugin test .     # unit tests
 claude plugin validate .
+cd app && swift build && swift test   # Wololo Desk (see Desktop app)
+app/scripts/build-app.sh              # Wololo Desk.app in app/dist
 ```
 
 ## Adapters
