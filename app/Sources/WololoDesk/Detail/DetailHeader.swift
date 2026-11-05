@@ -9,6 +9,7 @@ struct DetailHeader: View {
     let now: TimeInterval
     let runDir: URL
     let back: () -> Void
+    let goToTerminal: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -46,17 +47,15 @@ struct DetailHeader: View {
                 Label("Ir a la terminal", systemImage: "terminal")
             }
             .buttonStyle(DetailButtonStyle(isPrimary: true))
-            .help("Traer al frente la terminal de la sesión")
+            .help(TerminalPlan(run, now: now).triesFocus
+                ? "Traer al frente la terminal de la sesión"
+                : "Abrir una terminal en la carpeta del run")
             Button(action: openFolder) {
                 Label("Abrir carpeta del run", systemImage: "folder")
             }
             .buttonStyle(DetailButtonStyle())
             .help(runDir.path)
         }
-    }
-
-    private func goToTerminal() {
-        // item 8: the terminal focuser brings the session's terminal to the front from here.
     }
 
     private func openFolder() {

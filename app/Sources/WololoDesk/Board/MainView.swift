@@ -30,6 +30,7 @@ struct MainView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .toast(state.toast)
         }
         .background(Theme.ground)
         .overlay(alignment: .top) {

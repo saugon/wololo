@@ -30,6 +30,8 @@ final class AppState {
     var detailTab: LaunchOptions.DetailTab = .timeline
     /// While the sidebar's search field has the focus, Escape is the field's and does not leave the detail.
     var isSearchFocused = false
+    /// The message on screen for a moment, set through `showToast`.
+    var toast: Toast?
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let persists: Bool
