@@ -950,7 +950,8 @@ async function snapshot($: Engine, dir: string, worktree: string | null): Promis
 async function recordEvent($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run || !paths) return fail('No active run in this session. Start one with /wololo, or resume one with /wololo resume <run>.')
   const type = String(input.type ?? '')
-  const data = isObject(input.data) ? input.data : {}
+  // The tool's input arrives frozen; copy it so the snapshot and tree hashes can be added.
+  const data: Record<string, unknown> = isObject(input.data) ? { ...input.data } : {}
   const worktree = run.project.worktree
   if (worktree && type === 'item.verified' && data.result !== 'fail') data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
   if (worktree && type === 'item.committed' && typeof data.sha === 'string') data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])

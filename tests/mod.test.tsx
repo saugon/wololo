@@ -4,7 +4,7 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }> }
+type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string> }
 
 function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string } = {}): Host {
   const opens: Array<{ id: string; focus?: boolean }> = []
@@ -16,6 +16,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   const dead = new Set<string>()
   const shells: string[] = []
   const answers: Array<{ match: RegExp; stdout: string; exit: number }> = []
+  // What a git command answers, by its arguments, beside the ones every test gets.
+  const git = new Map<string, string>()
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('session.id', () => ({ value: 's1' }))
@@ -96,6 +98,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     }
     if (cmd === 'git') {
       const line = args.join(' ')
+      const known = git.get(line)
+      if (known !== undefined) return done(known)
       if (line === 'rev-parse --show-toplevel') return done(REPO)
       if (line.startsWith('rev-parse --path-format=absolute --git-common-dir')) return done(`${REPO}/.git`)
       if (line === 'remote get-url origin') return done('git@github.com:acme/shop.git')
@@ -110,7 +114,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     on('clock.now', () => ({ value: (now += 1_000) }))
   }
   on('tool.check', (_, e) => ({ decision: e.tool === 'AskUserQuestion' ? ('allow' as const) : ('ask' as const) }))
-  return { opens, files, gh, tools, ps, dead, killed, shells, answers }
+  return { opens, files, gh, tools, ps, dead, killed, shells, answers, git }
 }
 
 function parse(result: unknown): Record<string, unknown> {
@@ -535,6 +539,50 @@ test('/wololo pause asks the run to pause, and resume clears it', async ($, on) 
   const after = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
   expect((after.run as { paused: unknown; pause_requested_at: unknown }).paused).toBe(null)
   expect((after.run as { pause_requested_at: unknown }).pause_requested_at).toBe(null)
+})
+
+// The tool's input arrives frozen, so these tests freeze the data the way the engine hands it over.
+const eventLines = (host: Host, runId: string) =>
+  (host.files.get(`${DATA}/runs/${runId}/events.jsonl`) ?? '')
+    .trim()
+    .split('\n')
+    .map(line => JSON.parse(line) as { type: string; data: Record<string, unknown> })
+
+test('an approved gate is recorded with its snapshot when its data arrives frozen', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', (_, e) => (e.tool === 'AskUserQuestion' ? { result: { questions: [], answers: { '¿Aprobás la spec?': 'Aprobar' } } } : { result: {} }))
+  host.git.set('rev-parse HEAD^{tree}', '7ree')
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const runId = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result).run_id)
+  for (const stage of ['context', 'definition', 'gate_a']) parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)).result)
+  await $.tool.call({ tool: 'AskUserQuestion', questions: [{ question: '¿Aprobás la spec?', header: 'Aprobar spec', options: [], multiSelect: false }] } as never)
+  const data = Object.freeze({ gate: 'gate_a', outcome: 'approved', by: 'user' })
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'gate.resolved', data } as never)).result)
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  const resolved = eventLines(host, runId).find(line => line.type === 'gate.resolved')
+  expect(resolved?.data.snapshot).toEqual({ spec: null, plan: null, tree: '7ree' })
+})
+
+test('a verified and a committed item keep their trees when their data arrives frozen', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  for (const line of ['read-tree HEAD', 'add -A']) host.git.set(line, '')
+  host.git.set('write-tree', '7ree')
+  host.git.set('rev-parse c0mm1t^{tree}', '7ree')
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  const runId = String(started.run_id)
+  expect(started.worktree).toBe(`/repo/.claude/worktrees/wololo-${runId}`)
+  const event = async (type: string, data: Record<string, unknown>) => parse((await $.tool.call({ tool: 'mcp__wololo__event', type, data } as never)).result)
+  await event('plan.ready', { items: ['Back: API'] })
+  await event('item.started', { n: 1, title: 'Back: API' })
+  await event('item.verified', Object.freeze({ n: 1, result: 'pass' }))
+  await event('item.reviewed', { n: 1, findings: 0, verdict: 'ok' })
+  await event('item.committed', Object.freeze({ n: 1, sha: 'c0mm1t', title: 'Back: API' }))
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  const logged = eventLines(host, runId)
+  expect(logged.find(line => line.type === 'item.verified')?.data.worktree_tree).toBe('7ree')
+  expect(logged.find(line => line.type === 'item.committed')?.data.commit_tree).toBe('7ree')
 })
 
 test('every model request and every second are counted in the stage they ran in', async ($, on) => {
