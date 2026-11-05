@@ -400,35 +400,38 @@ async function flushMeasures($: Engine) {
   for (const entry of usage) await emit($, 'usage', { ...entry, usd: Math.round(entry.usd * 1e6) / 1e6 })
 }
 
-async function flush($: Engine) {
-  if (!run || !paths) return
+// True when every event pending at the start is in events.jsonl.
+async function flush($: Engine): Promise<boolean> {
+  if (!run || !paths) return false
   // What an instance that no longer owns the session holds came from a run another one now writes.
   if (!(await isOwner($))) {
     pending = []
-    return
+    return false
   }
   const dir = runDir(paths, run.id)
+  let isAppended = true
   if (pending.length > 0) {
     const batch = pending
     pending = []
     await rotateIfLarge($, dir)
     if (!(await isOwner($))) {
       pending = []
-      return
+      return false
     }
-    const ok = await appendLines(
+    isAppended = await appendLines(
       $,
       `${dir}/events.jsonl`,
       batch.map(ev => JSON.stringify(ev)),
     )
-    if (!ok) pending = [...batch, ...pending]
+    if (!isAppended) pending = [...batch, ...pending]
     else await writeHistory($, dir)
   }
   if (isDirty) {
-    if (!(await isOwner($))) return
+    if (!(await isOwner($))) return isAppended
     isDirty = false
     await writeJson($, `${dir}/run.json`, run)
   }
+  return isAppended
 }
 
 async function writeHistory($: Engine, dir: string) {
@@ -630,6 +633,13 @@ function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unk
 async function pauseRun($: Engine): Promise<{ text: string }> {
   const es = (run?.lang ?? config.languages.chat) === 'es'
   if (!run || run.outcome) return { text: es ? 'wololo: no hay un run activo en esta sesión.' : 'wololo: no active run in this session.' }
+  if (!(await isOwner($))) {
+    return {
+      text: es
+        ? `wololo: otra instancia de wololo es la dueña de este run en esta sesión. Retomalo acá con /wololo resume ${run.id}, o recargá la sesión.`
+        : `wololo: another wololo instance owns this run in this session. Take it back here with /wololo resume ${run.id}, or reload the session.`,
+    }
+  }
   if (run.paused) return { text: es ? 'wololo: el run ya está pausado. /wololo resume lo retoma.' : 'wololo: the run is already paused. /wololo resume picks it up.' }
   if (!run.pause_requested_at) await emit($, 'pause.requested', { by: 'person' })
   if (run.status === 'paused') {
@@ -796,6 +806,18 @@ function fail(message: string): string {
   return `ERROR: ${message}`
 }
 
+type Held = { run: Run | undefined; historyCache: Entry[] | undefined; recent: RunEvent[]; pending: RunEvent[]; live: Live; config: Config }
+
+// Puts back what a start or a resume replaced when its first event was dropped.
+function restore(held: Held) {
+  run = held.run
+  historyCache = held.historyCache
+  recent = held.recent
+  pending = held.pending
+  live = held.live
+  config = held.config
+}
+
 function notOwner(id?: string): string {
   return fail(`Another wololo instance owns this run in this session. Take it back here with /wololo resume ${id ?? '<run>'}, or reload the session.`)
 }
@@ -840,6 +862,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const flags = parseFlags(Array.isArray(input.flags) ? input.flags.map(String) : [])
   if (flags.errors.length > 0) return fail(`${flags.errors.join('; ')}. Launch flags: ${LAUNCH_FLAGS.join(' ')}`)
   const loaded = await loadConfig($, info.key)
+  const configBefore = config
   config = withOverrides(loaded.config, flags.overrides)
   const ts = await nowSeconds($)
   const slot = await freeSlot($, ts)
@@ -859,7 +882,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   const review = input.review === 'pr' || input.review === 'local' ? input.review : (flags.review ?? config.review.approval)
 
   await costDelta($)
-  const before = { run, historyCache, recent, pending }
+  const before = { run, historyCache, recent, pending, live, config: configBefore }
   run = emptyRun(id, ts)
   historyCache = undefined
   recent = []
@@ -880,10 +903,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   })
   if (!isStarted) {
     // Left in place, the run that was never recorded would hold the session against a resume.
-    run = before.run
-    historyCache = before.historyCache
-    recent = before.recent
-    pending = before.pending
+    restore(before)
     return notOwner()
   }
   run.last_user_at = ts
@@ -1000,7 +1020,8 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   if (!(await emit($, type as EventType, data))) return notOwner(run.id)
   let cleanup: { stopped: string[]; trimmed: string[] } | null = null
   if (type === 'run.finished') {
-    await flush($)
+    // Once its line is written the run is finished, whoever owns the session after; dropped, the owner still has it running.
+    if (!(await flush($)) && !(await isOwner($))) return notOwner(run.id)
     cleanup = await cleanUp($, runDir(paths, run.id))
   }
   const ts = await nowSeconds($)
@@ -1056,27 +1077,47 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
 async function resumeRun($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!paths) return fail('wololo is not ready yet.')
   const id = String(input.run_id ?? run?.id ?? '')
-  if (run && !run.outcome && run.id !== id)
+  // In an instance that no longer owns the session, its run is not what the session runs: another one may be resumed in its place.
+  if (run && !run.outcome && run.id !== id && (await isOwner($)))
     return fail(`Run ${run.id} is active in this session; finish or cancel it before resuming another.`)
+  // Only reads until the run can be taken: a resume that fails leaves the session's owner as it was.
+  const found = await reviveRun($, id)
+  if (!found) return fail(`No run ${id} in ${paths.runs}.`)
+  const ts = await nowSeconds($)
+  const status = effectiveStatus(found, ts)
+  if (found.outcome || isTerminal(status)) return fail(`Run ${id} already finished (${found.outcome ?? status}).`)
+  const isStale = ts - found.owner.heartbeat_at > ORPHAN_AFTER_SECONDS
+  if (found.owner.session_id !== sessionId && !isStale) {
+    return fail(`Run ${id} is owned by a live session (heartbeat ${Math.round(ts - found.owner.heartbeat_at)}s ago). Resume it there.`)
+  }
+  await update($, ownerAtom, () => INSTANCE)
+  startTicking($)
+  // Rebuilt again now that this instance owns the session: the one that owned it may have written, even finished the run, meanwhile.
   const target = await reviveRun($, id)
   if (!target) return fail(`No run ${id} in ${paths.runs}.`)
-  const ts = await nowSeconds($)
-  const status = effectiveStatus(target, ts)
-  if (isTerminal(status)) return fail(`Run ${id} already finished (${status}).`)
-  const isStale = ts - target.owner.heartbeat_at > ORPHAN_AFTER_SECONDS
-  if (target.owner.session_id !== sessionId && !isStale) {
-    return fail(`Run ${id} is owned by a live session (heartbeat ${Math.round(ts - target.owner.heartbeat_at)}s ago). Resume it there.`)
+  if (target.outcome) {
+    // This instance owns the session now: it holds the run as it ended, so its tick and flush cannot write it back as running.
+    run = target
+    historyCache = undefined
+    recent = (await readEvents($, runDir(paths, id))).slice(-RECENT)
+    pending = []
+    await refresh($)
+    return fail(`Run ${id} already finished (${target.outcome}).`)
   }
   const dir = runDir(paths, id)
   const events = await readEvents($, dir)
   await costDelta($)
+  const before = { run, historyCache, recent, pending, live, config }
   run = target
   historyCache = undefined
   recent = events.slice(-RECENT)
   pending = []
   config = await runConfig($, target.project.key)
   live = { isTurnRunning: true, question: null, permission: null }
-  if (!(await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() }))) return notOwner(id)
+  if (!(await emit($, 'owner.changed', { session_id: sessionId, cwd: await $.session.cwd() }))) {
+    restore(before)
+    return notOwner(id)
+  }
   if (run.paused || run.pause_requested_at) await emit($, 'resumed', {})
   await flush($)
   await writePointer($)
@@ -1526,6 +1567,10 @@ async function testsToRun($: Engine, input: Record<string, unknown>): Promise<st
   })
 }
 
+// What an instance that no longer owns the session may still answer: the tools that only read, and resume, which takes the run back. Any
+// other tool, one added later too, is refused there.
+const STALE_TOOLS: ReadonlySet<string> = new Set(['get', 'panel', 'resume'])
+
 async function handleOwnTool($: Engine, name: string, input: Record<string, unknown>): Promise<string> {
   switch (name) {
     case 'start':
@@ -1737,7 +1782,9 @@ export const register: Register = (on, options) => {
   })
 
   on('session.end', async ($, e, next) => {
-    await quietly(() => flush($))
+    await quietly(async () => {
+      await flush($)
+    })
     return next(e)
   })
 
@@ -1803,6 +1850,11 @@ export const register: Register = (on, options) => {
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
     if (tool.startsWith(TOOL_PREFIX)) {
+      if (!STALE_TOOLS.has(tool.slice(TOOL_PREFIX.length)) && !(await isOwner($))) {
+        // The load of the mod that owns the session answers if it sits beneath this one; with none there, the call is refused here.
+        const inner = await next(e).catch(() => undefined)
+        return inner?.result !== undefined && !inner.isError ? inner : { result: notOwner(run?.id) }
+      }
       const input = e as unknown as Record<string, unknown>
       const text = await handleOwnTool($, tool.slice(TOOL_PREFIX.length), input).catch(error => fail(String(error)))
       const notice = pauseNotice()

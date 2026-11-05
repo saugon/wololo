@@ -4,10 +4,11 @@ const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
 
-// before runs ahead of a git command (its arguments) or a clock read, to act in the middle of a call; a reason it returns refuses the call. A
-// hook that throws is skipped, so a refusal is the way to fail one.
-type Before = (kind: 'git' | 'clock.now', what: string) => string | undefined | Promise<string | undefined>
-type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; before: Before }
+// before runs ahead of a git command (its arguments), a clock read, a file write, stat or append (its path), to act in the middle of a call;
+// a reason it returns refuses the call. A hook that throws is skipped, so a refusal is the way to fail one.
+type Before = (kind: 'git' | 'clock.now' | 'fs.write' | 'fs.stat' | 'append', what: string) => string | undefined | Promise<string | undefined>
+// commands holds every process the plugin ran, its argv joined.
+type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; commands: string[]; before: Before }
 
 function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string } = {}): Host {
   const opens: Array<{ id: string; focus?: boolean }> = []
@@ -21,7 +22,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   const answers: Array<{ match: RegExp; stdout: string; exit: number }> = []
   // What a git command answers, by its arguments, beside the ones every test gets.
   const git = new Map<string, string>()
-  const host: Host = { opens, files, gh, tools, ps, dead, killed, shells, answers, git, before: () => undefined }
+  const host: Host = { opens, files, gh, tools, ps, dead, killed, shells, answers, git, commands: [], before: () => undefined }
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('session.id', () => ({ value: 's1' }))
@@ -43,12 +44,16 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: text }
   })
-  on('fs.write', (_, e) => {
+  on('fs.write', async (_, e) => {
+    const refused = await host.before('fs.write', e.path)
+    if (refused) return { deny: refused }
     files.set(e.path, e.text)
     return { value: undefined }
   })
   on('fs.exists', (_, e) => ({ value: files.has(e.path) || [...files.keys()].some(k => k.startsWith(`${e.path}/`)) }))
-  on('fs.stat', (_, e) => {
+  on('fs.stat', async (_, e) => {
+    const refused = await host.before('fs.stat', e.path)
+    if (refused) return { deny: refused }
     const text = files.get(e.path)
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: { kind: 'file', size: text.length, mtimeMs: 0, isLink: false } }
@@ -64,6 +69,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     return { value: [...names].map(([name, kind]) => ({ name, kind, size: 0, mtimeMs: 0, isLink: false })) }
   })
   on('process.run', async (_, e) => {
+    host.commands.push(e.argv.join(' '))
     const [cmd, ...args] = e.argv
     const done = (stdout = '', exitCode = 0) => ({
       value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -78,6 +84,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     }
     if (cmd === '/bin/sh') {
       const path = args[3] ?? ''
+      const refused = await host.before('append', path)
+      if (refused) return { deny: refused }
       files.set(path, (files.get(path) ?? '') + (e.init?.stdin ?? ''))
       return done()
     }
@@ -700,22 +708,35 @@ test('a permission wait left by an earlier load of the mod is cleared when the s
 })
 
 // Another instance of the mod owns the session until this one claims the atom. The test's $ has no state noun, so its hooks answer for it;
-// set hands the atom to another instance again, release gives it back to this one.
-function otherOwner(on: Parameters<TestBody>[1], id = 'other'): { set: (id: string) => void; release: () => void } {
+// set hands the atom to another instance again, release gives it back to this one, holder says which other instance holds it, null while
+// this one does, and onClaim runs each time this one claims it.
+type Owner = { set: (id: string) => void; release: () => void; holder: () => string | null; onClaim: () => void }
+function otherOwner(on: Parameters<TestBody>[1], id = 'other'): Owner {
   let other: string | null = id
-  on('state.get', (_, e, next) => (e.key === 'owner' && other !== null ? { value: { value: other, version: 1_000 } } : next(e)))
-  on('state.set', (_, e, next) => {
-    if (e.key === 'owner') other = null
-    return next(e)
-  })
-  return {
-    set: (next: string) => {
+  const owner: Owner = {
+    set: next => {
       other = next
     },
     release: () => {
       other = null
     },
+    holder: () => other,
+    onClaim: () => undefined,
   }
+  on('state.get', (_, e, next) => (e.key === 'owner' && other !== null ? { value: { value: other, version: 1_000 } } : next(e)))
+  on('state.set', (_, e, next) => {
+    if (e.key === 'owner') {
+      other = null
+      owner.onClaim()
+    }
+    return next(e)
+  })
+  return owner
+}
+
+// The session's other tools answer; wololo's own reach no other load of the mod beneath this one, so a call it passes on fails.
+function answerOtherTools(on: Parameters<TestBody>[1]) {
+  on('tool.call', (_, e, next) => (String(e.tool).startsWith('mcp__wololo__') ? next(e) : { result: {} }))
 }
 
 // A run of this session left on disk by an earlier load of the mod, its events up to seq 3.
@@ -892,6 +913,225 @@ test('a start dropped because the instance lost the session leaves no run behind
   parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: 'repo-txt-back01' } as never)).result)
   const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { id: string }
   expect(got.id).toBe('repo-txt-back01')
+})
+
+const NOT_OWNER = 'Another wololo instance owns this run in this session'
+
+test('an instance that lost the session refuses every tool that changes something, and still answers get', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  answerOtherTools(on)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const runId = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result).run_id)
+  owner.set('newer')
+  const files = [...host.files]
+  const ran = [...host.commands]
+  const sent = [...host.gh]
+  const calls: Array<[string, Record<string, unknown>]> = [
+    ['event', { type: 'doing', data: { text: 'more' } }],
+    ['start', { source: { kind: 'text', ref: 'y' }, title: 'Y' }],
+    ['run_adapter', { point: 'pr' }],
+    ['publish', { kind: 'issue_comment', body: 'hello' }],
+    ['external_turn', { prompt: 'review this' }],
+    ['review_config', { proposal: {} }],
+    ['tests', { files: ['src/a.test.ts'] }],
+  ]
+  for (const [tool, input] of calls) {
+    const answer = String((await $.tool.call({ tool: `mcp__wololo__${tool}`, ...input } as never)).result)
+    expect(answer).toContain(NOT_OWNER)
+    expect(answer).toContain(`/wololo resume ${runId}`)
+  }
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { id: string }
+  expect(got.id).toBe(runId)
+  expect([...host.files]).toEqual(files)
+  expect(host.commands).toEqual(ran)
+  expect(host.gh).toEqual(sent)
+})
+
+test('/wololo-pause in an instance that lost the session says so and writes nothing', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  owner.set('newer')
+  const files = [...host.files]
+  const asked = await $.command.run({ command: 'wololo-pause' } as never)
+  expect(asked.text).toContain('otra instancia de wololo es la dueña de este run')
+  expect([...host.files]).toEqual(files)
+})
+
+test('a resume that cannot take the run leaves the session to the instance that owns it', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  const dir = `${DATA}/runs/repo-txt-done01`
+  seedRun(host, 'repo-txt-done01', { waiting: false })
+  host.files.set(`${dir}/events.jsonl`, `${host.files.get(`${dir}/events.jsonl`)}${JSON.stringify({ v: 1, seq: 4, ts: 1_800_000_004, run: 'repo-txt-done01', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } })}\n`)
+  host.files.delete(`${DATA}/sessions/s1.json`)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  owner.set('newer')
+  const resume = async (id: string) => String((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: id } as never)).result)
+  expect(await resume('repo-txt-nope00')).toContain('No run repo-txt-nope00')
+  expect(owner.holder()).toBe('newer')
+  expect(await resume('repo-txt-done01')).toContain('already finished')
+  expect(owner.holder()).toBe('newer')
+})
+
+test('resume takes the run back from the instance that owned it, and its events are recorded again', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  answerOtherTools(on)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const runId = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result).run_id)
+  owner.set('newer')
+  const event = async () => String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'back here' } } as never)).result)
+  expect(await event()).toContain(NOT_OWNER)
+  parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: runId } as never)).result)
+  expect(owner.holder()).toBe(null)
+  parse(await event())
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  expect(eventLines(host, runId).filter(line => line.type === 'doing').map(line => line.data.text)).toEqual(['back here'])
+})
+
+test('a run the other instance finishes while it is resumed is not taken up, and stays finished', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  const owner = otherOwner(on)
+  const submitted: string[] = []
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }))
+  on('prompt.submit', (_, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X', mode: 'full' } as never)).result)
+  const runId = String(started.run_id)
+  const dir = String(started.run_dir)
+  owner.set('newer')
+  // The other instance records run.finished after the resume has checked the run, just as this one takes the session.
+  owner.onClaim = () => {
+    owner.onClaim = () => undefined
+    const finished = { v: 1, seq: 99, ts: 1_800_000_099, run: runId, type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } }
+    host.files.set(`${dir}/events.jsonl`, `${host.files.get(`${dir}/events.jsonl`) ?? ''}${JSON.stringify(finished)}\n`)
+  }
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: runId } as never)).result)).toContain('already finished')
+  await $.turn.complete({ turnId: 't1', reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+  await clock.advance(15_000)
+  expect((JSON.parse(host.files.get(`${dir}/run.json`) ?? '{}') as { outcome?: unknown }).outcome).toBe('cancelled')
+  expect(submitted).toEqual([])
+})
+
+test('an instance whose run another one took can resume a different run in its place', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  owner.set('newer')
+  seedRun(host, 'repo-txt-other1', { waiting: false })
+  parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: 'repo-txt-other1' } as never)).result)
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { id: string }
+  expect(got.id).toBe('repo-txt-other1')
+})
+
+test('a tool an instance that lost the session refuses goes to the load of the mod beneath it', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', (_, e) => ({ result: String(e.tool).startsWith('mcp__wololo__') ? 'answered by the owner' : {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  owner.set('newer')
+  const files = [...host.files]
+  expect((await $.tool.call({ tool: 'mcp__wololo__event', type: 'doing', data: { text: 'more' } } as never)).result).toBe('answered by the owner')
+  expect([...host.files]).toEqual(files)
+})
+
+test('a resume dropped because the instance lost the session again leaves no run behind', async ($, on) => {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  seedRun(host, 'repo-txt-back02', { waiting: false })
+  host.files.delete(`${DATA}/sessions/s1.json`)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  // The resume reads the clock once to check the run, and owner.changed reads it again once the resume took the session.
+  let reads = 0
+  host.before = kind => {
+    if (kind === 'clock.now' && ++reads === 2) owner.set('newer')
+    return undefined
+  }
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: 'repo-txt-back02' } as never)).result)).toContain(NOT_OWNER)
+  host.before = () => undefined
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)).toContain('No active run in this session')
+})
+
+test('a heartbeat that loses the session halfway writes neither owner.json nor the pointer', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const dir = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result).run_dir)
+  const pointer = host.files.get(`${DATA}/sessions/s1.json`)
+  expect(pointer).toBeDefined()
+  host.before = (kind, what) => {
+    if (kind === 'git' && what.startsWith('log -1')) owner.set('newer')
+    return undefined
+  }
+  await clock.advance(15_000)
+  expect(host.files.has(`${dir}/owner.json`)).toBe(false)
+  expect(host.files.get(`${DATA}/sessions/s1.json`)).toBe(pointer)
+})
+
+test('a heartbeat that loses the session after writing owner.json leaves the pointer alone', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const dir = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result).run_dir)
+  const pointer = host.files.get(`${DATA}/sessions/s1.json`)
+  host.before = (kind, what) => {
+    if (kind === 'fs.write' && what.startsWith(`${dir}/owner.json.`)) owner.set('newer')
+    return undefined
+  }
+  await clock.advance(15_000)
+  expect(host.files.has(`${dir}/owner.json`)).toBe(true)
+  expect(host.files.get(`${DATA}/sessions/s1.json`)).toBe(pointer)
+})
+
+// A run with a server up, about to be finished; at says where its instance loses the session while run.finished is written.
+async function finishLosing($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], at: 'fs.stat' | 'append') {
+  const host = fakeHost(on)
+  const owner = otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ commands: { start: [{ name: 'backend', cmd: 'INST={slot} make backend.run', port: '4000' }] } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const dir = String(started.run_dir)
+  host.files.set(`${dir}/servers.json`, JSON.stringify([{ name: 'backend', pid: 4242, port: 4000 }]))
+  host.ps.set('4242', '4240 make backend.run')
+  host.before = (kind, what) => {
+    if (kind === at && what === `${dir}/events.jsonl`) owner.set('newer')
+    return undefined
+  }
+  const finished = String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'cancelled', summary: 's' } } as never)).result)
+  return { host, finished, types: eventLines(host, String(started.run_id)).map(line => line.type) }
+}
+
+test('a finished run whose line is dropped because its instance lost the session is refused, and stops nothing', async ($, on) => {
+  const { host, finished, types } = await finishLosing($, on, 'fs.stat')
+  expect(finished).toContain(NOT_OWNER)
+  expect(host.killed).toEqual([])
+  expect(types).not.toContain('run.finished')
+})
+
+test('a finished run whose line was written before its instance lost the session stops its servers', async ($, on) => {
+  const { host, finished, types } = await finishLosing($, on, 'append')
+  expect((parse(finished).cleanup as { stopped: string[] }).stopped).toEqual(['4242 (make backend.run)'])
+  expect(host.killed).toEqual(['-TERM -4240'])
+  expect(types).toContain('run.finished')
 })
 
 test("the run's tools wait behind ToolSearch until a run is active", async ($, on) => {
