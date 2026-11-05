@@ -111,6 +111,13 @@ public func menuBarCount(_ runs: [Run], now: TimeInterval) -> Int {
     runs.filter { isWaitingOnPerson($0, now: now) }.count
 }
 
+/// The header of the menu bar menu, "3 te esperan · 9 activos". Active runs include the ones waiting on the person.
+public func menuBarHeader(_ runs: [Run], now: TimeInterval) -> String {
+    let waiting = menuBarCount(runs, now: now)
+    let active = runs.filter { isActive($0, now: now) }.count
+    return "\(waiting) \(waiting == 1 ? "te espera" : "te esperan") · \(active) \(active == 1 ? "activo" : "activos")"
+}
+
 public struct ProjectSummary: Equatable, Sendable {
     public let key: String
     public let display: String

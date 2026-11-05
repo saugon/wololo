@@ -25,15 +25,16 @@ public struct DataDirectory: Equatable, Sendable {
         home.appendingPathComponent(".claude/wololo", isDirectory: true)
     }
 
+    /// `setting` is the app's saved value under `settingKey`; the app reads it, so the store never touches defaults.
     public static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment,
-        defaults: UserDefaults = .standard,
+        setting: String?,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> DataDirectory {
         if let path = usable(environment[environmentKey]) {
             return DataDirectory(url: expand(path, home: home), origin: .environment)
         }
-        if let path = usable(defaults.string(forKey: settingKey)) {
+        if let path = usable(setting) {
             return DataDirectory(url: expand(path, home: home), origin: .setting)
         }
         return DataDirectory(url: standard(home: home), origin: .standard)
