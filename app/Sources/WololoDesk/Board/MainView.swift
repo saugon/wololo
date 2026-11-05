@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import WololoKit
 
-/// The window: the project sidebar and, beside it, the board of the runs that match the search and the chosen
-/// project, or the empty state when the store has no runs at all.
+/// The window: the project sidebar and, beside it, the chosen run's detail, the board of the runs that match the
+/// search and the chosen project, or the empty state when the store has no runs at all.
 struct MainView: View {
     /// The transparent title bar the content runs under: nothing clickable goes in this strip.
     static let titleBarHeight: CGFloat = 28
@@ -16,7 +16,10 @@ struct MainView: View {
         HStack(spacing: 0) {
             Sidebar(state: state, openSettings: openSettings)
             Group {
-                if model.runs.isEmpty {
+                if let id = state.selectedRunID {
+                    RunDetailView(state: state, runID: id)
+                        .id(id)
+                } else if model.runs.isEmpty {
                     EmptyStateView(
                         directory: model.dataDirectory,
                         isMissing: model.state == .missingRunsDirectory,

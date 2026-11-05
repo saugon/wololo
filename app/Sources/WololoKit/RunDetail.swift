@@ -134,3 +134,56 @@ public func screenshotURL(_ shot: Run.Screenshot, runDir: URL) -> URL? {
     let relative = file.contains("/") ? file : "screenshots/\(file)"
     return runDir.appendingPathComponent(relative).standardizedFileURL
 }
+
+extension DataDirectory {
+    /// `<data>/runs/<id>`, where a run keeps its snapshot, events and documents.
+    public func runURL(id: String) -> URL {
+        runsURL.appendingPathComponent(id, isDirectory: true)
+    }
+}
+
+public enum ItemMark: Equatable, Sendable {
+    case done
+    case active
+    case failing
+    case pending
+}
+
+/// How a plan item is drawn. Once the run ended nothing is in progress: an item left active or failing reads as
+/// pending.
+public func itemMark(_ item: Run.ItemEntry, in run: Run, now: TimeInterval) -> ItemMark {
+    if item.state == "done" { return .done }
+    if effectiveStatus(run, now: now).isTerminal { return .pending }
+    if item.state == "failing" { return .failing }
+    if item.state == "active" || run.items.current?.n == item.n { return .active }
+    return .pending
+}
+
+/// The PR row under the plan items: "PR #12 · draft" with its CI in words.
+public struct PRLine: Equatable, Sendable {
+    public let text: String
+    public let url: URL?
+    public let ci: String?
+    public let ciRole: CIRole?
+}
+
+public func prLine(_ run: Run) -> PRLine? {
+    guard let pr = run.pr else { return nil }
+    let es = run.lang == .es
+    let number = pr.number ?? Int((pr.url as NSString).lastPathComponent)
+    let state = pr.state == "draft" ? "draft" : (es ? "listo para revisar" : "ready for review")
+    let role = ciRole(run)
+    let ci: String?
+    switch role {
+    case .pending: ci = es ? "CI pendiente" : "CI pending"
+    case .passing: ci = es ? "CI en verde" : "CI passing"
+    case .failing: ci = es ? "CI en rojo" : "CI failing"
+    case nil: ci = nil
+    }
+    return PRLine(
+        text: (number.map { "PR #\($0)" } ?? "PR") + " · " + state,
+        url: pr.url.isEmpty ? nil : URL(string: pr.url),
+        ci: ci,
+        ciRole: role
+    )
+}

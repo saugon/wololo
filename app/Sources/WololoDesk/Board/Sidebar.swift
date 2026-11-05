@@ -3,7 +3,7 @@ import WololoKit
 
 /// Search, the runs waiting on the person, the projects (the chosen one with its active runs nested under it) and
 /// Ajustes at the foot. Section headers are muted with an icon; the chosen project is white and semibold on a
-/// rounded background.
+/// rounded background. Choosing a project goes back to the board, as in the mockup.
 struct Sidebar: View {
     static let width: CGFloat = 240
 
@@ -11,6 +11,7 @@ struct Sidebar: View {
     let openSettings: () -> Void
 
     @State private var isWaitingOpen = true
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         let model = state.model
@@ -65,6 +66,8 @@ struct Sidebar: View {
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.text)
                 .accessibilityLabel("Buscar runs")
+                .focused($isSearchFocused)
+                .onChange(of: isSearchFocused) { state.isSearchFocused = isSearchFocused }
             if !state.search.isEmpty {
                 Button {
                     state.search = ""
@@ -80,7 +83,15 @@ struct Sidebar: View {
         .padding(.horizontal, 12)
         .frame(height: 40)
         .background(Theme.field, in: RoundedRectangle(cornerRadius: 10))
-        .help("Busca por título, proyecto, rama o ref")
+        .background {
+            // The window opens with nothing focused; ⌘F goes to the search.
+            Button("Buscar") { isSearchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .opacity(0)
+                .frame(width: 0, height: 0)
+                .accessibilityHidden(true)
+        }
+        .help("Busca por título, proyecto, rama o ref (⌘F)")
     }
 
     // MARK: Te esperan
@@ -126,6 +137,7 @@ struct Sidebar: View {
                 isSelected: state.project == nil
             ) {
                 state.project = nil
+                state.selectedRunID = nil
             }
 
             ForEach(projects, id: \.key) { project in
@@ -141,6 +153,7 @@ struct Sidebar: View {
                         isSelected: isSelected
                     ) {
                         state.project = isSelected ? nil : project.key
+                        state.selectedRunID = nil
                     }
                     if isSelected {
                         let members = widgetRuns(runs.filter { $0.project.key == project.key }, now: now)

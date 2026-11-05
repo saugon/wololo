@@ -53,4 +53,14 @@ final class LabelsTests: XCTestCase {
         XCTAssertEqual(duration(-5), "0s")
         XCTAssertEqual(duration(.nan), "0s")
     }
+
+    func testRiskLabels() {
+        XCTAssertEqual(riskLabel("low", lang: .es), "bajo")
+        XCTAssertEqual(riskLabel("high", lang: .es), "alto")
+        XCTAssertEqual(riskLabel("unknown", lang: .es), "sin evaluar")
+        XCTAssertEqual(riskLabel("low", lang: .en), "low")
+        XCTAssertEqual(riskLabel("high", lang: .en), "high")
+        XCTAssertEqual(riskLabel("unknown", lang: .en), "unassessed")
+        XCTAssertEqual(riskLabel("medium", lang: .es), "medium", "a value the app does not know passes through")
+    }
 }

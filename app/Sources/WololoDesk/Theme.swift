@@ -31,6 +31,9 @@ enum Theme {
     static let hoverBorder = Color(hex: 0x3A404C)
     static let heading = Color(hex: 0xD5D8DD)
     static let agent = Color(hex: 0xB9A5FF)
+    /// The ○ of a plan item still ahead, and the lines between timeline rows.
+    static let pendingMark = Color(hex: 0x585F6B)
+    static let rowDivider = Color(hex: 0x1D2027)
 
     static let groundColor = NSColor(hex: 0x0B0C0F)
 

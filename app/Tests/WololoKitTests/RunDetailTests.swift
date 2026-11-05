@@ -149,4 +149,52 @@ final class RunDetailTests: XCTestCase {
         XCTAssertEqual(try url("/tmp/a.png"), "/tmp/a.png")
         XCTAssertNil(try url(""))
     }
+
+    func testRunDirectoryIsUnderRuns() {
+        let directory = DataDirectory(url: URL(fileURLWithPath: "/data/wololo"))
+        XCTAssertEqual(directory.runURL(id: "web-4312-a4f9c2").path, "/data/wololo/runs/web-4312-a4f9c2")
+    }
+
+    func testItemMarks() throws {
+        let items: [String: Any] = [
+            "done": 1, "total": 5,
+            "current": ["n": 4, "title": "d"],
+            "list": [
+                ["n": 1, "title": "a", "state": "done", "sha": "8ada11ce9ec9"],
+                ["n": 2, "title": "b", "state": "active"],
+                ["n": 3, "title": "c", "state": "failing"],
+                ["n": 4, "title": "d", "state": "pending"],
+                ["n": 5, "title": "e", "state": "something_new"],
+            ],
+        ]
+        let running = try makeRun("r", ["items": items])
+        XCTAssertEqual(running.items.list.map { itemMark($0, in: running, now: now) },
+                       [.done, .active, .failing, .active, .pending], "the current item is active even before its event")
+
+        let cancelled = try makeRun("r", status: "cancelled", ["items": items])
+        XCTAssertEqual(cancelled.items.list.map { itemMark($0, in: cancelled, now: now) },
+                       [.done, .pending, .pending, .pending, .pending])
+    }
+
+    func testPRLine() throws {
+        func line(_ pr: [String: Any], lang: String = "es") throws -> PRLine? {
+            prLine(try makeRun("r", ["lang": lang, "pr": pr]))
+        }
+        let draft = try line(["url": "https://github.com/acme/web/pull/88", "number": 88, "state": "draft", "ci": "pending"])
+        XCTAssertEqual(draft?.text, "PR #88 · draft")
+        XCTAssertEqual(draft?.url?.absoluteString, "https://github.com/acme/web/pull/88")
+        XCTAssertEqual(draft?.ci, "CI pendiente")
+        XCTAssertEqual(draft?.ciRole, .pending)
+
+        let ready = try line(["url": "https://github.com/acme/web/pull/91", "state": "ready", "ci": "failing"], lang: "en")
+        XCTAssertEqual(ready?.text, "PR #91 · ready for review", "the number comes from the URL when missing")
+        XCTAssertEqual(ready?.ci, "CI failing")
+
+        let bare = try line(["url": "", "state": "open"])
+        XCTAssertEqual(bare?.text, "PR · listo para revisar")
+        XCTAssertNil(bare?.url)
+        XCTAssertNil(bare?.ci)
+
+        XCTAssertNil(prLine(try makeRun("r")))
+    }
 }

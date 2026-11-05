@@ -87,3 +87,16 @@ public func duration(_ seconds: TimeInterval) -> String {
     if m < 60 { return "\(m)m" }
     return "\(m / 60)h" + String(format: "%02d", m % 60)
 }
+
+/// The run's risk in words: `low`, `high` and `unknown` as the mod sets them; anything else as it came.
+public func riskLabel(_ risk: String, lang: Lang) -> String {
+    switch (risk, lang) {
+    case ("low", .es): return "bajo"
+    case ("high", .es): return "alto"
+    case ("unknown", .es): return "sin evaluar"
+    case ("low", .en): return "low"
+    case ("high", .en): return "high"
+    case ("unknown", .en): return "unassessed"
+    default: return risk
+    }
+}

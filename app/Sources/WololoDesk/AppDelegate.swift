@@ -21,7 +21,15 @@ final class AppState {
     /// A project key, or nil for every project.
     var project: String?
     var boardMode: BoardMode = .byStatus
-    var selectedRunID: String?
+    /// The run whose detail the window shows instead of the board. Another run opens on its timeline.
+    var selectedRunID: String? {
+        didSet {
+            if selectedRunID != oldValue { detailTab = .timeline }
+        }
+    }
+    var detailTab: LaunchOptions.DetailTab = .timeline
+    /// While the sidebar's search field has the focus, Escape is the field's and does not leave the detail.
+    var isSearchFocused = false
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let persists: Bool
@@ -53,6 +61,12 @@ final class AppState {
         if let search = options.search { self.search = search }
         if let project = options.project { self.project = project }
         if let columns = options.columns { boardMode = columns }
+    }
+
+    /// Shows the run's detail, on `tab` or else on its timeline.
+    func showRun(_ id: String, tab: LaunchOptions.DetailTab? = nil) {
+        selectedRunID = id
+        if let tab { detailTab = tab }
     }
 
     /// Saves the setting (empty goes back to the default) and reads the runs from where it now points.
@@ -131,7 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func open(_ target: LaunchOptions.Target) {
         switch target {
-        case .window, .run:
+        case .window:
+            openWindow()
+        case .run(let id, let tab):
+            state.showRun(id, tab: tab)
             openWindow()
         case .settings:
             openSettings()
@@ -190,8 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch options.open ?? .window {
         case .window, .run: return mainWindow?.window
         case .settings: return settingsWindow?.window
-        case .widget: return nil // item 9 adds the widget panel; item 7 routes .run to its detail and tab
-
+        case .widget: return nil // item 9 adds the widget panel
         }
     }
 }

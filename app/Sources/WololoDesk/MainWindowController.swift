@@ -30,6 +30,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         let hosting = NSHostingController(rootView: MainView(state: state, openSettings: openSettings))
         hosting.sizingOptions = []
         window.contentViewController = hosting
+        // Without this the window gives the focus to its first key view, the sidebar's search field, which would then
+        // keep Escape from leaving a run's detail. ⌘F focuses the search.
+        window.initialFirstResponder = hosting.view
         window.setContentSize(NSSize(width: 1440, height: 900))
         window.center()
         if remembersFrame { window.setFrameAutosaveName("MainWindow") }
