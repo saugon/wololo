@@ -60,6 +60,14 @@ final class SampleDataTests: XCTestCase {
         }
         let png = try Data(contentsOf: fixture.runsURL.appendingPathComponent(busy.id).appendingPathComponent(busy.screenshots[0].file))
         XCTAssertEqual(Array(png.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
+
+        let runDir = fixture.runsURL.appendingPathComponent(busy.id)
+        let events = EventReader.readAll(runDir: runDir)
+        XCTAssertEqual(events.first?.type, "run.started")
+        XCTAssertEqual(events.map(\.seq), Array(1...627), "rotated then current, the broken last line skipped")
+        XCTAssertEqual(runDocuments(runDir: runDir).map(\.name), ["source.md", "context.md", "spec.md", "plan.md", "log.md"])
+        let shot = try XCTUnwrap(screenshotURL(busy.screenshots[0], runDir: runDir))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: shot.path))
     }
 
     func testRefusesToReplaceRunsItDidNotWrite() throws {
