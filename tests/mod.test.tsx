@@ -546,7 +546,7 @@ const eventLines = (host: Host, runId: string) =>
   (host.files.get(`${DATA}/runs/${runId}/events.jsonl`) ?? '')
     .trim()
     .split('\n')
-    .map(line => JSON.parse(line) as { type: string; data: Record<string, unknown> })
+    .map(line => JSON.parse(line) as { seq: number; type: string; data: Record<string, unknown> })
 
 test('an approved gate is recorded with its snapshot when its data arrives frozen', async ($, on) => {
   const host = fakeHost(on)
@@ -688,6 +688,71 @@ test('a permission wait left by an earlier load of the mod is cleared when the s
   const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as { status: string; waiting: unknown }
   expect(got.waiting).toBe(null)
   expect(got.status).not.toBe('waiting_permission')
+})
+
+// Another instance of the mod owns the session until this one claims the atom. The test's $ has no state noun, so its hooks answer for it;
+// set hands the atom to another instance again.
+function otherOwner(on: Parameters<TestBody>[1], id = 'other'): { set: (id: string) => void } {
+  let other: string | null = id
+  on('state.get', (_, e, next) => (e.key === 'owner' && other !== null ? { value: { value: other, version: 1_000 } } : next(e)))
+  on('state.set', (_, e, next) => {
+    if (e.key === 'owner') other = null
+    return next(e)
+  })
+  return {
+    set: (next: string) => {
+      other = next
+    },
+  }
+}
+
+// A run of this session left on disk by an earlier load of the mod, its events up to seq 3.
+function seedRun(host: Host, id: string, options: { waiting: boolean }) {
+  const dir = `${DATA}/runs/${id}`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: id, type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', { title: 'Salones', source: { kind: 'text', ref: 'x', url: null }, mode: 'checkpoints', session_id: 's1', cwd: REPO }),
+      ev(2, 'stage.entered', { stage: 'evidence' }),
+      options.waiting ? ev(3, 'permission.asked', { tool: 'Bash', what: 'for i in $(seq 240)' }) : ev(3, 'doing', { text: 'the evidence' }),
+    ].join('\n') + '\n',
+  )
+  const owner = { session_id: 's1', cwd: REPO, heartbeat_at: 1_799_999_000 }
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: options.waiting ? 'waiting_permission' : 'running', outcome: null, owner }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: id, heartbeat_at: owner.heartbeat_at }))
+}
+
+test('a session takes the run from the instance that owned it, and the permission it left waiting goes after the last seq on disk', async ($, on) => {
+  const host = fakeHost(on)
+  otherOwner(on)
+  on('tool.call', () => ({ result: {} }))
+  seedRun(host, 'repo-txt-perm02', { waiting: true })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
+  expect(eventLines(host, 'repo-txt-perm02').filter(line => line.type === 'permission.resolved').map(line => line.seq)).toEqual([4])
+})
+
+test('a run whose load fails after this session took it still beats and is written by the tick', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  // A hook that throws is skipped, so the card's first write is refused instead: the plugin's set rejects, once.
+  let isRefused = false
+  on('state.set', (_, e, next) => {
+    if (e.key !== 'view' || isRefused) return next(e)
+    isRefused = true
+    return { deny: 'the card could not be drawn' }
+  })
+  const dir = `${DATA}/runs/repo-txt-load01`
+  seedRun(host, 'repo-txt-load01', { waiting: false })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  expect(isRefused).toBe(true)
+  expect(host.opens).toEqual([])
+  expect(host.files.has(`${dir}/owner.json`)).toBe(false)
+  await clock.advance(15_000)
+  expect((JSON.parse(host.files.get(`${dir}/owner.json`) ?? '{}') as { heartbeat_at?: number }).heartbeat_at).toBe(1_800_000_015)
+  expect((JSON.parse(host.files.get(`${dir}/run.json`) ?? '{}') as { owner?: { heartbeat_at: number } }).owner?.heartbeat_at).toBe(1_800_000_015)
 })
 
 test("the run's tools wait behind ToolSearch until a run is active", async ($, on) => {

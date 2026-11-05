@@ -1609,6 +1609,31 @@ function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' |
   return 'other'
 }
 
+function startTicking($: Engine) {
+  timer?.cancel()
+  timer = $.clock.every(TICK_MS, () => {
+    if (isWriting) return
+    isWriting = true
+    void quietly(async () => {
+      if (!(await isOwner($))) {
+        timer?.cancel()
+        return
+      }
+      ticks += 1
+      if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
+      if (ticks % HEARTBEAT_TICKS === 0) await checkJob($)
+      if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
+      if (config.keep_awake && run && !run.outcome && ticks >= awakeRenewAt) {
+        await keepAwake($)
+        awakeRenewAt = ticks + AWAKE_RENEW_TICKS
+      }
+      await flush($)
+    }).finally(() => {
+      isWriting = false
+    })
+  })
+}
+
 function dataRoot(options: Readonly<Record<string, unknown>>, home: string): string {
   const configured = typeof options.data_dir === 'string' ? options.data_dir.trim() : ''
   if (!configured) return `${home}/.claude/wololo`
@@ -1618,6 +1643,12 @@ function dataRoot(options: Readonly<Record<string, unknown>>, home: string): str
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // Owning the session comes before reading or writing anything, and the tick right after: whatever fails later, the run still beats
+    // and flushes.
+    await quietly(async () => {
+      await update($, ownerAtom, () => INSTANCE)
+      startTicking($)
+    })
     await quietly(async () => {
       root = $.plugin.root
       const home = (await $.env.get('HOME')) ?? ''
@@ -1654,7 +1685,10 @@ export const register: Register = (on, options) => {
       const info = await projectInfo($, cwd)
       config = (await loadConfig($, info?.key ?? '__none__')).config
       await registerRoles($, config.models)
-
+    })
+    // After the tools are registered, so the ones a run brings forward are not registered back behind ToolSearch.
+    await quietly(async () => {
+      if (!paths) return
       const pointer = await readJson<{ run_id?: string }>($, `${paths.sessions}/${sessionId}.json`)
       if (pointer?.run_id) {
         const loaded = await reviveRun($, pointer.run_id)
@@ -1669,30 +1703,6 @@ export const register: Register = (on, options) => {
           if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}` }).catch(() => undefined)
         }
       }
-
-      await update($, ownerAtom, () => INSTANCE)
-      timer?.cancel()
-      timer = $.clock.every(TICK_MS, () => {
-        if (isWriting) return
-        isWriting = true
-        void quietly(async () => {
-          if (!(await isOwner($))) {
-            timer?.cancel()
-            return
-          }
-          ticks += 1
-          if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
-          if (ticks % HEARTBEAT_TICKS === 0) await checkJob($)
-          if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
-          if (config.keep_awake && run && !run.outcome && ticks >= awakeRenewAt) {
-            await keepAwake($)
-            awakeRenewAt = ticks + AWAKE_RENEW_TICKS
-          }
-          await flush($)
-        }).finally(() => {
-          isWriting = false
-        })
-      })
     })
     return started
   })
