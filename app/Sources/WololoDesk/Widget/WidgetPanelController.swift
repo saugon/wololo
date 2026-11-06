@@ -59,7 +59,7 @@ final class WidgetPanelController: NSWindowController, NSWindowDelegate {
             // Resizing the panel waits for the layout pass that measured the height to end.
             heightChanged: { [weak self] height in DispatchQueue.main.async { self?.fit(height: height) } }
         )
-        let hosting = FirstMouseHostingView(rootView: view)
+        let hosting = FirstMouseHostingView(rootView: ThemedRoot(themes: state.themes, paintsWindow: false) { view })
         hosting.sizingOptions = []
         panel.contentView = hosting
 

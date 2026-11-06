@@ -15,16 +15,19 @@ struct ProgressBarView: View {
     let progress: RunProgress
     var height: CGFloat = 4
     var caption: Caption = .full
-    var captionFont: Font = .system(size: 12)
+    /// The theme's body font at 12 pt when nil.
+    var captionFont: Font?
     var spacing: CGFloat = 12
+
+    @Environment(\.theme) private var theme
 
     var body: some View {
         HStack(spacing: spacing) {
             bar
             if let text = captionText {
                 Text(text)
-                    .font(captionFont)
-                    .foregroundStyle(Theme.secondary)
+                    .font(captionFont ?? theme.font(.body, size: 12))
+                    .foregroundStyle(theme.secondary)
                     .lineLimit(1)
                     .fixedSize()
                     .accessibilityHidden(true)
@@ -35,13 +38,13 @@ struct ProgressBarView: View {
     private var bar: some View {
         GeometryReader { proxy in
             Rectangle()
-                .fill(Theme.color(progress.role))
+                .fill(theme.bar(progress.role))
                 .frame(width: proxy.size.width * min(max(progress.fraction, 0), 1))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minWidth: 80)
         .frame(height: min(max(height, 3), 6))
-        .background(Theme.track)
+        .background(theme.track)
         .accessibilityRepresentation {
             ProgressView(value: min(max(progress.fraction, 0), 1))
                 .accessibilityLabel(progress.accessibilityLabel)

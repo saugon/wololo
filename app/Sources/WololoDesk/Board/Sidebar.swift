@@ -12,6 +12,7 @@ struct Sidebar: View {
 
     @State private var isWaitingOpen = true
     @FocusState private var isSearchFocused: Bool
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let model = state.model
@@ -34,21 +35,21 @@ struct Sidebar: View {
         .padding(.bottom, 16)
         .frame(width: Self.width)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Theme.sidebar)
+        .background(theme.sidebar)
         .overlay(alignment: .trailing) {
-            Theme.divider.frame(width: 1)
+            theme.divider.frame(width: 1)
         }
     }
 
     private var brand: some View {
         HStack(spacing: 10) {
             BoardGlyph()
-                .stroke(Theme.blue, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                 .frame(width: 22, height: 22)
             Text("Wololo Desk")
-                .font(.system(size: 17, weight: .bold))
-                .tracking(-0.17)
-                .foregroundStyle(.white)
+                .font(theme.font(.display, size: 17, weight: .bold))
+                .tracking(-0.17 + theme.tracking(.display, size: 17))
+                .foregroundStyle(theme.title)
         }
         .padding(.horizontal, 8)
         .accessibilityElement(children: .combine)
@@ -59,12 +60,12 @@ struct Sidebar: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.faint)
+                .foregroundStyle(theme.faint)
                 .accessibilityHidden(true)
-            TextField("Buscar", text: $state.search, prompt: Text("Buscar").foregroundStyle(Theme.faint))
+            TextField("Buscar", text: $state.search, prompt: Text("Buscar").foregroundStyle(theme.faint))
                 .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.text)
+                .font(theme.font(.body, size: 14))
+                .foregroundStyle(theme.text)
                 .accessibilityLabel("Buscar runs")
                 .focused($isSearchFocused)
                 .onChange(of: isSearchFocused) { state.isSearchFocused = isSearchFocused }
@@ -73,7 +74,7 @@ struct Sidebar: View {
                     state.search = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Theme.faint)
+                        .foregroundStyle(theme.faint)
                 }
                 .buttonStyle(.plain)
                 .help("Borrar la búsqueda")
@@ -82,7 +83,7 @@ struct Sidebar: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 40)
-        .background(Theme.field, in: RoundedRectangle(cornerRadius: 10))
+        .background(theme.field, in: RoundedRectangle(cornerRadius: theme.r(10)))
         .background {
             // The window opens with nothing focused; ⌘F goes to the search.
             Button("Buscar") { isSearchFocused = true }
@@ -109,8 +110,8 @@ struct Sidebar: View {
             if isWaitingOpen {
                 if runs.isEmpty {
                     Text("Nadie te espera")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.faint)
+                        .font(theme.font(.body, size: 13))
+                        .foregroundStyle(theme.faint)
                         .padding(.leading, 34)
                         .padding(.vertical, 6)
                 }
@@ -187,16 +188,16 @@ struct Sidebar: View {
                         .font(.system(size: 15))
                         .frame(width: 17, height: 17)
                     Text("Ajustes")
-                        .font(.system(size: 14))
+                        .font(theme.font(.body, size: 14))
                 }
-                .foregroundStyle(Theme.secondary)
+                .foregroundStyle(theme.secondary)
                 .frame(minHeight: 36)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             Text("lee \(path)")
-                .font(.system(size: 11).monospaced())
-                .foregroundStyle(Theme.faint)
+                .font(theme.font(.mono, size: 11))
+                .foregroundStyle(theme.faint)
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .help(directory.runsURL.path)
@@ -212,13 +213,15 @@ private struct SectionHeader: View {
     var count: Int?
     var chevron: String?
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(.system(size: 13, weight: .medium))
                 .frame(width: 16, height: 16)
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(theme.font(.body, size: 14, weight: .medium))
             if let chevron {
                 Image(systemName: chevron)
                     .font(.system(size: 10, weight: .semibold))
@@ -227,10 +230,10 @@ private struct SectionHeader: View {
             Spacer(minLength: 0)
             if let count {
                 Text("\(count)")
-                    .font(.system(size: 12.5).monospacedDigit())
+                    .font(theme.font(.body, size: 12.5).monospacedDigit())
             }
         }
-        .foregroundStyle(Theme.faint)
+        .foregroundStyle(theme.faint)
         .padding(.horizontal, 8)
         .padding(.bottom, 4)
         .contentShape(Rectangle())
@@ -249,35 +252,36 @@ private struct ProjectRow: View {
     let pick: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         Button(action: pick) {
             HStack(spacing: 12) {
                 Image(systemName: symbol)
                     .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(isSelected ? Theme.text : Theme.faint)
+                    .foregroundStyle(isSelected ? theme.text : theme.faint)
                     .frame(width: 17, height: 17)
                 Text(title)
-                    .font(.system(size: 14.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? Color.white : Theme.secondary)
+                    .font(theme.font(.body, size: 14.5, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? theme.title : theme.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let waitingTitle {
                     Circle()
-                        .fill(Theme.amber)
+                        .fill(theme.dot(.waitingUser))
                         .frame(width: 7, height: 7)
                         .help(waitingTitle)
                         .accessibilityLabel(waitingTitle)
                 }
                 Text("\(count)")
-                    .font(.system(size: 12.5).monospacedDigit())
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 12.5).monospacedDigit())
+                    .foregroundStyle(theme.faint)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
-            .background(background, in: RoundedRectangle(cornerRadius: 10))
-            .contentShape(RoundedRectangle(cornerRadius: 10))
+            .background(background, in: RoundedRectangle(cornerRadius: theme.r(10)))
+            .contentShape(RoundedRectangle(cornerRadius: theme.r(10)))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
@@ -286,8 +290,8 @@ private struct ProjectRow: View {
     }
 
     private var background: Color {
-        if isSelected { return Theme.selection }
-        return isHovered ? Theme.hover : .clear
+        if isSelected { return theme.selection }
+        return isHovered ? theme.surfaceHover : .clear
     }
 }
 
@@ -299,17 +303,18 @@ private struct SidebarRunRow: View {
     let select: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
         Button(action: select) {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Theme.dot(status))
+                    .fill(theme.dot(status))
                     .frame(width: 8, height: 8)
                 Text(run.displayTitle)
-                    .font(.system(size: 14))
-                    .foregroundStyle(isSelected ? Theme.text : Theme.secondary)
+                    .font(theme.font(.body, size: 14))
+                    .foregroundStyle(isSelected ? theme.text : theme.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -317,8 +322,8 @@ private struct SidebarRunRow: View {
             .padding(.leading, 34)
             .padding(.trailing, 10)
             .padding(.vertical, 7)
-            .background(isSelected || isHovered ? Theme.hover : .clear, in: RoundedRectangle(cornerRadius: 8))
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .background(isSelected || isHovered ? theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: theme.r(8)))
+            .contentShape(RoundedRectangle(cornerRadius: theme.r(8)))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }

@@ -40,6 +40,8 @@ public struct ThemeLibrary: Sendable {
     /// Keys a user folder cannot take, so a saved choice always means the same theme.
     public static let reservedKeys: Set<String> = ["actual", "aoe"]
     public static let fileName = "theme.json"
+    /// The theme of a first launch, and the one used when the chosen theme cannot be.
+    public static let defaultKey = "actual"
 
     public let userDirectory: URL?
     public let entries: [ThemeEntry]
@@ -80,6 +82,13 @@ public struct ThemeLibrary: Sendable {
         if let error = entry.error { throw ThemeLibraryError.unusable(key: key, reason: error) }
         guard let spec = specs[key] else { throw ThemeLibraryError.notFound(key) }
         return ResolvedTheme(spec: spec, warnings: entry.warnings)
+    }
+
+    /// The theme to show: the one `WOLOLO_DESK_THEME` forces, else the saved choice, else Actual. One that is gone or
+    /// broken gives Actual.
+    public func startingKey(forced: String?, saved: String?) -> String {
+        let wanted = forced ?? saved ?? Self.defaultKey
+        return (try? resolve(wanted)) == nil ? Self.defaultKey : wanted
     }
 
     /// Copies the theme's folder, assets included, into `directory` as `<key>-copia` (or `-copia-2`, …) and names

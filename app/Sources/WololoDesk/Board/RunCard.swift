@@ -10,15 +10,17 @@ struct RunCard: View {
     let select: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
-        let style = Theme.style(status)
+        let style = theme.style(status)
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 Text(run.displayTitle)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.display, size: 15, weight: .semibold))
+                    .tracking(theme.tracking(.display, size: 15))
+                    .foregroundStyle(theme.text)
                     .lineSpacing(2)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -29,27 +31,27 @@ struct RunCard: View {
             .padding(.horizontal, 18)
             .padding(.vertical, 16)
 
-            Theme.cardDivider.frame(height: 1)
+            theme.cardDivider.frame(height: 1)
 
             HStack(spacing: 12) {
                 Text(activityLine(run, now: now))
-                    .font(.system(size: 13))
+                    .font(theme.font(.body, size: 13))
                     .foregroundStyle(style.activity)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Text(ago(run.updatedAt, now: now, lang: run.lang))
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 12.5))
+                    .foregroundStyle(theme.faint)
                     .fixedSize()
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 13)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovered ? Theme.hover : Theme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .background(isHovered ? theme.surfaceHover : theme.surface, in: RoundedRectangle(cornerRadius: theme.r(10)))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: theme.r(10))
                 .strokeBorder(border, lineWidth: isSelected ? 1.5 : 1)
         )
         .onHover { isHovered = $0 }
@@ -57,7 +59,7 @@ struct RunCard: View {
             label: run.displayTitle,
             value: accessibilityValue(status),
             isSelected: isSelected,
-            cornerRadius: 10,
+            cornerRadius: theme.r(10),
             action: select
         )
     }
@@ -78,8 +80,8 @@ struct RunCard: View {
     }
 
     private var border: Color {
-        if isSelected { return Theme.blue }
-        return isHovered ? Theme.hoverBorder : Theme.border
+        if isSelected { return theme.focus }
+        return isHovered ? theme.borderHover : theme.border
     }
 
     private var origin: some View {
@@ -88,11 +90,11 @@ struct RunCard: View {
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: 14, height: 14)
             Text("\(run.project.display) · \(sourceLabel(run))")
-                .font(.system(size: 12).monospaced())
+                .font(theme.font(.mono, size: 12))
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        .foregroundStyle(Theme.muted)
+        .foregroundStyle(theme.muted)
         .help(run.project.branch ?? run.project.display)
     }
 
@@ -107,13 +109,13 @@ struct RunCard: View {
     private var metaIcons: some View {
         HStack(spacing: 14) {
             if let items = itemsChip(run) {
-                MetaIcon(symbol: "checklist", chip: items, color: Theme.secondary)
+                MetaIcon(symbol: "checklist", chip: items, color: theme.secondary)
             }
             if let agents = agentsChip(run, now: now) {
-                MetaIcon(symbol: "cpu", chip: agents, color: Theme.agent)
+                MetaIcon(symbol: "cpu", chip: agents, color: theme.agent)
             }
             if let pr = prChip(run) {
-                MetaIcon(symbol: "arrow.triangle.pull", chip: pr, color: Theme.secondary, dot: Theme.color(ciRole(run)))
+                MetaIcon(symbol: "arrow.triangle.pull", chip: pr, color: theme.secondary, dot: theme.ci(ciRole(run)))
             }
         }
     }
@@ -124,16 +126,18 @@ struct StatusBadge: View {
     let status: RunStatus
     let lang: Lang
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
-        let style = Theme.style(status)
+        let style = theme.style(status)
         Text(status.label(lang))
-            .font(.system(size: 11.5, weight: .semibold))
-            .foregroundStyle(style.badgeForeground)
+            .font(theme.font(.body, size: 11.5, weight: .semibold))
+            .foregroundStyle(style.badgeText)
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
-            .background(style.badgeBackground, in: Capsule())
+            .background(style.badge, in: Capsule())
     }
 }
 
@@ -145,13 +149,15 @@ struct MetaIcon: View {
     let color: Color
     var dot: Color?
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: symbol)
                 .font(.system(size: 11.5, weight: .medium))
                 .frame(width: 14, height: 14)
             Text(chip.text)
-                .font(.system(size: 12).monospacedDigit())
+                .font(theme.font(.body, size: 12).monospacedDigit())
             if let dot {
                 Circle()
                     .fill(dot)
@@ -227,6 +233,7 @@ private struct Selectable: ViewModifier {
     let action: () -> Void
 
     @FocusState private var isFocused: Bool
+    @Environment(\.theme) private var theme
 
     func body(content: Content) -> some View {
         content
@@ -237,7 +244,7 @@ private struct Selectable: ViewModifier {
             .focusEffectDisabled()
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .strokeBorder(Theme.blue, lineWidth: 2)
+                    .strokeBorder(theme.focus, lineWidth: 2)
                     .opacity(isFocused ? 1 : 0)
             )
             .onKeyPress(keys: [.space, .return]) { _ in

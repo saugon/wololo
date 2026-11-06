@@ -25,9 +25,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate {
         window.collectionBehavior = [.fullScreenPrimary]
         window.tabbingMode = .disallowed
         window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = Theme.groundColor
+        window.backgroundColor = state.themes.theme.nsGround
 
-        let hosting = NSHostingController(rootView: MainView(state: state, openSettings: openSettings))
+        let hosting = NSHostingController(rootView: ThemedRoot(themes: state.themes) {
+            MainView(state: state, openSettings: openSettings)
+        })
         hosting.sizingOptions = []
         window.contentViewController = hosting
         // Without this the window gives the focus to its first key view, the sidebar's search field, which would then

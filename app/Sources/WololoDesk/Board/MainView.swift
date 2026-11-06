@@ -11,6 +11,8 @@ struct MainView: View {
     @Bindable var state: AppState
     let openSettings: () -> Void
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         let model = state.model
         HStack(spacing: 0) {
@@ -32,7 +34,7 @@ struct MainView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .toast(state.toast(from: .window))
         }
-        .background(Theme.ground)
+        .background(theme.ground)
         .overlay(alignment: .top) {
             WindowDragArea()
                 .frame(height: Self.titleBarHeight)
@@ -46,7 +48,7 @@ struct MainView: View {
         let board = Board(runs: visible, now: model.now, mode: state.boardMode)
         return VStack(spacing: 0) {
             header(visible, now: model.now, runs: model.runs)
-            Theme.divider.frame(height: 1)
+            theme.divider.frame(height: 1)
             BoardView(
                 board: board,
                 mode: state.boardMode,
@@ -64,14 +66,14 @@ struct MainView: View {
         return HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(title(runs))
-                    .font(.system(size: 20, weight: .bold))
-                    .tracking(-0.2)
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.display, size: 20, weight: .bold))
+                    .tracking(-0.2 + theme.tracking(.display, size: 20))
+                    .foregroundStyle(theme.text)
                     .lineLimit(1)
                     .accessibilityAddTraits(.isHeader)
                 Text(subtitle(active: active, waiting: waiting))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.muted)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.muted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(WindowDragArea())
@@ -98,14 +100,16 @@ struct MainView: View {
 private struct ModePicker: View {
     @Binding var mode: BoardMode
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 2) {
             segment("Por estado", .byStatus)
             segment("Por etapa", .byStage)
         }
         .padding(3)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(8)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Agrupar columnas")
     }
@@ -116,12 +120,12 @@ private struct ModePicker: View {
             mode = value
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isOn ? Color.white : Theme.muted)
+                .font(theme.font(.body, size: 13, weight: .medium))
+                .foregroundStyle(isOn ? theme.title : theme.muted)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 7)
-                .background(isOn ? Theme.track : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .background(isOn ? theme.track : .clear, in: RoundedRectangle(cornerRadius: theme.r(6)))
+                .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? .isSelected : [])

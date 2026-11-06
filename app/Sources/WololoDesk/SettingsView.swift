@@ -19,9 +19,9 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.tabbingMode = .disallowed
         window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = Theme.groundColor
+        window.backgroundColor = state.themes.theme.nsGround
 
-        let hosting = NSHostingController(rootView: SettingsView(state: state))
+        let hosting = NSHostingController(rootView: ThemedRoot(themes: state.themes) { SettingsView(state: state) })
         hosting.sizingOptions = [.preferredContentSize]
         window.contentViewController = hosting
         window.center()

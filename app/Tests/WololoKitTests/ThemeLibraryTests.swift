@@ -133,6 +133,28 @@ final class ThemeLibraryTests: XCTestCase {
         }
     }
 
+    // MARK: Starting theme
+
+    func testStartingKeyPrefersTheForcedThemeThenTheSavedOne() throws {
+        let fixture = try LibraryFixture()
+        try fixture.write(fixture.user.appendingPathComponent("mio"), ##"{"version": 1}"##)
+        let library = fixture.library()
+
+        XCTAssertEqual(library.startingKey(forced: nil, saved: nil), "actual")
+        XCTAssertEqual(library.startingKey(forced: nil, saved: "mio"), "mio")
+        XCTAssertEqual(library.startingKey(forced: "aoe", saved: "mio"), "aoe")
+    }
+
+    func testStartingKeyFallsBackToActualWhenTheThemeCannotBeUsed() throws {
+        let fixture = try LibraryFixture()
+        try fixture.write(fixture.user.appendingPathComponent("roto"), "{")
+        let library = fixture.library()
+
+        XCTAssertEqual(library.startingKey(forced: nil, saved: "borrado"), "actual", "a saved theme that is gone")
+        XCTAssertEqual(library.startingKey(forced: nil, saved: "roto"), "actual")
+        XCTAssertEqual(library.startingKey(forced: "nada", saved: "aoe"), "actual", "a forced theme does not fall back to the saved one")
+    }
+
     // MARK: Duplicate
 
     /// Scenario 9: duplicating AoE creates `aoe-copia` with its theme.json and assets, and it shows up in the list.

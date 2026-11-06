@@ -6,6 +6,8 @@ enum SettingsKey {
     static let dataDirectory = DataDirectory.settingKey
     static let showWidgetAtLaunch = "showWidgetAtLaunch"
     static let widgetVisible = "widgetVisible"
+    /// The chosen theme's key. `WOLOLO_DESK_THEME` overrides it without writing it.
+    static let theme = "theme"
 }
 
 /// What every view reads: the live run list, rebuilt when the data directory setting changes, and whether the widget
@@ -15,6 +17,8 @@ enum SettingsKey {
 final class AppState {
     private(set) var model: RunsModel
     private(set) var isWidgetVisible: Bool
+    /// The theme every window draws with.
+    let themes: ThemeStore
 
     /// The board's filters, shared so the widget and the menu can open the window on a run.
     var search = ""
@@ -37,10 +41,11 @@ final class AppState {
     @ObservationIgnored private let persists: Bool
 
     /// With `persists: false` (snapshots) nothing the app does is written to the settings.
-    init(defaults: UserDefaults = .standard, persists: Bool = true) {
+    init(options: LaunchOptions = LaunchOptions(environment: [:]), defaults: UserDefaults = .standard, persists: Bool = true) {
         defaults.register(defaults: [SettingsKey.showWidgetAtLaunch: true, SettingsKey.widgetVisible: true])
         self.defaults = defaults
         self.persists = persists
+        themes = ThemeStore(options: options, defaults: defaults, persists: persists)
         model = RunsModel(dataDirectory: DataDirectory.resolve(setting: defaults.string(forKey: SettingsKey.dataDirectory)))
         isWidgetVisible = false
     }
@@ -106,7 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         options = LaunchOptions()
-        state = AppState(persists: options.snapshotURL == nil)
+        state = AppState(options: options, persists: options.snapshotURL == nil)
         super.init()
     }
 
