@@ -60,32 +60,50 @@ struct MainView: View {
         }
     }
 
+    /// The title and the counts, then the counters and the column picker; when they do not fit beside the title,
+    /// they move to a line of their own.
     private func header(_ visible: [Run], now: TimeInterval, runs: [Run]) -> some View {
         let active = visible.filter { isActive($0, now: now) }.count
         let waiting = visible.filter { isWaitingOnPerson($0, now: now) }.count
-        return HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title(runs))
-                    .font(theme.font(.display, size: 20, weight: .bold))
-                    .tracking(-0.2 + theme.tracking(.display, size: 20))
-                    .foregroundStyle(theme.text)
-                    .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Text(subtitle(active: active, waiting: waiting))
-                    .font(theme.font(.body, size: 13))
-                    .foregroundStyle(theme.muted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(WindowDragArea())
+        let counters = boardCounters(visible, now: now)
+        let heading = VStack(alignment: .leading, spacing: 1) {
+            Text(title(runs))
+                .font(theme.font(.display, size: 16, weight: .bold))
+                .tracking(theme.tracking(.display, size: 16))
+                .foregroundStyle(theme.title)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Text(subtitle(active: active, waiting: waiting))
+                .font(theme.font(.body, size: 13))
+                .foregroundStyle(theme.muted)
+                .lineLimit(1)
+        }
+        let controls = HStack(spacing: 14) {
+            CountersBox(working: counters.working, waiting: counters.waiting)
             ModePicker(mode: $state.boardMode)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, Self.titleBarHeight + 2)
-        .padding(.bottom, 16)
+        .fixedSize()
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 14) {
+                heading
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(WindowDragArea())
+                controls
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                heading
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(WindowDragArea())
+                controls
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, Self.titleBarHeight)
+        .padding(.bottom, 10)
     }
 
     private func title(_ runs: [Run]) -> String {
-        guard let key = state.project else { return "Todos los runs" }
+        guard let key = state.project else { return theme.spec.texts.boardTitle }
         return runs.first { $0.project.key == key }?.project.display ?? key
     }
 
@@ -93,6 +111,43 @@ struct MainView: View {
         let search = state.search.trimmingCharacters(in: .whitespacesAndNewlines)
         let counts = "\(active) \(active == 1 ? "activo" : "activos") · \(waiting) \(waiting == 1 ? "te espera" : "te esperan")"
         return search.isEmpty ? counts : "\(counts) · buscando “\(search)”"
+    }
+}
+
+/// "4 trabajando | 3 te esperan": how many runs are working and how many wait on the person, in the theme's words.
+/// It only informs; nothing in it is clickable.
+private struct CountersBox: View {
+    let working: Int
+    let waiting: Int
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 0) {
+            stat(working, theme.spec.texts.counterWorking)
+            theme.border.frame(width: 1, height: 22)
+            stat(waiting, theme.spec.texts.counterWaiting)
+        }
+        .background(theme.field, in: RoundedRectangle(cornerRadius: theme.r(8)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Runs")
+    }
+
+    private func stat(_ count: Int, _ word: String) -> some View {
+        HStack(spacing: 7) {
+            Text("\(count)")
+                .font(theme.font(.body, size: 16, weight: .bold).monospacedDigit())
+                .foregroundStyle(theme.title)
+            Text(word)
+                .font(theme.font(.body, size: 13, weight: .medium))
+                .foregroundStyle(theme.secondary)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 10)
+        .frame(minHeight: 40)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(count) \(word)")
     }
 }
 
@@ -123,7 +178,7 @@ private struct ModePicker: View {
                 .font(theme.font(.body, size: 13, weight: .medium))
                 .foregroundStyle(isOn ? theme.title : theme.muted)
                 .padding(.horizontal, 14)
-                .padding(.vertical, 7)
+                .frame(minHeight: 34)
                 .background(isOn ? theme.track : .clear, in: RoundedRectangle(cornerRadius: theme.r(6)))
                 .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
         }

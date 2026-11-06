@@ -140,7 +140,7 @@ final class ThemeTests: XCTestCase {
           "archive": ""}}
         """).spec
         XCTAssertEqual(spec.columnText("working"), ThemeSpec.ColumnText(title: "Trabajando", subtitle: "Trabajando"))
-        XCTAssertEqual(spec.columnText("finished"), ThemeSpec.ColumnText(title: "Terminado"))
+        XCTAssertEqual(spec.columnText("finished"), ThemeSpec.ColumnText(title: "Terminado · 24 h"))
         XCTAssertEqual(spec.texts.archive, "Archivo")
     }
 

@@ -40,23 +40,32 @@ struct BoardView: View {
     }
 
     private func columnView(_ column: BoardColumn, index: Int, width: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        let text = columnText(of: column, index: index)
+        let group = group(of: column)
+        return VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Circle()
-                    .fill(theme.columnIcon(group(of: column)))
-                    .frame(width: 10, height: 10)
-                Text(label(of: column, index: index))
-                    .font(theme.font(.display, size: 14, weight: .medium))
-                    .tracking(theme.tracking(.display, size: 14))
-                    .foregroundStyle(theme.columnTitle(group(of: column)))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+                ThemeIconView(icon: theme.spec.shapes.columnIcons[group], color: theme.columnIcon(group), size: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(text.title)
+                        .font(theme.font(.display, size: 15, weight: .bold))
+                        .tracking(theme.tracking(.display, size: 15))
+                        .foregroundStyle(theme.columnTitle(group))
+                        .lineLimit(1)
+                    if let subtitle = text.subtitle {
+                        Text(subtitle)
+                            .font(theme.font(.body, size: 13))
+                            .foregroundStyle(theme.muted)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Text("\(column.count)")
-                    .font(theme.font(.body, size: 13).monospacedDigit())
-                    .foregroundStyle(theme.faint)
+                    .font(theme.font(.body, size: 20, weight: .bold).monospacedDigit())
+                    .foregroundStyle(theme.title)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .help(column.id == StatusGroup.finished.rawValue ? "Terminados en las últimas 24 h" : "")
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
@@ -65,7 +74,7 @@ struct BoardView: View {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 16) {
                     if column.runs.isEmpty {
-                        Text("Nada acá")
+                        Text(theme.spec.texts.empty)
                             .font(theme.font(.body, size: 13))
                             .foregroundStyle(theme.faint)
                             .frame(maxWidth: .infinity)
@@ -87,15 +96,18 @@ struct BoardView: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(label(of: column, index: index))
+        .accessibilityLabel([text.title, text.subtitle].compactMap { $0 }.joined(separator: ", "))
     }
 
-    private func label(of column: BoardColumn, index: Int) -> String {
+    /// A status column's title and subtitle come from the theme; a stage column is titled "2 · Definición".
+    private func columnText(of column: BoardColumn, index: Int) -> ThemeSpec.ColumnText {
         switch mode {
         case .byStatus:
-            return column.id == StatusGroup.finished.rawValue ? "\(column.label(.es)) · 24 h" : column.label(.es)
+            let text = theme.spec.columnText(column.id, fallback: column.label(.es))
+            let subtitle = text.subtitle.flatMap { $0.isEmpty ? nil : $0 }
+            return ThemeSpec.ColumnText(title: text.title, subtitle: subtitle)
         case .byStage:
-            return "\(index + 1) · \(column.label(.es))"
+            return ThemeSpec.ColumnText(title: "\(index + 1) · \(column.label(.es))")
         }
     }
 
@@ -107,37 +119,31 @@ struct BoardView: View {
 
     // MARK: Archive
 
+    /// "Archivo · N": the label opens and closes the list of older runs.
     private var archive: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let label = "\(theme.spec.texts.archive) · \(board.archiveCount)"
+        return VStack(alignment: .leading, spacing: 0) {
             Button {
                 isArchiveOpen.toggle()
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: isArchiveOpen ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .frame(width: 12)
-                    Text("ARCHIVO")
-                        .tracking(0.7)
-                    Text("\(board.archiveCount)")
-                        .foregroundStyle(theme.faint)
-                }
-                .font(theme.font(.mono, size: 12))
-                .foregroundStyle(theme.muted)
-                .frame(minHeight: 36)
-                .contentShape(Rectangle())
+                Text(label)
+                    .font(theme.font(.display, size: 13))
+                    .tracking(theme.tracking(.display, size: 13))
+                    .foregroundStyle(theme.secondary)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Terminados hace más de 24 h")
-            .accessibilityLabel("Archivo, \(board.archiveCount) terminados hace más de 24 h")
+            .accessibilityLabel("\(theme.spec.texts.archive), \(board.archiveCount) terminados hace más de 24 h")
             .accessibilityValue(isArchiveOpen ? "abierto" : "cerrado")
 
             if isArchiveOpen {
                 archiveList
+                    .padding(.bottom, 14)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 10)
-        .padding(.bottom, 18)
+        .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -208,5 +214,30 @@ private struct ArchiveRow: View {
             cornerRadius: 0,
             action: select
         )
+    }
+}
+
+/// A column's or a project's icon as the theme sets it, in a `size` square: a dot or an SF Symbol in `color`.
+struct ThemeIconView: View {
+    let icon: ThemeIcon
+    let color: Color
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            switch icon {
+            case .symbol(let name):
+                Image(systemName: name)
+                    .font(.system(size: size * 0.75, weight: .regular))
+                    .foregroundStyle(color)
+            case .dot, .builtin, .image:
+                // The app's own icons and a theme's images are drawn by the AoE work; until then they show the dot.
+                Circle()
+                    .fill(color)
+                    .frame(width: size / 2, height: size / 2)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }

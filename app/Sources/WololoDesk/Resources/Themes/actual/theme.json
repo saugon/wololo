@@ -70,7 +70,7 @@
       "waiting": {"title": "Te espera", "subtitle": ""},
       "working": {"title": "Trabajando", "subtitle": ""},
       "onHold": {"title": "En pausa / huérfano", "subtitle": ""},
-      "finished": {"title": "Terminado", "subtitle": ""}
+      "finished": {"title": "Terminado · 24 h", "subtitle": ""}
     },
     "waitingSection": "Te esperan",
     "projectsSection": "Proyectos",

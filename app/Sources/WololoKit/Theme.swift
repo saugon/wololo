@@ -710,7 +710,7 @@ extension ThemeSpec {
                     waiting: ColumnText(title: StatusGroup.waiting.label(.es)),
                     working: ColumnText(title: StatusGroup.working.label(.es)),
                     onHold: ColumnText(title: StatusGroup.onHold.label(.es)),
-                    finished: ColumnText(title: StatusGroup.finished.label(.es))
+                    finished: ColumnText(title: StatusGroup.finished.label(.es) + " · 24 h")
                 ),
                 waitingSection: "Te esperan",
                 projectsSection: "Proyectos",

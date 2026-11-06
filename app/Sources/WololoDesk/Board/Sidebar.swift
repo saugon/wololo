@@ -2,15 +2,14 @@ import SwiftUI
 import WololoKit
 
 /// Search, the runs waiting on the person, the projects (the chosen one with its active runs nested under it) and
-/// Ajustes at the foot. Section headers are muted with an icon; the chosen project is white and semibold on a
-/// rounded background. Choosing a project goes back to the board, as in the mockup.
+/// Ajustes at the foot, as the reference draws them: small headings in the display font, rows with a bullet or an
+/// icon, and the chosen row on a subtle background with a 1 pt border. Choosing a project goes back to the board.
 struct Sidebar: View {
     static let width: CGFloat = 240
 
     @Bindable var state: AppState
     let openSettings: () -> Void
 
-    @State private var isWaitingOpen = true
     @FocusState private var isSearchFocused: Bool
     @Environment(\.theme) private var theme
 
@@ -23,7 +22,7 @@ struct Sidebar: View {
             brand
             search
             ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 16) {
                     waitingSection(waiting, now: model.now)
                     projectsSection(model.runs, now: model.now)
                 }
@@ -98,26 +97,17 @@ struct Sidebar: View {
     // MARK: Te esperan
 
     private func waitingSection(_ runs: [Run], now: TimeInterval) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button {
-                isWaitingOpen.toggle()
-            } label: {
-                SectionHeader(symbol: "bell", title: "Te esperan", count: runs.count, chevron: isWaitingOpen ? "chevron.down" : "chevron.right")
+        VStack(alignment: .leading, spacing: 2) {
+            SectionHeading(title: "\(theme.spec.texts.waitingSection) · \(runs.count)")
+            if runs.isEmpty {
+                Text("Nadie te espera")
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
-            .accessibilityValue(isWaitingOpen ? "abierto" : "cerrado")
-
-            if isWaitingOpen {
-                if runs.isEmpty {
-                    Text("Nadie te espera")
-                        .font(theme.font(.body, size: 13))
-                        .foregroundStyle(theme.faint)
-                        .padding(.leading, 34)
-                        .padding(.vertical, 6)
-                }
-                ForEach(runs, id: \.id) { run in
-                    runRow(run, now: now)
-                }
+            ForEach(runs, id: \.id) { run in
+                runRow(run, now: now)
             }
         }
     }
@@ -127,16 +117,10 @@ struct Sidebar: View {
     private func projectsSection(_ runs: [Run], now: TimeInterval) -> some View {
         let projects = projectSummaries(runs, now: now)
         let active = runs.filter { isActive($0, now: now) }.count
-        return VStack(alignment: .leading, spacing: 4) {
-            SectionHeader(symbol: "folder", title: "Proyectos")
+        return VStack(alignment: .leading, spacing: 2) {
+            SectionHeading(title: theme.spec.texts.projectsSection)
 
-            ProjectRow(
-                symbol: "square.grid.2x2",
-                title: "Todos",
-                count: active,
-                waitingTitle: nil,
-                isSelected: state.project == nil
-            ) {
+            ProjectRow(icon: nil, title: theme.spec.texts.all, count: active, isSelected: state.project == nil) {
                 state.project = nil
                 state.selectedRunID = nil
             }
@@ -145,12 +129,9 @@ struct Sidebar: View {
                 let isSelected = state.project == project.key
                 VStack(alignment: .leading, spacing: 2) {
                     ProjectRow(
-                        symbol: "folder",
+                        icon: theme.spec.shapes.projectIcon,
                         title: project.display,
                         count: project.active,
-                        waitingTitle: project.hasWaiting
-                            ? (project.waiting == 1 ? "1 run te espera" : "\(project.waiting) runs te esperan")
-                            : nil,
                         isSelected: isSelected
                     ) {
                         state.project = isSelected ? nil : project.key
@@ -160,133 +141,83 @@ struct Sidebar: View {
                         let members = widgetRuns(runs.filter { $0.project.key == project.key }, now: now)
                         VStack(alignment: .leading, spacing: 2) {
                             ForEach(members, id: \.id) { run in
-                                runRow(run, now: now)
+                                runRow(run, now: now, indent: 20)
                             }
                         }
-                        .padding(.top, 4)
-                        .padding(.bottom, 6)
+                        .padding(.bottom, 4)
                     }
                 }
             }
         }
     }
 
-    private func runRow(_ run: Run, now: TimeInterval) -> some View {
-        SidebarRunRow(run: run, now: now, isSelected: state.selectedRunID == run.id) {
+    private func runRow(_ run: Run, now: TimeInterval, indent: CGFloat = 0) -> some View {
+        SidebarRunRow(run: run, now: now, indent: indent, isSelected: state.selectedRunID == run.id) {
             state.selectedRunID = run.id
         }
     }
 
     // MARK: Ajustes
 
+    /// A plain row; its tooltip says which folder the app reads.
     private func footer(_ directory: DataDirectory) -> some View {
         let path = (directory.url.path as NSString).abbreviatingWithTildeInPath
-        return VStack(alignment: .leading, spacing: 6) {
-            Button(action: openSettings) {
-                HStack(spacing: 10) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 15))
-                        .frame(width: 17, height: 17)
-                    Text("Ajustes")
-                        .font(theme.font(.body, size: 14))
-                }
-                .foregroundStyle(theme.secondary)
-                .frame(minHeight: 36)
-                .contentShape(Rectangle())
+        return Button(action: openSettings) {
+            NavRow(isSelected: false) {
+                Text("Ajustes")
+                    .font(theme.font(.body, size: 14))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.plain)
-            Text("lee \(path)")
-                .font(theme.font(.mono, size: 11))
-                .foregroundStyle(theme.faint)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(directory.runsURL.path)
         }
-        .padding(.horizontal, 8)
+        .buttonStyle(.plain)
+        .help("lee \(path)")
+        .accessibilityLabel("Ajustes")
+        .accessibilityHint("Lee los runs de \(path)")
     }
 }
 
-/// "Te esperan", "Proyectos": muted, with an icon, not uppercase.
-private struct SectionHeader: View {
-    let symbol: String
+/// "Te esperan · 3", "Proyectos": small, in the display font.
+private struct SectionHeading: View {
     let title: String
-    var count: Int?
-    var chevron: String?
 
     @Environment(\.theme) private var theme
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 13, weight: .medium))
-                .frame(width: 16, height: 16)
-            Text(title)
-                .font(theme.font(.body, size: 14, weight: .medium))
-            if let chevron {
-                Image(systemName: chevron)
-                    .font(.system(size: 10, weight: .semibold))
-                    .frame(width: 14, height: 14)
-            }
-            Spacer(minLength: 0)
-            if let count {
-                Text("\(count)")
-                    .font(theme.font(.body, size: 12.5).monospacedDigit())
-            }
-        }
-        .foregroundStyle(theme.faint)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        Text(title)
+            .font(theme.font(.display, size: 12, weight: .semibold))
+            .tracking(theme.tracking(.display, size: 12))
+            .foregroundStyle(theme.faint)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 2)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
-private struct ProjectRow: View {
-    let symbol: String
-    let title: String
-    let count: Int
-    /// "2 runs te esperan" when the project has runs waiting on the person: an amber dot with this tooltip.
-    let waitingTitle: String?
+/// A sidebar row: at least 36 pt tall, white on a subtle background with a 1 pt border when chosen, lighter when
+/// hovered.
+private struct NavRow<Content: View>: View {
     let isSelected: Bool
-    let pick: () -> Void
+    @ViewBuilder let content: Content
 
     @State private var isHovered = false
     @Environment(\.theme) private var theme
 
     var body: some View {
-        Button(action: pick) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(isSelected ? theme.text : theme.faint)
-                    .frame(width: 17, height: 17)
-                Text(title)
-                    .font(theme.font(.body, size: 14.5, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? theme.title : theme.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let waitingTitle {
-                    Circle()
-                        .fill(theme.dot(.waitingUser))
-                        .frame(width: 7, height: 7)
-                        .help(waitingTitle)
-                        .accessibilityLabel(waitingTitle)
-                }
-                Text("\(count)")
-                    .font(theme.font(.body, size: 12.5).monospacedDigit())
-                    .foregroundStyle(theme.faint)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
-            .background(background, in: RoundedRectangle(cornerRadius: theme.r(10)))
-            .contentShape(RoundedRectangle(cornerRadius: theme.r(10)))
+        HStack(spacing: 9) {
+            content
         }
-        .buttonStyle(.plain)
+        .foregroundStyle(isSelected || isHovered ? theme.title : theme.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .frame(minHeight: 36)
+        .background(background, in: RoundedRectangle(cornerRadius: theme.r(8)))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.r(8))
+                .strokeBorder(isSelected ? theme.borderHover : .clear, lineWidth: 1)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: theme.r(8)))
         .onHover { isHovered = $0 }
-        .accessibilityLabel(waitingTitle.map { "\(title), \(count) activos, \($0)" } ?? "\(title), \(count) activos")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var background: Color {
@@ -295,42 +226,78 @@ private struct ProjectRow: View {
     }
 }
 
-/// A run nested under its section or project: indented, with its status dot and its title in light gray.
+/// "Todos" (no icon) or a project with the theme's project icon, and its active runs.
+private struct ProjectRow: View {
+    let icon: ThemeIcon?
+    let title: String
+    let count: Int
+    let isSelected: Bool
+    let pick: () -> Void
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        Button(action: pick) {
+            NavRow(isSelected: isSelected) {
+                if let icon {
+                    ThemeIconView(icon: icon, color: theme.faint, size: 20)
+                }
+                Text(title)
+                    .font(theme.font(.body, size: 14, weight: icon == nil || isSelected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(count)")
+                    .font(theme.font(.body, size: icon == nil ? 14 : 13, weight: icon == nil ? .semibold : .regular)
+                        .monospacedDigit())
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(title), \(count) activos")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A run waiting on the person, or one nested under the chosen project: its status bullet and its title.
 private struct SidebarRunRow: View {
     let run: Run
     let now: TimeInterval
+    let indent: CGFloat
     let isSelected: Bool
     let select: () -> Void
 
-    @State private var isHovered = false
     @Environment(\.theme) private var theme
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
         Button(action: select) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(theme.dot(status))
-                    .frame(width: 8, height: 8)
+            NavRow(isSelected: isSelected) {
+                bullet(theme.dot(status))
                 Text(run.displayTitle)
                     .font(theme.font(.body, size: 14))
-                    .foregroundStyle(isSelected ? theme.text : theme.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.leading, 34)
-            .padding(.trailing, 10)
-            .padding(.vertical, 7)
-            .background(isSelected || isHovered ? theme.surfaceHover : .clear, in: RoundedRectangle(cornerRadius: theme.r(8)))
-            .contentShape(RoundedRectangle(cornerRadius: theme.r(8)))
+            .padding(.leading, indent)
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
         .help(run.displayTitle)
         .accessibilityLabel(run.displayTitle)
         .accessibilityValue(status.label(run.lang))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func bullet(_ color: Color) -> some View {
+        switch theme.spec.shapes.bullet {
+        case .dot, .gem:
+            // The gem is drawn by the AoE work; until then it shows the dot.
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
+        }
     }
 }
 
