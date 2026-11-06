@@ -37,6 +37,10 @@ final class BuiltInThemesTests: XCTestCase {
         spec.images = ThemeSpec.actual.images
         spec.fonts.body.weight = ThemeSpec.actual.fonts.body.weight
         spec.fonts.mono.weight = ThemeSpec.actual.fonts.mono.weight
+        for group in StatusGroup.allCases {
+            spec.colors.columns[group].hood = nil
+        }
+        spec.colors.status.failed.hood = nil
         XCTAssertEqual(spec, .actual)
     }
 
@@ -50,6 +54,11 @@ final class BuiltInThemesTests: XCTestCase {
         XCTAssertEqual(spec.colors.surface, RGBA(hex: 0x25272A))
         XCTAssertEqual(spec.barFill(.working), RGBA(hex: 0xD8BD7C))
         XCTAssertEqual(spec.colors.columns.waiting.title, RGBA(hex: 0xE5CC8C))
+        XCTAssertEqual(spec.hood(.waitingUser), RGBA(hex: 0xE8963A))
+        XCTAssertEqual(spec.hood(.waitingAgents), RGBA(hex: 0x7FA9D6))
+        XCTAssertEqual(spec.hood(.paused), RGBA(hex: 0x8D8C84))
+        XCTAssertEqual(spec.hood(.done), RGBA(hex: 0x7CC08A))
+        XCTAssertEqual(spec.hood(.failed), RGBA(hex: 0xC0655F))
         XCTAssertEqual(spec.fonts.display.family, "Cinzel")
         XCTAssertEqual(spec.fonts.display.weight, 700)
         XCTAssertEqual(spec.fonts.display.tracking, 0.04)

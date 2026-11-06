@@ -210,18 +210,24 @@ public struct ThemeFile: Codable, Equatable, Sendable {
             public var badge: String?
             public var badgeText: String?
             public var activity: String?
+            /// The card's hood for this status, over its column's: AoE's failed run.
+            public var hood: String?
 
-            public init(color: String? = nil, badge: String? = nil, badgeText: String? = nil, activity: String? = nil) {
+            public init(color: String? = nil, badge: String? = nil, badgeText: String? = nil, activity: String? = nil,
+                        hood: String? = nil) {
                 self.color = color
                 self.badge = badge
                 self.badgeText = badgeText
                 self.activity = activity
+                self.hood = hood
             }
         }
 
         public struct Column: Codable, Equatable, Sendable {
             public var icon: String?
             public var title: String?
+            /// The hood of the column's cards, when the status icon is `hood`; the icon's color when not set.
+            public var hood: String?
         }
 
         public struct Bar: Codable, Equatable, Sendable {
@@ -385,12 +391,15 @@ public struct ThemeSpec: Equatable, Sendable {
         public var badge: RGBA
         public var badgeText: RGBA
         public var activity: RGBA
+        /// The card's hood, over the column's; `nil` takes the column's.
+        public var hood: RGBA?
 
-        public init(color: RGBA, badge: RGBA, badgeText: RGBA, activity: RGBA) {
+        public init(color: RGBA, badge: RGBA, badgeText: RGBA, activity: RGBA, hood: RGBA? = nil) {
             self.color = color
             self.badge = badge
             self.badgeText = badgeText
             self.activity = activity
+            self.hood = hood
         }
     }
 
@@ -453,6 +462,8 @@ public struct ThemeSpec: Equatable, Sendable {
     public struct ColumnColor: Equatable, Sendable {
         public var icon: RGBA
         public var title: RGBA
+        /// The hood of the column's cards; `nil` is the icon's color.
+        public var hood: RGBA? = nil
     }
 
     public enum BarFill: Equatable, Sendable {
@@ -607,6 +618,12 @@ public struct ThemeSpec: Equatable, Sendable {
         case .finished: return colors.columns.finished.icon
         case .failed: return colors.status.failed.color
         }
+    }
+
+    /// The card's hood: the status's own when the theme sets one, else its column's, else the column's icon color.
+    public func hood(_ status: RunStatus) -> RGBA {
+        let column = colors.columns[StatusGroup(status)]
+        return style(status).hood ?? column.hood ?? column.icon
     }
 
     /// The title and subtitle of a column, by `BoardColumn.id`. A stage column is not themed: it gets `fallback`.
@@ -840,7 +857,8 @@ private final class ThemeResolver {
             columns: try columns(file.columns, base.columns, "colors.columns") { column, fallback, key in
                 ThemeSpec.ColumnColor(
                     icon: try color(column?.icon, fallback.icon, "\(key).icon"),
-                    title: try color(column?.title, fallback.title, "\(key).title")
+                    title: try color(column?.title, fallback.title, "\(key).title"),
+                    hood: try optionalColor(column?.hood, fallback.hood, "\(key).hood")
                 )
             },
             bar: ThemeSpec.Bar(
@@ -867,7 +885,8 @@ private final class ThemeResolver {
                 color: try color(status.color, fallback.color, "\(path).color"),
                 badge: try color(status.badge, fallback.badge, "\(path).badge"),
                 badgeText: try color(status.badgeText, fallback.badgeText, "\(path).badgeText"),
-                activity: try color(status.activity, fallback.activity, "\(path).activity")
+                activity: try color(status.activity, fallback.activity, "\(path).activity"),
+                hood: try optionalColor(status.hood, fallback.hood, "\(path).hood")
             )
         }
         return styles
@@ -883,6 +902,12 @@ private final class ThemeResolver {
         guard let value else { return base }
         guard let color = RGBA(hex: value) else { throw ThemeError.invalidColor(key: key, value: value) }
         return color
+    }
+
+    /// A color a theme may leave unset all the way down, such as a hood that follows its column's icon.
+    private func optionalColor(_ value: String?, _ base: RGBA?, _ key: String) throws -> RGBA? {
+        guard let value else { return base }
+        return try color(value, .white, key)
     }
 
     // MARK: Fonts

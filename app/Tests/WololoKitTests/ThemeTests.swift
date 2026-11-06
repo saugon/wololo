@@ -123,6 +123,46 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(spec.style(.failed), ThemeSpec.actual.style(.failed))
     }
 
+    // MARK: Hoods
+
+    func testHoodIsTheColumnIconUnlessTheThemeSetsOne() throws {
+        let actual = ThemeSpec.actual
+        XCTAssertEqual(actual.hood(.waitingUser), actual.colors.columns.waiting.icon)
+        XCTAssertEqual(actual.hood(.running), actual.colors.columns.working.icon)
+        XCTAssertEqual(actual.hood(.orphaned), actual.colors.columns.onHold.icon)
+        XCTAssertEqual(actual.hood(.failed), actual.colors.columns.finished.icon)
+
+        let fixture = try ThemeFixture()
+        let spec = try fixture.resolve(##"{"version": 1, "colors": {"columns": {"onHold": {"icon": "#cfcbc0"}}}}"##).spec
+        XCTAssertEqual(spec.hood(.paused), RGBA(hex: 0xCFCBC0))
+    }
+
+    func testColumnHoodAndStatusHood() throws {
+        let fixture = try ThemeFixture()
+        let spec = try fixture.resolve("""
+        {"version": 1, "colors": {
+          "columns": {"working": {"hood": "#7fa9d6"}, "finished": {"hood": "#7cc08a"}},
+          "status": {"failed": {"hood": "#c0655f"}}}}
+        """).spec
+        XCTAssertEqual(spec.hood(.running), RGBA(hex: 0x7FA9D6))
+        XCTAssertEqual(spec.hood(.waitingAgents), RGBA(hex: 0x7FA9D6))
+        XCTAssertEqual(spec.colors.columns.working.icon, ThemeSpec.actual.colors.columns.working.icon)
+        XCTAssertEqual(spec.hood(.done), RGBA(hex: 0x7CC08A))
+        XCTAssertEqual(spec.hood(.failed), RGBA(hex: 0xC0655F))
+        XCTAssertEqual(spec.style(.failed).color, ThemeSpec.actual.style(.failed).color)
+        XCTAssertEqual(spec.hood(.waitingUser), ThemeSpec.actual.colors.columns.waiting.icon)
+    }
+
+    func testBadHoodNamesTheKey() throws {
+        let fixture = try ThemeFixture()
+        XCTAssertThrowsError(try fixture.resolve(##"{"version": 1, "colors": {"columns": {"waiting": {"hood": "orange"}}}}"##)) { error in
+            XCTAssertEqual(error as? ThemeError, .invalidColor(key: "colors.columns.waiting.hood", value: "orange"))
+        }
+        XCTAssertThrowsError(try fixture.resolve(##"{"version": 1, "colors": {"status": {"failed": {"hood": "#c06"}}}}"##)) { error in
+            XCTAssertEqual(error as? ThemeError, .invalidColor(key: "colors.status.failed.hood", value: "#c06"))
+        }
+    }
+
     // MARK: Texts
 
     func testColumnTextFallsBack() throws {

@@ -60,7 +60,7 @@ struct WidgetView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heightChanged($0) }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(theme.widget)
+        .background { ThemeGround(color: theme.widget) }
         .clipShape(RoundedRectangle(cornerRadius: theme.r(12)))
         .overlay(RoundedRectangle(cornerRadius: theme.r(12)).strokeBorder(theme.widgetBorder, lineWidth: 1))
         .preferredColorScheme(.dark)
@@ -68,10 +68,15 @@ struct WidgetView: View {
 
     private func header(waiting: Int) -> some View {
         HStack(spacing: 10) {
-            BoardGlyph()
-                .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8 * 18 / 24, lineCap: .round, lineJoin: .round))
-                .frame(width: 18, height: 18)
-                .accessibilityHidden(true)
+            if theme.drawsHoods {
+                HoodIcon(color: theme.muted, face: theme.widget)
+                    .frame(width: 18, height: 18)
+            } else {
+                BoardGlyph()
+                    .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8 * 18 / 24, lineCap: .round, lineJoin: .round))
+                    .frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+            }
             Text("wololo")
                 .font(theme.font(.display, size: 13, weight: .bold))
                 .tracking(theme.tracking(.display, size: 13))

@@ -96,6 +96,9 @@ struct AppTheme {
 
     // MARK: Shapes
 
+    /// A theme whose cards wear hoods also uses the hood as the app's mark and in the board's counters.
+    var drawsHoods: Bool { spec.shapes.statusIcon == .hood }
+
     /// A corner radius designed for Actual's 10 pt, scaled to the theme's: 0 squares every corner.
     func r(_ base: CGFloat) -> CGFloat {
         base * CGFloat(spec.shapes.radius) / 10
@@ -142,10 +145,38 @@ struct AppTheme {
         cache.image(asset.url)
     }
 
+    /// The background texture, one tile `size` points wide.
+    var backgroundTile: NSImage? {
+        guard let background = spec.images.background else { return nil }
+        return cache.image(background.file.url, scale: { size in background.size / Double(size.width) })
+    }
+
+    /// The divider between the sidebar and the board, `width` points wide.
+    var dividerTile: (image: NSImage, width: CGFloat)? {
+        guard let divider = spec.images.divider,
+              let image = cache.image(divider.file.url, scale: { size in divider.width / Double(size.width) }) else { return nil }
+        return (image, CGFloat(divider.width))
+    }
+
+    /// The band under the board header, `height` points tall.
+    var bandTile: (image: NSImage, height: CGFloat)? {
+        guard let band = spec.images.band,
+              let image = cache.image(band.file.url, scale: { size in band.height / Double(size.height) }) else { return nil }
+        return (image, CGFloat(band.height))
+    }
+
+    /// The 9-slice frame, scaled so that its `slice` pixels are `width` points: its caps are then `width` wide.
+    var frameImage: (image: NSImage, width: CGFloat)? {
+        guard let frame = spec.images.frame,
+              let image = cache.image(frame.file.url, scale: { _ in frame.width / frame.slice }) else { return nil }
+        return (image, CGFloat(frame.width))
+    }
+
     /// Fonts and images built once per theme. Only the main thread draws, so it needs no lock.
     private final class Cache {
         private var fonts: [String: Font?] = [:]
         private var images: [URL: NSImage?] = [:]
+        private var scaled: [String: NSImage?] = [:]
 
         static func isInstalled(_ family: String) -> Bool {
             NSFontManager.shared.availableMembers(ofFontFamily: family) != nil
@@ -164,6 +195,26 @@ struct AppTheme {
             let image = NSImage(contentsOf: url)
             images[url] = image
             return image
+        }
+
+        /// The image drawn at `scale` points per pixel, which `scale` works out from its size in pixels.
+        func image(_ url: URL, scale: (CGSize) -> Double) -> NSImage? {
+            guard let image = image(url) else { return nil }
+            let pixels = Self.pixelSize(image)
+            let factor = CGFloat(scale(pixels))
+            let key = "\(url.path)|\(factor)"
+            if let cached = scaled[key] { return cached }
+            guard factor.isFinite, factor > 0, let copy = image.copy() as? NSImage else { return nil }
+            copy.size = CGSize(width: pixels.width * factor, height: pixels.height * factor)
+            scaled[key] = copy
+            return copy
+        }
+
+        /// The size of the image's largest representation in pixels, whatever resolution the file declares.
+        private static func pixelSize(_ image: NSImage) -> CGSize {
+            let reps = image.representations.filter { $0.pixelsWide > 0 && $0.pixelsHigh > 0 }
+            guard let largest = reps.max(by: { $0.pixelsWide < $1.pixelsWide }) else { return image.size }
+            return CGSize(width: largest.pixelsWide, height: largest.pixelsHigh)
         }
 
         /// The family's face nearest to `weight`, then the `wght` axis set to it (ignored by a static font).

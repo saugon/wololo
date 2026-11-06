@@ -34,7 +34,7 @@ struct BoardView: View {
                 }
                 .scrollIndicators(.automatic)
             }
-            theme.divider.frame(height: 1)
+            ThemeBand()
             archive
         }
     }
@@ -217,11 +217,15 @@ private struct ArchiveRow: View {
     }
 }
 
-/// A column's or a project's icon as the theme sets it, in a `size` square: a dot or an SF Symbol in `color`.
+/// A column's or a project's icon as the theme sets it, in a `size` square: a dot, an SF Symbol or one of the app's
+/// own outlines in `color`, or the theme's image as it is. A name the app does not know or an image that does not
+/// load shows the dot.
 struct ThemeIconView: View {
     let icon: ThemeIcon
     let color: Color
     let size: CGFloat
+
+    @Environment(\.theme) private var theme
 
     var body: some View {
         Group {
@@ -230,14 +234,33 @@ struct ThemeIconView: View {
                 Image(systemName: name)
                     .font(.system(size: size * 0.75, weight: .regular))
                     .foregroundStyle(color)
-            case .dot, .builtin, .image:
-                // The app's own icons and a theme's images are drawn by the AoE work; until then they show the dot.
-                Circle()
-                    .fill(color)
-                    .frame(width: size / 2, height: size / 2)
+            case .builtin(let name):
+                if let shape = BuiltinIcon(name) {
+                    shape.stroke(color, style: StrokeStyle(lineWidth: shape.lineWidth * size / 22, lineCap: .round,
+                                                           lineJoin: .round))
+                } else {
+                    dot
+                }
+            case .image(let asset):
+                if let image = theme.image(asset) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                } else {
+                    dot
+                }
+            case .dot:
+                dot
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    private var dot: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size / 2, height: size / 2)
     }
 }

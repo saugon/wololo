@@ -18,7 +18,7 @@ struct RunCard: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .top, spacing: 8) {
-                    statusIcon(style.color)
+                    statusIcon(status, color: style.color)
                     Text(run.displayTitle)
                         .font(theme.font(.body, size: 15, weight: .semibold))
                         .foregroundStyle(theme.title)
@@ -60,12 +60,21 @@ struct RunCard: View {
             progressBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovered ? theme.surfaceHover : theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: theme.r(10)))
-        .overlay(
-            RoundedRectangle(cornerRadius: theme.r(10))
-                .strokeBorder(border, lineWidth: isSelected ? 1.5 : 1)
-        )
+        .themeFrame(theme, fill: isHovered ? theme.surfaceHover : theme.surface) { card in
+            card
+                .background(isHovered ? theme.surfaceHover : theme.surface)
+                .clipShape(RoundedRectangle(cornerRadius: theme.r(10)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: theme.r(10))
+                        .strokeBorder(border, lineWidth: isSelected ? 1.5 : 1)
+                )
+        }
+        .overlay {
+            // In a frame the border is the theme's image; the chosen card is outlined over it.
+            if theme.frameImage != nil && isSelected {
+                Rectangle().strokeBorder(theme.focus, lineWidth: 2)
+            }
+        }
         .onHover { isHovered = $0 }
         .selectable(
             label: run.displayTitle,
@@ -96,24 +105,42 @@ struct RunCard: View {
         return isHovered ? theme.borderHover : theme.border
     }
 
-    /// The icon left of the title, centered on its first line.
+    /// The icon left of the title: a dot centered on its first line, or a hood or the theme's image beside it.
     @ViewBuilder
-    private func statusIcon(_ color: Color) -> some View {
+    private func statusIcon(_ status: RunStatus, color: Color) -> some View {
         switch theme.spec.shapes.statusIcon {
-        case .dot, .hood, .image:
-            // The hood and a theme's image are drawn by the AoE work; until then they show the dot.
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-                .frame(height: 18)
+        case .hood:
+            HoodIcon(color: Color(theme.spec.hood(status)), face: theme.field)
+                .frame(width: 17, height: 19)
+        case .image(let asset):
+            if let image = theme.image(asset) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 17, height: 19)
+                    .accessibilityHidden(true)
+            } else {
+                dot(color)
+            }
+        case .dot:
+            dot(color)
         }
+    }
+
+    private func dot(_ color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 8, height: 8)
+            .frame(height: 18)
     }
 
     @ViewBuilder
     private func bullet(_ color: Color) -> some View {
         switch theme.spec.shapes.bullet {
-        case .dot, .gem:
-            // The gem is drawn by the AoE work; until then it shows the dot.
+        case .gem:
+            Gem(color: color)
+        case .dot:
             Circle()
                 .fill(color)
                 .frame(width: 7, height: 7)
@@ -160,8 +187,9 @@ struct RunCard: View {
     private var progressBar: some View {
         let progress = RunProgress(run, now: now)
         switch theme.spec.shapes.bar {
-        case .continuous, .blocks:
-            // The blocks are drawn by the AoE work; until then they show the continuous bar.
+        case .blocks:
+            ProgressBlocksView(progress: progress)
+        case .continuous:
             ProgressBarView(progress: progress, height: 4, caption: .none)
         }
     }

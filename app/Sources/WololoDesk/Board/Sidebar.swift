@@ -34,17 +34,25 @@ struct Sidebar: View {
         .padding(.bottom, 16)
         .frame(width: Self.width)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(theme.sidebar)
+        // A theme's texture runs under the sidebar too, and its divider image replaces the 1 pt line.
+        .background(theme.backgroundTile == nil ? theme.sidebar : .clear)
         .overlay(alignment: .trailing) {
-            theme.divider.frame(width: 1)
+            if theme.dividerTile == nil {
+                theme.divider.frame(width: 1)
+            }
         }
     }
 
     private var brand: some View {
         HStack(spacing: 10) {
-            BoardGlyph()
-                .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                .frame(width: 22, height: 22)
+            if theme.drawsHoods {
+                HoodIcon(color: theme.muted, face: theme.ground)
+                    .frame(width: 24, height: 27)
+            } else {
+                BoardGlyph()
+                    .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
+                    .frame(width: 22, height: 22)
+            }
             Text("Wololo Desk")
                 .font(theme.font(.display, size: 17, weight: .bold))
                 .tracking(-0.17 + theme.tracking(.display, size: 17))
@@ -291,8 +299,9 @@ private struct SidebarRunRow: View {
     @ViewBuilder
     private func bullet(_ color: Color) -> some View {
         switch theme.spec.shapes.bullet {
-        case .dot, .gem:
-            // The gem is drawn by the AoE work; until then it shows the dot.
+        case .gem:
+            Gem(color: color)
+        case .dot:
             Circle()
                 .fill(color)
                 .frame(width: 7, height: 7)

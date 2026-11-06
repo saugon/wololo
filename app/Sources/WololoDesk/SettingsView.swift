@@ -90,7 +90,7 @@ struct SettingsView: View {
         .tint(theme.accent)
         .padding(24)
         .frame(width: 560, alignment: .topLeading)
-        .background(theme.ground)
+        .background { ThemeGround() }
     }
 
     private var dataDirectoryNote: String {

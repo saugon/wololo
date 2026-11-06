@@ -12,10 +12,15 @@ struct EmptyStateView: View {
     var body: some View {
         let runs = (directory.runsURL.path as NSString).abbreviatingWithTildeInPath
         VStack(alignment: .leading, spacing: 18) {
-            BoardGlyph()
-                .stroke(theme.faint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-                .frame(width: 40, height: 40)
-                .accessibilityHidden(true)
+            if theme.drawsHoods {
+                HoodIcon(color: theme.faint, face: theme.surface)
+                    .frame(width: 40, height: 40)
+            } else {
+                BoardGlyph()
+                    .stroke(theme.faint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                    .frame(width: 40, height: 40)
+                    .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Todavía no hay runs")

@@ -63,6 +63,18 @@ struct TimelineTab: View {
             .onChange(of: entries.last?.id) {
                 if let last = entries.last?.id { proxy.scrollTo(last, anchor: .bottom) }
             }
+            // Kept at the newest event, an older row is often cut by the top edge (taller fonts make it likelier);
+            // fading the pane's surface over the edge hides the bits of text left of it. The fade is no taller than
+            // the empty top of a row, so a row that starts at the edge looks as before.
+            .overlay(alignment: .top) {
+                LinearGradient(
+                    stops: [.init(color: theme.surface, location: 0.4), .init(color: theme.surface.opacity(0), location: 1)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 6)
+                .allowsHitTesting(false)
+            }
         }
     }
 

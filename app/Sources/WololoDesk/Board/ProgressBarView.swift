@@ -59,3 +59,27 @@ struct ProgressBarView: View {
         }
     }
 }
+
+/// The run's progress as one block per stage, those reached filled: `3/8` fills three. The card's bar when the theme
+/// asks for `blocks`, on a dark rail along the bottom edge.
+struct ProgressBlocksView: View {
+    let progress: RunProgress
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(0..<progress.stageCount, id: \.self) { index in
+                Rectangle()
+                    .fill(index < progress.stageNumber ? theme.bar(progress.role) : theme.track)
+                    .frame(height: 5)
+            }
+        }
+        .padding(2)
+        .background(theme.field)
+        .accessibilityRepresentation {
+            ProgressView(value: min(max(progress.fraction, 0), 1))
+                .accessibilityLabel(progress.accessibilityLabel)
+        }
+    }
+}

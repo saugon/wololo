@@ -17,6 +17,7 @@ struct MainView: View {
         let model = state.model
         HStack(spacing: 0) {
             Sidebar(state: state, openSettings: openSettings)
+            ThemeRod()
             Group {
                 if let id = state.selectedRunID {
                     RunDetailView(state: state, runID: id)
@@ -34,7 +35,7 @@ struct MainView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .toast(state.toast(from: .window))
         }
-        .background(theme.ground)
+        .background { ThemeGround() }
         .overlay(alignment: .top) {
             WindowDragArea()
                 .frame(height: Self.titleBarHeight)
@@ -48,7 +49,7 @@ struct MainView: View {
         let board = Board(runs: visible, now: model.now, mode: state.boardMode)
         return VStack(spacing: 0) {
             header(visible, now: model.now, runs: model.runs)
-            theme.divider.frame(height: 1)
+            ThemeBand()
             BoardView(
                 board: board,
                 mode: state.boardMode,
@@ -123,19 +124,38 @@ private struct CountersBox: View {
     @Environment(\.theme) private var theme
 
     var body: some View {
+        let hoods = theme.drawsHoods
         HStack(spacing: 0) {
-            stat(working, theme.spec.texts.counterWorking)
+            stat(working, theme.spec.texts.counterWorking) {
+                if hoods {
+                    HoodIcon(color: theme.secondary, face: theme.field)
+                        .frame(width: 16, height: 18)
+                }
+            }
             theme.border.frame(width: 1, height: 22)
-            stat(waiting, theme.spec.texts.counterWaiting)
+            stat(waiting, theme.spec.texts.counterWaiting) {
+                if hoods {
+                    // A silhouette on a light coin, as the reference's idle count.
+                    HoodIcon(color: theme.field)
+                        .frame(width: 12, height: 14)
+                        .frame(width: 22, height: 22)
+                        .background(theme.muted, in: Circle())
+                }
+            }
         }
-        .background(theme.field, in: RoundedRectangle(cornerRadius: theme.r(8)))
-        .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
+        .themeFrame(theme, fill: theme.field) { box in
+            box
+                .background(theme.field, in: RoundedRectangle(cornerRadius: theme.r(8)))
+                .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Runs")
     }
 
-    private func stat(_ count: Int, _ word: String) -> some View {
+    /// The count and its word, after the theme's icon for it if it draws one.
+    private func stat(_ count: Int, _ word: String, @ViewBuilder icon: () -> some View) -> some View {
         HStack(spacing: 7) {
+            icon()
             Text("\(count)")
                 .font(theme.font(.body, size: 16, weight: .bold).monospacedDigit())
                 .foregroundStyle(theme.title)
@@ -163,8 +183,11 @@ private struct ModePicker: View {
             segment("Por etapa", .byStage)
         }
         .padding(3)
-        .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(8)))
-        .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
+        .themeFrame(theme, fill: theme.field) { picker in
+            picker
+                .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(8)))
+                .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Agrupar columnas")
     }
