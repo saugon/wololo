@@ -62,6 +62,29 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(menuBarHeader([runs[0]], now: now), "1 te espera · 1 activo")
     }
 
+    func testBoardCountersCountWorkingAndWaitingOnPerson() throws {
+        let runs = [
+            try makeRun("asks", status: "waiting_user"),
+            try makeRun("permission", status: "waiting_permission"),
+            try makeRun("blocked", status: "blocked"),
+            try makeRun("stalled", status: "stalled"),
+            try makeRun("busy", status: "running"),
+            try makeRun("agents", status: "waiting_agents"),
+            try makeRun("pausing", status: "pausing"),
+            try makeRun("new", status: "something_new"),
+            try makeRun("orphan", status: "running", ["owner": ["heartbeat_at": now - 120]]),
+            try makeRun("paused", status: "paused"),
+            try makeRun("shipped", status: "done"),
+        ]
+        let counters = boardCounters(runs, now: now)
+        XCTAssertEqual(counters.working, 4, "an orphaned run is not working")
+        XCTAssertEqual(counters.waiting, 4)
+        XCTAssertEqual(counters.waiting, menuBarCount(runs, now: now))
+        let none = boardCounters([], now: now)
+        XCTAssertEqual(none.working, 0)
+        XCTAssertEqual(none.waiting, 0)
+    }
+
     func testWaitingAndActiveLabels() {
         XCTAssertEqual(waitingLabel(1), "1 te espera")
         XCTAssertEqual(waitingLabel(3), "3 te esperan")

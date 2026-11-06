@@ -47,6 +47,9 @@ public struct RunProgress: Equatable, Sendable {
 
     public var text: String { "\(shortText) · \(stageLabel)" }
 
+    /// The card's meta row, "5/8 Implementación".
+    public var metaText: String { "\(shortText) \(stageLabel)" }
+
     public var accessibilityLabel: String {
         lang == .es
             ? "Etapa \(stageNumber) de \(stageCount): \(stageLabel)"

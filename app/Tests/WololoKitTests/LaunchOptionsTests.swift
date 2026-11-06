@@ -39,4 +39,17 @@ final class LaunchOptionsTests: XCTestCase {
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_COLUMNS": "items"]).columns)
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_SEARCH": ""]).search)
     }
+
+    /// Scenario 10: a theme forced for one launch, and a themes folder outside Application Support.
+    func testThemeAndThemesDirectory() {
+        let options = LaunchOptions(environment: [
+            "WOLOLO_DESK_THEME": " aoe ",
+            "WOLOLO_DESK_THEMES_DIR": "/tmp/wololo/themes",
+        ])
+        XCTAssertEqual(options, LaunchOptions(theme: "aoe", themesDirectory: URL(fileURLWithPath: "/tmp/wololo/themes")))
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_THEMES_DIR": "~/temas"]).themesDirectory?.path,
+                       (NSHomeDirectory() as NSString).appendingPathComponent("temas"))
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_THEME": ""]).theme)
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_THEMES_DIR": "  "]).themesDirectory)
+    }
 }

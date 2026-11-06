@@ -107,6 +107,13 @@ public func lastFinished(_ runs: [Run], now: TimeInterval) -> Run? {
     runs.filter { !isActive($0, now: now) }.max { finishedTime($0) < finishedTime($1) }
 }
 
+/// The board header's counters: active runs in the working group, and the runs waiting on the person (the same
+/// rule as the menu bar's count).
+public func boardCounters(_ runs: [Run], now: TimeInterval) -> (working: Int, waiting: Int) {
+    (working: runs.filter { StatusGroup($0, now: now) == .working }.count,
+     waiting: menuBarCount(runs, now: now))
+}
+
 public func menuBarCount(_ runs: [Run], now: TimeInterval) -> Int {
     runs.filter { isWaitingOnPerson($0, now: now) }.count
 }

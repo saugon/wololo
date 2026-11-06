@@ -1,6 +1,8 @@
 import Foundation
 
-public func activityLine(_ run: Run, now: TimeInterval) -> String {
+/// What the run is doing now. `prefixed` names a permission request, a block or a pause ("Bloqueado: …"), for places
+/// that do not show the status next to it, such as the widget; the card shows it on its own line and drops it.
+public func activityLine(_ run: Run, now: TimeInterval, prefixed: Bool = true) -> String {
     let status = effectiveStatus(run, now: now)
     if status == .orphaned {
         let silence = elapsed(now - run.owner.heartbeatAt, lang: run.lang)
@@ -19,7 +21,8 @@ public func activityLine(_ run: Run, now: TimeInterval) -> String {
     ]
     for candidate in candidates {
         guard let text = candidate.text, !text.isEmpty else { continue }
-        return candidate.prefix.map { "\($0): \(text)" } ?? text
+        guard prefixed, let prefix = candidate.prefix else { return text }
+        return "\(prefix): \(text)"
     }
     if let item = run.items.current {
         return "\(run.lang == .es ? "Ítem" : "Item") \(item.n): \(item.title)"
@@ -82,8 +85,19 @@ public func agentsChip(_ run: Run, now: TimeInterval) -> MetaChip? {
         counts[agent.role, default: 0] += 1
     }
     let names = roles.map { role in counts[role] == 1 ? role : "\(role) ×\(counts[role] ?? 0)" }
-    let noun = run.lang == .es ? (live.count == 1 ? "agente" : "agentes") : (live.count == 1 ? "agent" : "agents")
-    return MetaChip(text: "\(live.count)", title: "\(live.count) \(noun): \(names.joined(separator: ", "))")
+    return MetaChip(text: "\(live.count)", title: "\(agentsLabel(live.count, lang: run.lang) ?? ""): \(names.joined(separator: ", "))")
+}
+
+/// "1 agente", "2 agentes" ("agent", "agents"); nil for none.
+public func agentsLabel(_ count: Int, lang: Lang) -> String? {
+    guard count > 0 else { return nil }
+    let noun = lang == .es ? (count == 1 ? "agente" : "agentes") : (count == 1 ? "agent" : "agents")
+    return "\(count) \(noun)"
+}
+
+/// The card's "2 agentes": nil when no agent is running, or once the run ended or lost its session, as `agentsChip`.
+public func agentsLabel(_ run: Run, now: TimeInterval) -> String? {
+    agentsChip(run, now: now) == nil ? nil : agentsLabel(liveAgents(run).count, lang: run.lang)
 }
 
 public enum CIRole: String, Sendable {
@@ -98,10 +112,10 @@ public func ciRole(_ run: Run) -> CIRole? {
 
 public func prChip(_ run: Run) -> MetaChip? {
     guard let pr = run.pr else { return nil }
-    let number = pr.number ?? Int((pr.url as NSString).lastPathComponent)
+    let number = prNumber(pr)
     let text = number.map { "#\($0)" } ?? "PR"
     let es = run.lang == .es
-    var title = number.map { "PR #\($0)" } ?? "PR"
+    var title = prLabel(run) ?? "PR"
     title += pr.state == "draft" ? " draft" : (es ? " listo" : " ready")
     switch ciRole(run) {
     case .pending: title += es ? ", CI pendiente" : ", CI pending"
@@ -110,6 +124,21 @@ public func prChip(_ run: Run) -> MetaChip? {
     case nil: break
     }
     return MetaChip(text: text, title: title)
+}
+
+/// The card's "PR #120", or "PR" when its number is not known.
+public func prLabel(_ run: Run) -> String? {
+    guard let pr = run.pr else { return nil }
+    return prNumber(pr).map { "PR #\($0)" } ?? "PR"
+}
+
+private func prNumber(_ pr: Run.PullRequest) -> Int? {
+    pr.number ?? Int((pr.url as NSString).lastPathComponent)
+}
+
+/// The card's origin in the reference layout, "acme/web #4312": the project and its source, without a separator.
+public func originLabel(_ run: Run) -> String {
+    "\(run.project.display) \(sourceLabel(run))"
 }
 
 public func sourceLabel(_ run: Run) -> String {

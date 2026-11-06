@@ -19,6 +19,7 @@ final class ProgressTests: XCTestCase {
         XCTAssertEqual(progress.fraction, 0.5714, accuracy: 1e-4)
         XCTAssertEqual(progress.text, "5/8 · Implementación")
         XCTAssertEqual(progress.shortText, "5/8")
+        XCTAssertEqual(progress.metaText, "5/8 Implementación")
         XCTAssertEqual(progress.accessibilityLabel, "Etapa 5 de 8: Implementación")
         XCTAssertEqual(progress.role, .working)
         XCTAssertEqual(RunProgress(try implementing("waiting_user"), now: now).role, .waiting)
@@ -27,6 +28,7 @@ final class ProgressTests: XCTestCase {
     func testEnglishLabels() throws {
         let progress = RunProgress(try implementing("running", lang: "en"), now: now)
         XCTAssertEqual(progress.text, "5/8 · Implementation")
+        XCTAssertEqual(progress.metaText, "5/8 Implementation")
         XCTAssertEqual(progress.accessibilityLabel, "Stage 5 of 8: Implementation")
     }
 

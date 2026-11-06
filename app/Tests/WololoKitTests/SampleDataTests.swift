@@ -70,6 +70,31 @@ final class SampleDataTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: shot.path))
     }
 
+    /// Scenarios 4 and 5 on the data the snapshots use: the board header's counters and the busy card's texts.
+    func testBoardCountersAndCardTexts() throws {
+        let fixture = try StoreFixture(createRuns: false)
+        XCTAssertEqual(try runScript(into: fixture.root), 0)
+        let store = RunStore(runsURL: fixture.runsURL)
+        store.scan()
+        let runs = store.runs
+        let now = Date().timeIntervalSince1970
+
+        let counters = boardCounters(runs, now: now)
+        XCTAssertEqual(counters.working, 4)
+        XCTAssertEqual(counters.waiting, 3)
+
+        let busy = try XCTUnwrap(runs.first { $0.id == "web-4312-a4f9c2" })
+        // Pinned 53 s after its last update, still well within its heartbeat.
+        let later = busy.updatedAt + 53
+        XCTAssertEqual(originLabel(busy), "acme/web #4312")
+        XCTAssertEqual(effectiveStatus(busy, now: later).label(busy.lang), "Agentes trabajando")
+        XCTAssertEqual(activityLine(busy, now: later, prefixed: false), "Implementando ítem 5: animación al soltar la tarjeta")
+        XCTAssertEqual(RunProgress(busy, now: later).metaText, "5/8 Implementación")
+        XCTAssertNil(prLabel(busy))
+        XCTAssertEqual(agentsLabel(busy, now: later), "2 agentes")
+        XCTAssertEqual(shortAgo(busy.updatedAt, now: later, lang: busy.lang), "53s")
+    }
+
     func testRefusesToReplaceRunsItDidNotWrite() throws {
         let fixture = try StoreFixture()
         try fixture.write("real-run")

@@ -40,6 +40,25 @@ final class ActivityTests: XCTestCase {
                        "Paused: falta la credencial")
     }
 
+    /// The card shows the status on its own line, so its activity drops the prefix; the widget keeps it.
+    func testUnprefixedActivityDropsTheStatusWord() throws {
+        let cases: [(String, [String: Any], String)] = [
+            ("waiting_permission", ["waiting": ["on": "permission", "question": "Bash · npm run db:migrate", "since": 0]], "Bash · npm run db:migrate"),
+            ("blocked", ["blocked": ["reason": "un test parece estar mal", "since": 0]], "un test parece estar mal"),
+            ("paused", ["paused": ["note": "falta la credencial", "since": 0]], "falta la credencial"),
+            ("blocked", ["lang": "en", "blocked": ["reason": "a test looks wrong", "since": 0]], "a test looks wrong"),
+            ("running", ["items": ["done": 4, "total": 7, "current": ["n": 5, "title": "Animación al soltar"]]], "Ítem 5: Animación al soltar"),
+        ]
+        for (status, fields, line) in cases {
+            let run = try makeRun("r", status: status, fields)
+            XCTAssertEqual(activityLine(run, now: now, prefixed: false), line)
+            XCTAssertEqual(activityLine(run, now: now), activityLine(run, now: now, prefixed: true))
+        }
+        XCTAssertEqual(activityLine(try makeRun("r", status: "blocked", cases[1].1), now: now), "Bloqueado: un test parece estar mal")
+        let orphan = try makeRun("r", ["owner": ["heartbeat_at": now - 600]])
+        XCTAssertEqual(activityLine(orphan, now: now, prefixed: false), "sin señal hace 10m")
+    }
+
     func testAPermissionRequestWithoutQuestionFallsThrough() throws {
         let run = try makeRun("r", status: "waiting_permission", [
             "waiting": ["on": "permission", "question": "", "since": 0],
@@ -148,6 +167,54 @@ final class ActivityTests: XCTestCase {
         let orphan = try makeRun("r", ["agents": agents, "owner": ["heartbeat_at": now - 600]])
         XCTAssertNil(agentsChip(orphan, now: now))
         XCTAssertNotNil(agentsChip(try makeRun("r", status: "paused", ["agents": agents]), now: now))
+    }
+
+    func testAgentsLabel() throws {
+        XCTAssertEqual(agentsLabel(1, lang: .es), "1 agente")
+        XCTAssertEqual(agentsLabel(2, lang: .es), "2 agentes")
+        XCTAssertEqual(agentsLabel(1, lang: .en), "1 agent")
+        XCTAssertEqual(agentsLabel(3, lang: .en), "3 agents")
+        XCTAssertNil(agentsLabel(0, lang: .es))
+
+        let agents = [agent("implementer"), agent("verifier"), agent("critic", finishedAt: 10)]
+        XCTAssertEqual(agentsLabel(try makeRun("r", ["agents": agents]), now: now), "2 agentes")
+        XCTAssertNil(agentsLabel(try makeRun("r"), now: now))
+        XCTAssertNil(agentsLabel(try makeRun("r", status: "done", ["agents": agents]), now: now))
+        XCTAssertNil(agentsLabel(try makeRun("r", ["agents": agents, "owner": ["heartbeat_at": now - 600]]), now: now))
+    }
+
+    func testPRLabel() throws {
+        XCTAssertEqual(prLabel(try makeRun("r", ["pr": ["url": "https://github.com/acme/web/pull/120", "number": 120, "state": "draft"]])), "PR #120")
+        XCTAssertEqual(prLabel(try makeRun("r", ["pr": ["url": "https://github.com/acme/web/pull/43", "state": "ready"]])), "PR #43")
+        XCTAssertEqual(prLabel(try makeRun("r", ["pr": ["url": "", "state": "ready"]])), "PR")
+        XCTAssertNil(prLabel(try makeRun("r")))
+    }
+
+    /// Scenario 4: the texts of a card in implementation with 4/7 items, 2 agents, PR #120 and 53 s old.
+    func testCardTextsInTheReferenceLayout() throws {
+        let run = try makeRun("web-87", status: "waiting_agents", updatedAt: now - 53, [
+            "title": "Arrastrar y soltar tarjetas",
+            "source": ["kind": "github_issue", "ref": "87"],
+            "project": ["key": "acme__web", "path": "/code/acme/web"],
+            "stage": ["id": "implement", "index": 4, "since": 0],
+            "items": ["done": 4, "total": 7, "current": ["n": 5, "title": "Animación al soltar"]],
+            "agents": [agent("implementer"), agent("verifier")],
+            "doing": ["text": "Implementando ítem 5", "since": 0],
+            "pr": ["url": "https://github.com/acme/web/pull/120", "number": 120, "state": "draft", "ci": "pending"],
+        ])
+        let status = effectiveStatus(run, now: now)
+        XCTAssertEqual(originLabel(run), "acme/web #87")
+        XCTAssertEqual(status.label(run.lang), "Agentes trabajando")
+        XCTAssertEqual(activityLine(run, now: now, prefixed: false), "Implementando ítem 5")
+        XCTAssertEqual(RunProgress(run, now: now).metaText, "5/8 Implementación")
+        XCTAssertEqual(prLabel(run), "PR #120")
+        XCTAssertEqual(agentsLabel(run, now: now), "2 agentes")
+        XCTAssertEqual(shortAgo(run.updatedAt, now: now, lang: run.lang), "53s")
+    }
+
+    func testOriginLabel() throws {
+        XCTAssertEqual(originLabel(try makeRun("r", ["project": ["key": "saugon__wololo", "path": "/p"],
+                                                      "source": ["kind": "file", "ref": "docs/plan.md"]])), "saugon/wololo plan.md")
     }
 
     func testPRChip() throws {

@@ -22,13 +22,20 @@ public struct LaunchOptions: Equatable, Sendable {
     public var project: String?
     public var columns: BoardMode?
     public var snapshotURL: URL?
+    /// A theme key to use for this launch only: the saved choice stays as it was.
+    public var theme: String?
+    /// Where to look for the user's themes instead of Application Support.
+    public var themesDirectory: URL?
 
-    public init(open: Target? = nil, search: String? = nil, project: String? = nil, columns: BoardMode? = nil, snapshotURL: URL? = nil) {
+    public init(open: Target? = nil, search: String? = nil, project: String? = nil, columns: BoardMode? = nil, snapshotURL: URL? = nil,
+                theme: String? = nil, themesDirectory: URL? = nil) {
         self.open = open
         self.search = search
         self.project = project
         self.columns = columns
         self.snapshotURL = snapshotURL
+        self.theme = theme
+        self.themesDirectory = themesDirectory
     }
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
@@ -40,9 +47,13 @@ public struct LaunchOptions: Equatable, Sendable {
         case "stage": columns = .byStage
         default: columns = nil
         }
-        snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map { path in
-            URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-        }
+        snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map(Self.fileURL)
+        theme = Self.value(environment["WOLOLO_DESK_THEME"])
+        themesDirectory = Self.value(environment["WOLOLO_DESK_THEMES_DIR"]).map(Self.fileURL)
+    }
+
+    private static func fileURL(_ path: String) -> URL {
+        URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     }
 
     private static func value(_ raw: String?) -> String? {
