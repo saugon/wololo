@@ -247,6 +247,7 @@ public struct ThemeFile: Codable, Equatable, Sendable {
             public var family: String?
             public var file: String?
             public var weight: Int?
+            /// In em, like CSS `letter-spacing`: `0.04` is 4% of the font's size.
             public var tracking: Double?
         }
     }
@@ -511,6 +512,7 @@ public struct ThemeSpec: Equatable, Sendable {
         public var file: ThemeAsset?
         /// CSS-style, 100 to 900. `nil` leaves it to each view.
         public var weight: Int?
+        /// In em, like CSS `letter-spacing`.
         public var tracking: Double
     }
 

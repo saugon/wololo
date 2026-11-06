@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppResources.registerFonts()
         NSApp.appearance = NSAppearance(named: .darkAqua)
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = MainMenu.make(openSettings: #selector(openSettings), target: self)

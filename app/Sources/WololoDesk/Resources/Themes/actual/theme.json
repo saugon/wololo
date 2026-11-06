@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "id": "actual",
+  "name": "Actual",
+  "colors": {
+    "ground": "#0b0c0f",
+    "sidebar": "#0f1014",
+    "surface": "#16181d",
+    "surfaceHover": "#1a1d23",
+    "field": "#1a1c21",
+    "border": "#262a33",
+    "borderHover": "#3a404c",
+    "divider": "#1f232b",
+    "cardDivider": "#22262e",
+    "rowDivider": "#1d2027",
+    "title": "#ffffff",
+    "heading": "#d5d8dd",
+    "text": "#e8eaed",
+    "secondary": "#c3c7ce",
+    "muted": "#9aa0ab",
+    "faint": "#858c98",
+    "pendingMark": "#585f6b",
+    "agent": "#b9a5ff",
+    "accent": "#5b9dff",
+    "focus": "#5b9dff",
+    "selection": "#202329",
+    "widget": "#121418",
+    "widgetBorder": "#2f343e",
+    "widgetHover": "#1c1f26",
+    "status": {
+      "waiting": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
+      "permission": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
+      "blocked": {"color": "#e5484d", "badge": "#c9373d", "badgeText": "#ffffff", "activity": "#ff8a8e"},
+      "stalled": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
+      "running": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
+      "agents": {"color": "#5b9dff", "badge": "#3a2f66", "badgeText": "#e6deff", "activity": "#c3c7ce"},
+      "tests": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
+      "ci": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
+      "pausing": {"color": "#5b9dff", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#c3c7ce"},
+      "paused": {"color": "#a1a7b3", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#9aa0ab"},
+      "orphaned": {"color": "#a1a7b3", "badge": "#5a3a1a", "badgeText": "#ffe2c2", "activity": "#e9b98a"},
+      "done": {"color": "#3fb950", "badge": "#1e4d2b", "badgeText": "#d7f5dd", "activity": "#9aa0ab"},
+      "failed": {"color": "#e5484d", "badge": "#8e2a2e", "badgeText": "#ffffff", "activity": "#ff8a8e"},
+      "cancelled": {"color": "#a1a7b3", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#9aa0ab"}
+    },
+    "columns": {
+      "waiting": {"icon": "#f5a524", "title": "#d5d8dd"},
+      "working": {"icon": "#5b9dff", "title": "#d5d8dd"},
+      "onHold": {"icon": "#a1a7b3", "title": "#d5d8dd"},
+      "finished": {"icon": "#3fb950", "title": "#d5d8dd"}
+    },
+    "bar": {"fill": "status", "track": "#2a2f3a"},
+    "ci": {"pending": "#f5a524", "passing": "#3fb950", "failing": "#ff8a8e", "none": "#9aa0ab"}
+  },
+  "fonts": {
+    "display": {"family": "", "weight": 600, "tracking": 0},
+    "body": {"family": "", "tracking": 0},
+    "mono": {"family": "", "tracking": 0}
+  },
+  "shapes": {
+    "radius": 10,
+    "bar": "continuous",
+    "bullet": "dot",
+    "statusIcon": "dot",
+    "columnIcons": {"waiting": "dot", "working": "dot", "onHold": "dot", "finished": "dot"},
+    "projectIcon": "symbol:folder"
+  },
+  "texts": {
+    "columns": {
+      "waiting": {"title": "Te espera", "subtitle": ""},
+      "working": {"title": "Trabajando", "subtitle": ""},
+      "onHold": {"title": "En pausa / huérfano", "subtitle": ""},
+      "finished": {"title": "Terminado", "subtitle": ""}
+    },
+    "waitingSection": "Te esperan",
+    "projectsSection": "Proyectos",
+    "all": "Todos",
+    "boardTitle": "Todos los runs",
+    "counterWorking": "trabajando",
+    "counterWaiting": "te esperan",
+    "archive": "Archivo",
+    "empty": "Nada acá"
+  }
+}

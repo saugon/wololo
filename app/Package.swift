@@ -10,7 +10,11 @@ let package = Package(
     ],
     targets: [
         .target(name: "WololoKit"),
-        .executableTarget(name: "WololoDesk", dependencies: ["WololoKit"]),
+        .executableTarget(
+            name: "WololoDesk",
+            dependencies: ["WololoKit"],
+            resources: [.copy("Resources/Fonts"), .copy("Resources/Themes")]
+        ),
         .testTarget(name: "WololoKitTests", dependencies: ["WololoKit"]),
     ]
 )

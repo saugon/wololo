@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "id": "aoe",
+  "name": "AoE",
+  "colors": {
+    "ground": "#18191b",
+    "sidebar": "#18191b",
+    "surface": "#25272a",
+    "surfaceHover": "#2e3034",
+    "field": "#101113",
+    "border": "#55534e",
+    "borderHover": "#6e6c66",
+    "divider": "#36373a",
+    "cardDivider": "#36373a",
+    "rowDivider": "#36373a",
+    "title": "#f6f3ea",
+    "heading": "#ece8dc",
+    "text": "#ece8dc",
+    "secondary": "#e4e0d4",
+    "muted": "#d6d2c6",
+    "faint": "#bdbab0",
+    "pendingMark": "#6e6c66",
+    "agent": "#d6d2c6",
+    "accent": "#d8bd7c",
+    "focus": "#ffffff",
+    "selection": "#ffffff17",
+    "widget": "#18191b",
+    "widgetBorder": "#55534e",
+    "widgetHover": "#2e3034",
+    "status": {
+      "waiting": {"color": "#f5ae5c", "badge": "#f5ae5c", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "permission": {"color": "#f5ae5c", "badge": "#f5ae5c", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "blocked": {"color": "#f29a92", "badge": "#f29a92", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "stalled": {"color": "#f5ae5c", "badge": "#f5ae5c", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "running": {"color": "#a6ccf2", "badge": "#a6ccf2", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "agents": {"color": "#a6ccf2", "badge": "#a6ccf2", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "tests": {"color": "#a6ccf2", "badge": "#a6ccf2", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "ci": {"color": "#a6ccf2", "badge": "#a6ccf2", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "pausing": {"color": "#a6ccf2", "badge": "#d8d5cb", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "paused": {"color": "#cfcbc0", "badge": "#d8d5cb", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "orphaned": {"color": "#f5ae5c", "badge": "#f5ae5c", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "done": {"color": "#a4dcae", "badge": "#a4dcae", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "failed": {"color": "#f29a92", "badge": "#f29a92", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "cancelled": {"color": "#cfcbc0", "badge": "#d8d5cb", "badgeText": "#17171a", "activity": "#e4e0d4"}
+    },
+    "columns": {
+      "waiting": {"icon": "#f0a03c", "title": "#e5cc8c"},
+      "working": {"icon": "#a6ccf2", "title": "#e5cc8c"},
+      "onHold": {"icon": "#cfcbc0", "title": "#e5cc8c"},
+      "finished": {"icon": "#a4dcae", "title": "#e5cc8c"}
+    },
+    "bar": {"fill": "#d8bd7c", "track": "#35363a"},
+    "ci": {"pending": "#f5ae5c", "passing": "#a4dcae", "failing": "#f29a92", "none": "#d6d2c6"}
+  },
+  "fonts": {
+    "display": {"family": "Cinzel", "weight": 700, "tracking": 0.04},
+    "body": {"family": "Source Sans 3"},
+    "mono": {"family": "JetBrains Mono", "weight": 500}
+  },
+  "images": {
+    "background": {"file": "background.png", "size": 512},
+    "divider": {"file": "rod.png", "width": 8},
+    "frame": {"file": "frame.png", "slice": 12, "width": 6},
+    "band": {"file": "band.png", "height": 10}
+  },
+  "shapes": {
+    "radius": 0,
+    "bar": "blocks",
+    "bullet": "gem",
+    "statusIcon": "hood",
+    "columnIcons": {
+      "waiting": "builtin:resisting",
+      "working": "builtin:converting",
+      "onHold": "builtin:idle",
+      "finished": "builtin:unitReady"
+    },
+    "projectIcon": "builtin:castle"
+  },
+  "texts": {
+    "columns": {
+      "waiting": {"title": "Resisting", "subtitle": "Te espera"},
+      "working": {"title": "Converting", "subtitle": "Trabajando"},
+      "onHold": {"title": "Idle", "subtitle": "En pausa / huérfano"},
+      "finished": {"title": "Unit ready", "subtitle": "Terminado · 24 h"}
+    },
+    "waitingSection": "Te esperan",
+    "projectsSection": "Buildings",
+    "all": "Todos",
+    "boardTitle": "Todos los runs",
+    "counterWorking": "trabajando",
+    "counterWaiting": "idle",
+    "archive": "Archivo",
+    "empty": "Nada acá"
+  }
+}

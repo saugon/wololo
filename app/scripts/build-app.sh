@@ -30,14 +30,19 @@ fail() {
 
 echo "→ Building WololoDesk (release)..."
 swift build -c release --product WololoDesk || fail "swift build failed (needs Swift 5.9+ on macOS 14+)"
-bin="$(swift build -c release --show-bin-path)/WololoDesk"
+bin_dir="$(swift build -c release --show-bin-path)"
+bin="$bin_dir/WololoDesk"
 [ -x "$bin" ] || fail "no binary at $bin"
+# Fonts, licences and the built-in themes, which the app looks for in Contents/Resources.
+resources="$bin_dir/WololoDesk_WololoDesk.bundle"
+[ -d "$resources" ] || fail "no resource bundle at $resources"
 
 app="dist/$app_name"
 echo "→ Assembling $app..."
 rm -rf "$app"
-mkdir -p "$app/Contents/MacOS"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/WololoDesk"
+ditto --norsrc --noextattr "$resources" "$app/Contents/Resources/WololoDesk_WololoDesk.bundle"
 cp Resources/Info.plist "$app/Contents/Info.plist"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 
