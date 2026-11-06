@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "id": "parcial",
+  "name": "Parcial",
+  "colors": {"surface": "#3a2a4a"},
+  "texts": {"columns": {"waiting": {"title": "Te toca"}}}
+}

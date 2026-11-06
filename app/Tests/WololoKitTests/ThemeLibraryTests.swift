@@ -90,6 +90,41 @@ final class ThemeLibraryTests: XCTestCase {
         XCTAssertEqual(try library.resolve("aoe").spec.name, "AoE")
     }
 
+    /// Scenarios 6, 7 and 8 over `Tests/Fixtures/themes`, the folder the Settings snapshots use. Whether a font
+    /// family is installed is checked by the app, so here only the missing files warn.
+    func testFixtureThemesListTheirErrorsAndWarnings() throws {
+        let fixture = try LibraryFixture()
+        let themes = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/themes")
+        let library = ThemeLibrary(builtIns: fixture.builtInFolders, userDirectory: themes)
+
+        XCTAssertEqual(library.entries.map(\.key), ["actual", "aoe", "parcial", "roto", "ruta-mala", "sin-fuente"])
+        XCTAssertEqual(library.entries.map(\.isUsable), [true, true, true, false, false, true])
+
+        let partial = try library.resolve("parcial")
+        XCTAssertEqual(partial.warnings, [])
+        var expected = ThemeSpec.actual
+        expected.id = "parcial"
+        expected.name = "Parcial"
+        expected.colors.surface = RGBA(hex: 0x3a2a4a)
+        expected.texts.columns.waiting.title = "Te toca"
+        XCTAssertEqual(partial.spec, expected, "only the surface and the waiting title differ from Actual")
+
+        XCTAssertTrue(try XCTUnwrap(library.entry("roto")?.error).hasPrefix("theme.json no es JSON válido"))
+        XCTAssertEqual(library.entry("ruta-mala")?.error,
+                       ThemeError.unsafePath(key: "images.background.file", path: "../x.png").description)
+
+        let missing = try library.resolve("sin-fuente")
+        XCTAssertEqual(missing.spec.fonts.display.family, "NoExiste")
+        XCTAssertEqual(missing.warnings, [
+            "fonts.display.file: no existe fonts/NoExiste.ttf",
+            "images.background.file: no existe textura.png",
+        ])
+        XCTAssertEqual(library.entry("sin-fuente")?.warnings, missing.warnings)
+    }
+
     func testWithoutUserFolderThereAreOnlyBuiltIns() throws {
         let fixture = try LibraryFixture()
         XCTAssertEqual(fixture.library().entries.map(\.key), ["actual", "aoe"], "the folder does not exist yet")

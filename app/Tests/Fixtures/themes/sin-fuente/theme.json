@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "name": "Sin fuente",
+  "colors": {"surface": "#2a3a2a"},
+  "fonts": {"display": {"family": "NoExiste", "file": "fonts/NoExiste.ttf"}},
+  "images": {"background": {"file": "textura.png", "size": 128}, "divider": {"file": "divisor.png", "width": 6}}
+}

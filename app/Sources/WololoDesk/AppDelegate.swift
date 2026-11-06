@@ -111,12 +111,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     override init() {
         options = LaunchOptions()
+        // Before the themes are read, so a bundled family such as Cinzel is not reported missing.
+        AppResources.registerFonts()
         state = AppState(options: options, persists: options.snapshotURL == nil)
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppResources.registerFonts()
         NSApp.appearance = NSAppearance(named: .darkAqua)
         NSApp.setActivationPolicy(.accessory)
         NSApp.mainMenu = MainMenu.make(openSettings: #selector(openSettings), target: self)

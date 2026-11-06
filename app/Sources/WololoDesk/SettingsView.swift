@@ -46,6 +46,8 @@ struct SettingsView: View {
     @State private var path: String
     @AppStorage(SettingsKey.showWidgetAtLaunch) private var showWidgetAtLaunch = true
     @State private var loginItem = LoginItem()
+    /// What the last theme button did, until another is pressed or another theme is chosen.
+    @State private var themeNote: ThemeNote?
     @Environment(\.theme) private var theme
 
     init(state: AppState) {
@@ -55,6 +57,10 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
+            section("Apariencia") {
+                appearance
+            }
+
             section("Datos") {
                 Text("Directorio de datos")
                     .font(theme.font(.body, size: 12, weight: .medium))
@@ -92,6 +98,142 @@ struct SettingsView: View {
         .frame(width: 560, alignment: .topLeading)
         .background { ThemeGround() }
     }
+
+    // MARK: Appearance
+
+    private struct ThemeNote {
+        let text: String
+        let isProblem: Bool
+    }
+
+    private var themes: ThemeStore { state.themes }
+
+    @ViewBuilder
+    private var appearance: some View {
+        HStack(spacing: 8) {
+            Text("Tema")
+                .font(theme.font(.body, size: 12, weight: .medium))
+                .foregroundStyle(theme.text)
+            Spacer()
+            Picker("Tema", selection: Binding(
+                get: { themes.key },
+                set: { key in
+                    if themes.select(key) {
+                        themeNote = nil
+                    } else if let entry = themes.entries.first(where: { $0.id == key || $0.key == key }) {
+                        // In case the menu lets a disabled option through: say why nothing changed.
+                        themeNote = ThemeNote(text: "\(entry.name) no se puede usar: \(entry.error ?? "no se pudo leer").", isProblem: true)
+                    }
+                }
+            )) {
+                ForEach(themes.entries.filter(\.isBuiltIn)) { entry in
+                    themeOption(entry)
+                }
+                let own = themes.entries.filter { !$0.isBuiltIn }
+                if !own.isEmpty {
+                    Divider()
+                    ForEach(own) { entry in
+                        themeOption(entry)
+                    }
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 240)
+        }
+        ForEach(themes.warnings, id: \.self) { warning in
+            Label(warning, systemImage: "exclamationmark.triangle.fill")
+                .font(theme.font(.body, size: 11.5))
+                .foregroundStyle(theme.style(.waitingUser).color)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        let unusable = themes.entries.filter { !$0.isUsable }
+        if !unusable.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("No se pueden elegir:")
+                ForEach(unusable) { entry in
+                    Text("\(entry.name): \(entry.error ?? "")")
+                }
+            }
+            .font(theme.font(.body, size: 11.5))
+            .foregroundStyle(theme.muted)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) { themeButtons }
+            VStack(alignment: .leading, spacing: 8) { themeButtons }
+        }
+        .disabled(themes.userDirectory == nil)
+        .padding(.top, 2)
+        if let themeNote {
+            Text(themeNote.text)
+                .font(theme.font(.body, size: 11.5))
+                .foregroundStyle(themeNote.isProblem ? theme.style(.waitingUser).color : theme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        note(themesFolderNote)
+    }
+
+    @ViewBuilder
+    private var themeButtons: some View {
+        Button("Abrir carpeta de temas", action: openThemesFolder)
+        Button("Duplicar el tema elegido como tema propio", action: duplicateTheme)
+        Button("Recargar temas", action: reloadThemes)
+    }
+
+    /// An option of the theme picker; one that cannot be used shows up disabled, with its error below the picker.
+    private func themeOption(_ entry: ThemeEntry) -> some View {
+        Text(entry.isUsable ? entry.name : "\(entry.name) (no se puede usar)")
+            // A broken folder may share its key with a usable theme: its path keeps the tags apart.
+            .tag(entry.isUsable ? entry.key : entry.id)
+            .disabled(!entry.isUsable)
+    }
+
+    private var themesFolderNote: String {
+        let folder = themes.userDirectory.map { "Tus temas van en \($0.path.abbreviatingTilde): cada uno es una carpeta con su theme.json." }
+            ?? "No hay carpeta de temas propios."
+        guard themes.isForced else { return folder }
+        return "\(folder) Lo fija WOLOLO_DESK_THEME: lo que elijas acá no se guarda."
+    }
+
+    private func openThemesFolder() {
+        do {
+            NSWorkspace.shared.open(try themes.createUserDirectory())
+        } catch {
+            themeNote = ThemeNote(text: "No se pudo abrir la carpeta de temas: \(error.localizedDescription)", isProblem: true)
+        }
+    }
+
+    private func duplicateTheme() {
+        let name = themes.library.entry(themes.key)?.name ?? themes.key
+        do {
+            let copy = try themes.duplicateCurrent()
+            if !copy.selected {
+                let reason = themes.library.entry(copy.key)?.error ?? "no se pudo leer"
+                themeNote = ThemeNote(text: "Dupliqué \(name) en la carpeta \(copy.key), pero la copia no se puede usar: \(reason).", isProblem: true)
+            } else if themes.isForced {
+                themeNote = ThemeNote(text: "Dupliqué \(name) en la carpeta \(copy.key) y lo estás usando, pero no se guarda: lo fija WOLOLO_DESK_THEME.", isProblem: false)
+            } else {
+                themeNote = ThemeNote(text: "Dupliqué \(name) en la carpeta \(copy.key) y es el tema elegido.", isProblem: false)
+            }
+        } catch {
+            themeNote = ThemeNote(text: "No se pudo duplicar \(name): \(error)", isProblem: true)
+        }
+    }
+
+    private func reloadThemes() {
+        let previous = themes.key
+        let name = themes.library.entry(previous)?.name ?? previous
+        themes.reload()
+        if themes.key == previous {
+            themeNote = ThemeNote(text: "Recargué los temas.", isProblem: false)
+        } else {
+            let reason = themes.library.entry(previous)?.error ?? "ya no está"
+            themeNote = ThemeNote(text: "\(name) no se puede usar (\(reason)): volví a Actual.", isProblem: true)
+        }
+    }
+
+    // MARK: Data
 
     private var dataDirectoryNote: String {
         let directory = state.model.dataDirectory

@@ -1,0 +1,5 @@
+{
+  "version": 1,
+  "name": "Ruta mala",
+  "images": {"background": {"file": "../x.png", "size": 128}}
+}

@@ -21,15 +21,19 @@ final class ThemeStore {
     private(set) var warnings: [String]
 
     var entries: [ThemeEntry] { library.entries }
+    /// Where the person's own themes go: `WOLOLO_DESK_THEMES_DIR` or Application Support. It may not exist yet.
+    let userDirectory: URL?
+    /// `WOLOLO_DESK_THEME` chose the theme for this launch, so a choice made now is not saved.
+    let isForced: Bool
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let persists: Bool
-    @ObservationIgnored private let userDirectory: URL?
 
     /// With `persists: false` (snapshots) or a theme forced by `WOLOLO_DESK_THEME`, a choice is not saved.
     init(options: LaunchOptions, defaults: UserDefaults, persists: Bool) {
         self.defaults = defaults
         self.persists = persists && options.theme == nil
+        isForced = options.theme != nil
         let userDirectory = options.themesDirectory ?? Self.defaultUserDirectory
         let library = ThemeLibrary(builtIns: AppResources.builtInThemes, userDirectory: userDirectory)
         self.userDirectory = userDirectory
@@ -51,6 +55,22 @@ final class ThemeStore {
     func reload() {
         library = ThemeLibrary(builtIns: AppResources.builtInThemes, userDirectory: userDirectory)
         apply(library.startingKey(forced: nil, saved: key))
+    }
+
+    /// Copies the theme in use into the user's folder, reads the folder again and uses the copy. Returns its key,
+    /// also the name of its folder, and whether the copy could be used.
+    func duplicateCurrent() throws -> (key: String, selected: Bool) {
+        guard let directory = userDirectory else { throw ThemeLibraryError.noUserDirectory }
+        let copy = try library.duplicate(key, into: directory)
+        reload()
+        return (copy, select(copy))
+    }
+
+    /// The user's themes folder, created when missing so it can be opened in the Finder.
+    func createUserDirectory() throws -> URL {
+        guard let directory = userDirectory else { throw ThemeLibraryError.noUserDirectory }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 
     private func apply(_ key: String) {
@@ -76,6 +96,15 @@ final class ThemeStore {
             if let family = font.family, !theme.hasFamily(role) {
                 warnings.append("fonts.\(name).family: no está \(family), se usa la del sistema")
             }
+        }
+        let images: [(String, ThemeAsset?)] = [
+            ("background", spec.images.background?.file), ("divider", spec.images.divider?.file),
+            ("frame", spec.images.frame?.file), ("band", spec.images.band?.file),
+        ]
+        for case let (name, asset?) in images
+        where FileManager.default.fileExists(atPath: asset.url.path) && theme.image(asset) == nil {
+            // A missing file already warned when the theme was read; one that is there but is not an image warns here.
+            warnings.append("images.\(name).file: no se pudo cargar \(asset.path)")
         }
         return (spec.id, theme, warnings)
     }
