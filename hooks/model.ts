@@ -766,6 +766,12 @@ export function duration(seconds: number): string {
   return `${h}h${String(m % 60).padStart(2, '0')}`
 }
 
+// The same, rounded up to the unit it shows: what a table of spent time adds up with, so no part reads as less than it took.
+export function durationUp(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds))
+  return s < 60 ? `${s}s` : duration(Math.ceil(s / 60) * 60)
+}
+
 
 const TEXT: Record<Lang, Record<string, string>> = {
   es: {

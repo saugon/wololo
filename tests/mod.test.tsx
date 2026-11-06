@@ -208,7 +208,9 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   const entered = parse(
     (await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)).result,
   )
-  expect(entered.header).toBe('[wololo #12 · 1/8 Contexto · ⟳ trabajando]')
+  expect(entered).toEqual({ ok: true, status: 'running', hint: expect.stringMatching(/^Read .*\/stages\/01-context\.md before working on this stage\.$/) })
+  const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect(got.header).toBe('[wololo #12 · 1/8 Contexto · ⟳ trabajando]')
   const short = await $.ui.mount({
     plugin: 'wololo',
     surface: 'terminal',
@@ -558,7 +560,7 @@ test('the init review says so when its pane cannot be shown, instead of claiming
   expect(host.files.has(`${DATA}/projects/acme__shop/config.json`)).toBe(false)
 })
 
-test('the expanded card pages its tab instead of growing past its rows', async ($, on) => {
+test('the expanded card draws its whole tab for the engine to scroll, with a way back at both ends', async ($, on) => {
   fakeHost(on)
   on('tool.call', () => ({ result: {} }))
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
@@ -572,10 +574,14 @@ test('the expanded card pages its tab instead of growing past its rows', async (
     props: { hasSurvey: false, isWorking: true, maxRows: 22, bodyColumns: 140, scroll: { offset: 0, bodyRows: 22 }, view: {} },
   })
   await ui.press({ key: 'toggle' })
-  const range = (await ui.find({ type: 'Text', text: /^1–\d+ de \d+$/ }))?.text ?? ''
-  expect(range).toMatch(/^1–\d+ de \d+$/)
-  await ui.press({ key: 'page-down' })
-  expect((await ui.find({ type: 'Text', text: /^\d+–\d+ de \d+$/ }))?.text).not.toBe(range)
+  expect(await ui.find({ type: 'Button', key: 'page-down' })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'pane' })).toBeUndefined()
+  await ui.redraw({ hasSurvey: false, isWorking: true, maxRows: 8, bodyColumns: 140, scroll: { offset: 0, bodyRows: 8 }, view: {} })
+  expect((await ui.findAll({ type: 'Text' })).length).toBeGreaterThan(8)
+  expect(await ui.find({ type: 'Button', key: 'toggle-end' })).toBeDefined()
+  await ui.press({ key: 'toggle' })
+  expect((await ui.find({ type: 'Button', key: 'toggle' }))?.text).toContain('más')
+  expect(await ui.find({ type: 'Button', key: 'toggle-end' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -804,6 +810,39 @@ test('a session takes the run from the instance that owned it, and the permissio
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
   expect(eventLines(host, 'repo-txt-perm02').filter(line => line.type === 'permission.resolved').map(line => line.seq)).toEqual([4])
+})
+
+test('the card of a run that finished is drawn again when the mod loads, not kept as an earlier load drew it', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const id = 'repo-txt-done02'
+  const dir = `${DATA}/runs/${id}`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq * 60, run: id, type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', { title: 'Salones', source: { kind: 'text', ref: 'x', url: null }, mode: 'checkpoints', session_id: 's1', cwd: REPO }),
+      ev(2, 'stage.entered', { stage: 'definition' }),
+      ev(3, 'time', { stage: 'definition', kind: 'you', seconds: 120 }),
+      ev(5, 'run.finished', { outcome: 'cancelled', summary: 's' }),
+    ].join('\n') + '\n',
+  )
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: 'cancelled', outcome: 'cancelled', owner: { session_id: 's1', cwd: REPO, heartbeat_at: 1_800_000_300 } }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: id, heartbeat_at: 1_800_000_300 }))
+  // What an earlier load of the mod left on the card.
+  const stale = { band: { title: 'old' }, details: [{ text: 'old table', tone: 'text' }] }
+  let view: unknown = stale
+  on('state.get', (_, e, next) => (e.key === 'view' ? { value: { value: view, version: 1 } } : next(e)))
+  on('state.set', (_, e, next) => {
+    if (e.key === 'view') view = (e as unknown as { value: unknown }).value
+    return next(e)
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const texts = ((view as { details?: Array<{ text: string }> } | null)?.details ?? []).map(row => row.text)
+  expect(texts).not.toContain('old table')
+  expect(texts.some(text => /^ +activo +total$/.test(text))).toBe(true)
+  // The run stays closed: nothing is written to it.
+  expect(eventLines(host, id).map(line => line.type)).toEqual(['run.started', 'stage.entered', 'time', 'run.finished'])
 })
 
 test('a run whose load fails after this session took it still beats and is written by the tick', async ($, on) => {

@@ -1,8 +1,8 @@
 import { expect, test } from 'claude-code/testing'
 
 import { historyMarkdown, timeline } from '../hooks/history'
-import { type RunEvent, rebuild, shortModel } from '../hooks/model'
-import { buildView, fitChips, pageOf, progressOf, wrapLines } from '../hooks/ui'
+import { type RunEvent, durationUp, rebuild, shortModel } from '../hooks/model'
+import { buildView, fitChips, progressOf, wrapLines } from '../hooks/ui'
 
 function events(list: Array<[RunEvent['type'], Record<string, unknown>]>): RunEvent[] {
   return list.map(([type, data], i) => ({ v: 1, seq: i + 1, ts: 1_800_000_000 + i * 60, run: 'r1', type, data }))
@@ -161,18 +161,6 @@ test('the progress bar fills done stages, the current one by its items, and says
   expect(progressOf(finished).segments.every(segment => segment.state === 'done' && segment.filled === '████')).toBe(true)
 })
 
-test('a tab shows a window that fits, starting near the item in progress', async () => {
-  const rows = Array.from({ length: 15 }, (_, i) => ({ text: `${i === 11 ? '▶' : '✓'} ${i + 1}.`, tone: 'text' as const }))
-  const around = pageOf(rows, 6, -1, 11)
-  expect(around.rows.map(row => row.text)).toEqual(['✓ 10.', '✓ 11.', '▶ 12.', '✓ 13.', '✓ 14.', '✓ 15.'])
-  expect(around.start).toBe(9)
-  const first = pageOf(rows, 6, 0, 11)
-  expect(first.rows[0]?.text).toBe('✓ 1.')
-  const past = pageOf(rows, 6, 40, -1)
-  expect(past.start).toBe(9)
-  expect(pageOf(rows.slice(0, 3), 6, -1, -1)).toEqual({ rows: rows.slice(0, 3), start: 0, size: 6, total: 3 })
-})
-
 test('a long detail wraps on words and ends in an ellipsis past its line budget', () => {
   const text = 'Pausado tras el ítem 12/15. Sigue: revisar el ítem 12, luego los ítems 13 a 15 y la suite final.'
   const lines = wrapLines(text, 30, 2)
@@ -272,12 +260,19 @@ test('the summary says where each stage spent its time, and how long its agents 
   const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_720)
   const texts = view.details.map(row => row.text)
   const start = texts.indexOf('Tiempo por etapa')
-  expect(texts.slice(start + 1, start + 5)).toEqual([
-    '  Contexto     7m  trabajando 1m · agentes 2m · sin medir 4m',
-    '                   agentes en total: explorador 4m',
-    '  Definición   4m  te esperó 30s · sin medir 3m',
-    '  Total       11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 7m',
+  // Active leaves out what the stage waited for the person; each time rounds up to the unit it shows, never down.
+  expect(texts.slice(start + 1, start + 6)).toEqual([
+    '              activo  total',
+    '  Contexto        7m     7m  trabajando 1m · agentes 2m · sin medir 4m',
+    '                             agentes en total: explorador 4m',
+    '  Definición      4m     4m  te esperó 30s · sin medir 4m',
+    '  Total          11m    11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 8m',
   ])
+  expect(durationUp(59)).toBe('59s')
+  expect(durationUp(60)).toBe('1m')
+  expect(durationUp(61)).toBe('2m')
+  expect(durationUp(3_599)).toBe('1h00')
+  expect(durationUp(9_601)).toBe('2h41')
 })
 
 test('the summary names the worktree, its branch against the base, its HEAD and the run ports', async () => {

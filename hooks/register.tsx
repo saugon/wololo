@@ -51,7 +51,7 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type MirrorRun, type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, mirrorCards, pageOf, statusCards, statusTable, thinBar, wrapLines } from './ui'
+import { type MirrorRun, type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, mirrorCards, statusCards, statusTable, thinBar, wrapLines } from './ui'
 
 type Engine = EngineInterface
 
@@ -79,7 +79,6 @@ const detailAtom = atom({ plugin: 'wololo', key: 'detail' } as const, false)
 const dialogAtom = atom({ plugin: 'wololo', key: 'dialog' } as const, null)
 const CONFIG_PANE = 'wololo-config'
 const ownerAtom = atom({ plugin: 'wololo', key: 'owner' } as const, '')
-const pageAtom = atom({ plugin: 'wololo', key: 'page' } as const, -1)
 const INSTANCE = Math.random().toString(36).slice(2, 10)
 
 let paths: Paths | undefined
@@ -1164,8 +1163,10 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
     if (!(await flush($)) && !(await isOwner($))) return notOwner(run.id)
     cleanup = await cleanUp($, runDir(paths, run.id))
   }
-  const ts = await nowSeconds($)
-  return ok({ ok: true, header: header(run, run.status, ts), status: run.status, hint: hintFor(type, data, root), ...(cleanup ? { cleanup } : {}) })
+  // Kept short: the answer stays in the conversation and is read again on every request after it. The card already shows the header,
+  // and get still returns it.
+  const hint = hintFor(type, data, root)
+  return ok({ ok: true, status: run.status, ...(hint ? { hint } : {}), ...(cleanup ? { cleanup } : {}) })
 }
 
 async function getState($: Engine, input: Record<string, unknown>): Promise<string> {
@@ -1922,6 +1923,13 @@ export const register: Register = (on, options) => {
           await inspectWorktree($)
           await refresh($)
           if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}` }).catch(() => undefined)
+        } else if (loaded?.outcome && loaded.owner.session_id === sessionId && (await read($, viewAtom))) {
+          // The card of a run that finished stays up for the session, kept with the state across loads of the mod: drawn again here from
+          // the run's events, so a reload shows what this load's code makes of it. The run itself stays closed.
+          const dir = runDir(paths, loaded.id)
+          const events = await readEvents($, dir)
+          const view = buildView(loaded, loaded.status, events.slice(-RECENT), await nowSeconds($), dir, undefined, undefined, homeDir || undefined)
+          await update($, viewAtom, () => view)
         }
       }
     })
@@ -2187,7 +2195,8 @@ export const register: Register = (on, options) => {
     const tab = await read($, tabAtom)
     const withDetail = await read($, detailAtom)
     const lang = run?.lang ?? 'es'
-    const tabRowsFixed = 6
+    // The tab row, the margins around it and the closing row, plus one row of slack.
+    const tabRowsFixed = 5
     const agentRows = (band.agents ?? []).length > 0 ? 1 : 0
     const bandRows = (isRoomy: boolean, detailRows: number) =>
       (isRoomy ? 4 : 2) + 1 + (isRoomy ? 1 : 0) + 1 + detailRows + agentRows + (band.progress ? (isRoomy ? 1 : 0) + 2 : 0)
@@ -2198,10 +2207,8 @@ export const register: Register = (on, options) => {
       : e.props.maxRows >= bandRows(true, roomyDetail)
     const detailRoom = Math.max(1, e.props.maxRows - bandRows(roomy, 0) - (isExpanded ? tabRowsFixed + 1 : 0))
     const detailLines = band.detail ? wrapLines(clip(band.detail, 220), detailWidth(roomy), Math.min(3, detailRoom)) : []
-    const fixedRows = bandRows(roomy, detailLines.length) + tabRowsFixed
-    const page = isExpanded
-      ? pageOf(tabRows(view, tab, withDetail, lang), Math.max(1, e.props.maxRows - fixedRows), await read($, pageAtom), tab === 'items' ? (view.items ?? []).findIndex(row => row.text.startsWith('▶')) : -1)
-      : { rows: [], start: 0, size: 0, total: 0 }
+    // Expanded, the card draws its tab whole: taller than the band, the engine scrolls it under the mouse wheel.
+    const rows = isExpanded ? tabRows(view, tab, withDetail, lang) : []
     const barWidth = Math.max(24, e.props.bodyColumns - (roomy ? 4 : 2) - 2 - 7)
     const chips = fitChips(band.agents ?? [], detailWidth(roomy))
     const isWaitingTone = band.tone === 'warning' || band.tone === 'error'
@@ -2273,81 +2280,64 @@ export const register: Register = (on, options) => {
         )}
         {isExpanded && (
           <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="row" columnGap={3}>
-              {TABS.map(item => (
-                <Button
-                  key={`tab-${item.id}`}
-                  hotkey={item.key}
-                  variant={item.id === tab ? 'primary' : undefined}
-                  plain={item.id === tab ? undefined : true}
-                  dimColor={item.id !== tab}
-                  label={tabName(lang, item.id)}
-                  onPress={async () => {
-                    await update($, tabAtom, () => item.id)
-                    await update($, pageAtom, () => -1)
-                    void $.ui.focus({ requestId: e.requestId, key: `tab-${item.id}` }).catch(() => undefined)
-                  }}
-                />
-              ))}
-              {tab === 'history' && (
-                <Button
-                  key="detail"
-                  hotkey="d"
-                  plain
-                  dimColor
-                  label={detailLabel(lang, withDetail)}
-                  onPress={() => update($, detailAtom, value => !value)}
-                />
-              )}
-              <Button
-                key="pane"
-                hotkey="p"
-                plain
-                dimColor
-                label={lang === 'es' ? 'abrir panel' : 'open pane'}
-                onPress={() => void $.ui.open({ id: PANE, title: view.title }).catch(() => undefined)}
-              />
+            <Box flexDirection="row" justifyContent="space-between" columnGap={3}>
+              <Box flexDirection="row" columnGap={3}>
+                {TABS.map(item => (
+                  <Button
+                    key={`tab-${item.id}`}
+                    hotkey={item.key}
+                    variant={item.id === tab ? 'primary' : undefined}
+                    plain={item.id === tab ? undefined : true}
+                    dimColor={item.id !== tab}
+                    label={tabName(lang, item.id)}
+                    onPress={async () => {
+                      await update($, tabAtom, () => item.id)
+                      void $.ui.focus({ requestId: e.requestId, key: `tab-${item.id}` }).catch(() => undefined)
+                      if (item.id === 'items') void $.ui.scroll({ to: { key: 'row-current' }, in: e.requestId, block: 'center' }).catch(() => undefined)
+                    }}
+                  />
+                ))}
+                {tab === 'history' && (
+                  <Button
+                    key="detail"
+                    hotkey="d"
+                    plain
+                    dimColor
+                    label={detailLabel(lang, withDetail)}
+                    onPress={() => update($, detailAtom, value => !value)}
+                  />
+                )}
+              </Box>
+              <Box flexShrink={0}>
+                <Button key="toggle" hotkey="m" plain dimColor label={lang === 'es' ? '▴ menos' : '▴ less'} onPress={() => update($, expandedAtom, () => false)} />
+              </Box>
             </Box>
             <Box flexDirection="column" marginTop={1}>
-              {page.rows.map(row => (
-                <Text color={paint(row.tone)} wrap="truncate-end">
-                  {row.text || ' '}
-                </Text>
-              ))}
-              {page.total > page.size && (
-                <Box flexDirection="row" columnGap={3} marginTop={1}>
-                  <Text color="subtle">{`${page.start + 1}–${page.start + page.rows.length} ${lang === 'es' ? 'de' : 'of'} ${page.total}`}</Text>
-                  <Button
-                    key="page-down"
-                    hotkey="j"
-                    plain
-                    dimColor
-                    label={lang === 'es' ? '↓ siguientes' : '↓ next'}
-                    onPress={() => update($, pageAtom, () => Math.min(page.start + page.size, Math.max(0, page.total - page.size)))}
-                  />
-                  <Button
-                    key="page-up"
-                    hotkey="k"
-                    plain
-                    dimColor
-                    label={lang === 'es' ? '↑ anteriores' : '↑ previous'}
-                    onPress={() => update($, pageAtom, () => Math.max(0, page.start - page.size))}
-                  />
-                </Box>
+              {rows.map(row =>
+                tab === 'items' && row.text.startsWith('▶') ? (
+                  <Box key="row-current">
+                    <Text color={paint(row.tone)} wrap="truncate-end">
+                      {row.text}
+                    </Text>
+                  </Box>
+                ) : (
+                  <Text color={paint(row.tone)} wrap="truncate-end">
+                    {row.text || ' '}
+                  </Text>
+                ),
               )}
+            </Box>
+            {/* The card scrolls whole, so the way back sits at both ends of it, never over a row. */}
+            <Box flexDirection="row" justifyContent="flex-end">
+              <Button key="toggle-end" plain dimColor label={lang === 'es' ? '▴ menos' : '▴ less'} onPress={() => update($, expandedAtom, () => false)} />
             </Box>
           </Box>
         )}
-        <Box position="absolute" bottom={0} right={0}>
-          <Button
-            key="toggle"
-            hotkey="m"
-            plain
-            dimColor
-            label={isExpanded ? (lang === 'es' ? '▴ menos' : '▴ less') : lang === 'es' ? '▾ más' : '▾ more'}
-            onPress={() => update($, expandedAtom, value => !value)}
-          />
-        </Box>
+        {!isExpanded && (
+          <Box position="absolute" bottom={0} right={0}>
+            <Button key="toggle" hotkey="m" plain dimColor label={lang === 'es' ? '▾ más' : '▾ more'} onPress={() => update($, expandedAtom, () => true)} />
+          </Box>
+        )}
       </Box>
     )
   }).catch(($, e, next) => next(e))
@@ -2847,7 +2837,6 @@ export const register: Register = (on, options) => {
                   label={tabName(lang, item.id)}
                   onPress={async () => {
                     await update($, tabAtom, () => item.id)
-                    await update($, pageAtom, () => -1)
                     void $.ui.focus({ requestId: PANE, key: `tab-${item.id}` }).catch(() => undefined)
                   }}
                 />

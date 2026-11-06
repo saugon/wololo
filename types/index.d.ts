@@ -53,6 +53,6 @@ export type ConfigDialog = {
 
 declare module 'claude-code' {
   interface PluginState {
-    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean; dialog: ConfigDialog | null; owner: string; page: number }
+    wololo: { view: ViewState | null; expanded: boolean; tab: 'summary' | 'items' | 'history'; detail: boolean; dialog: ConfigDialog | null; owner: string }
   }
 }

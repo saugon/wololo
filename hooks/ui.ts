@@ -22,6 +22,7 @@ import {
   badge,
   statusDetail,
   duration,
+  durationUp,
   header,
   isTerminal,
   isWaitingOnPerson,
@@ -176,26 +177,36 @@ function timeSection(run: Run, now: number): Row[] {
   })
   if (stages.length === 0) return []
   const labelWidth = Math.max(5, ...stages.map(stage => stage.label.length))
+  // Active is the stage's time less what it waited for the person and stood paused; total is its wall time, the waits included.
+  const active = (time: Partial<Record<TimeKind, number>>, wall: number) => Math.max(0, wall - (time.you ?? 0) - (time.paused ?? 0))
   const wallTotal = stages.reduce((sum, stage) => sum + stage.wall, 0)
-  const wallWidth = Math.max(...stages.map(stage => duration(stage.wall).length), duration(wallTotal).length)
+  const activeTotal = stages.reduce((sum, stage) => sum + active(stage.time, stage.wall), 0)
+  const heads = es ? { active: 'activo', wall: 'total' } : { active: 'active', wall: 'total' }
+  const activeWidth = Math.max(heads.active.length, ...stages.map(stage => durationUp(active(stage.time, stage.wall)).length), durationUp(activeTotal).length)
+  const wallWidth = Math.max(heads.wall.length, ...stages.map(stage => durationUp(stage.wall).length), durationUp(wallTotal).length)
   const parts = (time: Partial<Record<TimeKind, number>>, wall: number) => {
     const measured = TIME_KINDS.reduce((sum, kind) => sum + (time[kind] ?? 0), 0)
-    const list = TIME_KINDS.filter(kind => (time[kind] ?? 0) >= 1).map(kind => `${names[kind]} ${duration(time[kind] ?? 0)}`)
-    if (wall - measured >= 60) list.push(`${names.unmeasured} ${duration(wall - measured)}`)
+    const list = TIME_KINDS.filter(kind => (time[kind] ?? 0) >= 1).map(kind => `${names[kind]} ${durationUp(time[kind] ?? 0)}`)
+    if (wall - measured >= 60) list.push(`${names.unmeasured} ${durationUp(wall - measured)}`)
     return list.join(' · ')
   }
-  const indent = ' '.repeat(2 + labelWidth + 2 + wallWidth + 2)
-  const rows: Row[] = [{ text: es ? 'Tiempo por etapa' : 'Time by stage', tone: 'subtle' }]
+  const line = (label: string, time: Partial<Record<TimeKind, number>>, wall: number, activeSeconds: number) =>
+    `  ${label.padEnd(labelWidth)}  ${durationUp(activeSeconds).padStart(activeWidth)}  ${durationUp(wall).padStart(wallWidth)}  ${parts(time, wall)}`.trimEnd()
+  const indent = ' '.repeat(2 + labelWidth + 2 + activeWidth + 2 + wallWidth + 2)
+  const rows: Row[] = [
+    { text: es ? 'Tiempo por etapa' : 'Time by stage', tone: 'subtle' },
+    { text: `  ${''.padEnd(labelWidth)}  ${heads.active.padStart(activeWidth)}  ${heads.wall.padStart(wallWidth)}`, tone: 'subtle' },
+  ]
   const totals: Partial<Record<TimeKind, number>> = {}
   for (const { label, time, wall } of stages) {
     for (const kind of TIME_KINDS) totals[kind] = (totals[kind] ?? 0) + (time[kind] ?? 0)
-    rows.push({ text: `  ${label.padEnd(labelWidth)}  ${duration(wall).padStart(wallWidth)}  ${parts(time, wall)}`.trimEnd(), tone: 'text' })
+    rows.push({ text: line(label, time, wall, active(time, wall)), tone: 'text' })
     const roles = Object.entries(time.roles)
       .sort(([, a], [, b]) => b - a)
-      .map(([role, seconds]) => `${roleName(lang, role, 1)} ${duration(seconds)}`)
+      .map(([role, seconds]) => `${roleName(lang, role, 1)} ${durationUp(seconds)}`)
     if (roles.length > 0) rows.push({ text: `${indent}${es ? 'agentes en total' : 'agents in all'}: ${roles.join(' · ')}`, tone: 'subtle' })
   }
-  rows.push({ text: `  ${'Total'.padEnd(labelWidth)}  ${duration(wallTotal).padStart(wallWidth)}  ${parts(totals, wallTotal)}`.trimEnd(), tone: 'text' })
+  rows.push({ text: line('Total', totals, wallTotal, activeTotal), tone: 'text' })
   return rows
 }
 
@@ -522,11 +533,4 @@ export function wrapLines(text: string, width: number, max: number): string[] {
   const last = kept[max - 1] ?? ''
   kept[max - 1] = `${last.length >= width ? last.slice(0, width - 1) : last}…`
   return kept
-}
-
-export function pageOf(rows: Row[], size: number, wanted: number, focus: number): { rows: Row[]; start: number; size: number; total: number } {
-  const total = rows.length
-  const last = Math.max(0, total - size)
-  const start = wanted >= 0 ? Math.min(wanted, last) : focus >= 0 ? Math.min(Math.max(0, focus - 2), last) : 0
-  return { rows: rows.slice(start, start + size), start, size, total }
 }
