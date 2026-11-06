@@ -83,6 +83,8 @@ extension View {
 struct ToastView: View {
     let toast: Toast
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(Array(toast.lines.enumerated()), id: \.offset) { _, line in
@@ -90,14 +92,14 @@ struct ToastView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .font(.system(size: 13))
-        .foregroundStyle(Theme.text)
+        .font(theme.font(.body, size: 13))
+        .foregroundStyle(theme.text)
         .multilineTextAlignment(.leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(maxWidth: 560, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hoverBorder, lineWidth: 1))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(10)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(10)).strokeBorder(theme.borderHover, lineWidth: 1))
         .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
         .accessibilityElement(children: .combine)
     }

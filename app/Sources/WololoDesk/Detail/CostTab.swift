@@ -6,12 +6,14 @@ import WololoKit
 struct CostTab: View {
     let table: CostTable
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         Group {
             if table.rows.isEmpty {
                 Text("Todavía no hay tiempo ni costo registrado.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
             } else {
@@ -40,16 +42,16 @@ struct CostTab: View {
     }
 
     private var divider: some View {
-        Theme.cardDivider
+        theme.cardDivider
             .frame(height: 1)
             .gridCellUnsizedAxes(.horizontal)
     }
 
     private func header(_ title: String) -> some View {
         Text(title.uppercased())
-            .font(.system(size: 11.5, weight: .semibold))
+            .font(theme.font(.body, size: 11.5, weight: .semibold))
             .tracking(0.7)
-            .foregroundStyle(Theme.faint)
+            .foregroundStyle(theme.faint)
             .padding(.vertical, 8)
             .accessibilityLabel(title)
     }
@@ -57,8 +59,8 @@ struct CostTab: View {
     private func line(_ row: CostRow, isTotal: Bool) -> some View {
         GridRow {
             Text(row.label)
-                .font(.system(size: 13, weight: isTotal ? .semibold : .regular))
-                .foregroundStyle(Theme.text)
+                .font(theme.font(.body, size: 13, weight: isTotal ? .semibold : .regular))
+                .foregroundStyle(theme.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
             time(row.work, isTotal: isTotal)
             time(row.agents, isTotal: isTotal)
@@ -77,8 +79,8 @@ struct CostTab: View {
 
     private func number(_ text: String, isTotal: Bool, isFaint: Bool = false) -> some View {
         Text(text)
-            .font(.system(size: 12, weight: isTotal ? .semibold : .regular).monospaced())
-            .foregroundStyle(isFaint ? Theme.faint : (isTotal ? Theme.text : Theme.secondary))
+            .font(theme.font(.mono, size: 12, weight: isTotal ? .semibold : .regular))
+            .foregroundStyle(isFaint ? theme.faint : (isTotal ? theme.text : theme.secondary))
             .lineLimit(1)
     }
 }

@@ -10,12 +10,14 @@ struct ScreenshotsTab: View {
     /// A new snapshot may come with an image written after its entry: the tiles look at their file again.
     let updatedAt: TimeInterval
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         Group {
             if screenshots.isEmpty {
                 Text("Las capturas llegan en la etapa Evidencia.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 14, alignment: .top)], alignment: .leading, spacing: 14) {
@@ -42,6 +44,7 @@ private struct ScreenshotTile: View {
     @State private var loaded: FileStamp?
     @State private var loadedURL: URL?
     @State private var isHovered = false
+    @Environment(\.theme) private var theme
 
     private struct LoadKey: Hashable {
         let url: URL?
@@ -60,8 +63,8 @@ private struct ScreenshotTile: View {
             .accessibilityHint(image == nil ? "No se encontró la imagen" : "Abre la imagen")
             if !shot.caption.isEmpty {
                 Text(shot.caption)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.secondary)
+                    .font(theme.font(.body, size: 12.5))
+                    .foregroundStyle(theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -72,7 +75,7 @@ private struct ScreenshotTile: View {
     }
 
     private var thumbnail: some View {
-        Theme.sidebar
+        theme.sidebar
             .aspectRatio(16 / 10, contentMode: .fit)
             .overlay {
                 if let image {
@@ -81,19 +84,19 @@ private struct ScreenshotTile: View {
                         .scaledToFit()
                 } else {
                     Text((shot.file as NSString).lastPathComponent)
-                        .font(.system(size: 11.5).monospaced())
-                        .foregroundStyle(Theme.faint)
+                        .font(theme.font(.mono, size: 11.5))
+                        .foregroundStyle(theme.faint)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .padding(12)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: theme.r(8)))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(isHovered && image != nil ? Theme.hoverBorder : Theme.border, lineWidth: 1)
+                RoundedRectangle(cornerRadius: theme.r(8))
+                    .strokeBorder(isHovered && image != nil ? theme.borderHover : theme.border, lineWidth: 1)
             )
-            .contentShape(RoundedRectangle(cornerRadius: 8))
+            .contentShape(RoundedRectangle(cornerRadius: theme.r(8)))
             .onHover { isHovered = $0 }
     }
 

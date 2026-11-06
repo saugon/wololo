@@ -7,6 +7,8 @@ struct NowView: View {
     let run: Run
     let now: TimeInterval
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         let status = effectiveStatus(run, now: now)
         let activity = activityLine(run, now: now)
@@ -18,21 +20,21 @@ struct NowView: View {
                 StatusBadge(status: status, lang: run.lang)
             }
             Text(activity.isEmpty ? "Sin actividad todavía." : activity)
-                .font(.system(size: 16, weight: .medium))
+                .font(theme.font(.body, size: 16, weight: .medium))
                 .lineSpacing(3)
-                .foregroundStyle(activity.isEmpty ? Theme.faint : Theme.style(status).activity)
+                .foregroundStyle(activity.isEmpty ? theme.faint : theme.style(status).activity)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
             if live {
                 ForEach(notes(except: activity), id: \.label) { note in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text(note.label)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.faint)
+                            .font(theme.font(.body, size: 12))
+                            .foregroundStyle(theme.faint)
                             .frame(width: 64, alignment: .leading)
                         Text(note.text)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.secondary)
+                            .font(theme.font(.body, size: 13))
+                            .foregroundStyle(theme.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -40,8 +42,8 @@ struct NowView: View {
             }
             if StatusGroup(status) == .waiting {
                 Text("Se responde en la terminal de la sesión. La app solo muestra.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.muted)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if live {
@@ -80,7 +82,7 @@ struct NowView: View {
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(agents, id: \.id) { agent in
                     WorkerRow(
-                        color: Theme.agent,
+                        color: theme.agent,
                         name: agent.role,
                         detail: agent.model.map(shortModel),
                         since: ago(agent.startedAt, now: now, lang: run.lang),
@@ -89,7 +91,7 @@ struct NowView: View {
                 }
                 ForEach(tasks, id: \.id) { task in
                     WorkerRow(
-                        color: Theme.blue,
+                        color: theme.dot(.running),
                         name: task.label.isEmpty ? task.kind : task.label,
                         detail: task.kind,
                         since: ago(task.startedAt, now: now, lang: run.lang),
@@ -99,7 +101,7 @@ struct NowView: View {
             }
             .padding(.top, 12)
             .overlay(alignment: .top) {
-                Theme.cardDivider.frame(height: 1)
+                theme.cardDivider.frame(height: 1)
             }
         }
     }
@@ -117,25 +119,27 @@ private struct WorkerRow: View {
     let since: String
     let help: String
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: theme.r(2))
                 .fill(color)
                 .frame(width: 8, height: 8)
             Text(name)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.text)
+                .font(theme.font(.body, size: 13))
+                .foregroundStyle(theme.text)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let detail, !detail.isEmpty {
                 Text(detail)
-                    .font(.system(size: 11.5).monospaced())
-                    .foregroundStyle(Theme.muted)
+                    .font(theme.font(.mono, size: 11.5))
+                    .foregroundStyle(theme.muted)
                     .lineLimit(1)
             }
             Text(since)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.faint)
+                .font(theme.font(.body, size: 12))
+                .foregroundStyle(theme.faint)
                 .lineLimit(1)
                 .fixedSize()
         }

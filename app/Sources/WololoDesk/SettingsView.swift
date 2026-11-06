@@ -46,6 +46,7 @@ struct SettingsView: View {
     @State private var path: String
     @AppStorage(SettingsKey.showWidgetAtLaunch) private var showWidgetAtLaunch = true
     @State private var loginItem = LoginItem()
+    @Environment(\.theme) private var theme
 
     init(state: AppState) {
         self.state = state
@@ -56,12 +57,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 22) {
             section("Datos") {
                 Text("Directorio de datos")
-                    .font(Theme.Font.label)
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.body, size: 12, weight: .medium))
+                    .foregroundStyle(theme.text)
                 HStack(spacing: 8) {
                     TextField(DataDirectory.standard().path.abbreviatingTilde, text: $path)
                         .textFieldStyle(.roundedBorder)
-                        .font(Theme.Font.mono)
+                        .font(theme.font(.mono, size: 11.5))
                         .onSubmit(apply)
                     Button("Elegir…", action: choose)
                     Button("Aplicar", action: apply)
@@ -86,10 +87,10 @@ struct SettingsView: View {
             }
         }
         .toggleStyle(.switch)
-        .tint(Theme.blue)
+        .tint(theme.accent)
         .padding(24)
         .frame(width: 560, alignment: .topLeading)
-        .background(Theme.ground)
+        .background(theme.ground)
     }
 
     private var dataDirectoryNote: String {
@@ -134,15 +135,15 @@ struct SettingsView: View {
     private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title.lowercased())
-                .font(Theme.Font.caption)
-                .foregroundStyle(Theme.faint)
+                .font(theme.font(.body, size: 11.5))
+                .foregroundStyle(theme.faint)
             VStack(alignment: .leading, spacing: 8, content: content)
                 .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.border, lineWidth: 1))
+                .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(8)))
+                .overlay(RoundedRectangle(cornerRadius: theme.r(8)).stroke(theme.border, lineWidth: 1))
         }
-        .foregroundStyle(Theme.text)
+        .foregroundStyle(theme.text)
     }
 
     private func switchRow(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -156,8 +157,8 @@ struct SettingsView: View {
 
     private func note(_ text: String) -> some View {
         Text(text)
-            .font(Theme.Font.caption)
-            .foregroundStyle(Theme.muted)
+            .font(theme.font(.body, size: 11.5))
+            .foregroundStyle(theme.muted)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

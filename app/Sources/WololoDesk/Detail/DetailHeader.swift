@@ -11,14 +11,16 @@ struct DetailHeader: View {
     let back: () -> Void
     let goToTerminal: () -> Void
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             actions
             VStack(alignment: .leading, spacing: 8) {
                 Text(run.displayTitle)
-                    .font(.system(size: 24, weight: .bold))
-                    .tracking(-0.36)
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.display, size: 24, weight: .bold))
+                    .tracking(-0.36 + theme.tracking(.display, size: 24))
+                    .foregroundStyle(theme.text)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
                     .accessibilityAddTraits(.isHeader)
@@ -26,7 +28,7 @@ struct DetailHeader: View {
                 ProgressBarView(
                     progress: RunProgress(run, now: now),
                     height: 6,
-                    captionFont: .system(size: 13),
+                    captionFont: theme.font(.body, size: 13),
                     spacing: 14
                 )
                 .frame(maxWidth: 720)
@@ -68,11 +70,11 @@ struct DetailHeader: View {
     private var facts: some View {
         FlowLayout(spacing: 16, lineSpacing: 8) {
             Text(run.project.display)
-                .font(.system(size: 12.5).monospaced())
+                .font(theme.font(.mono, size: 12.5))
                 .help(run.project.path)
             if let branch = run.project.branch, !branch.isEmpty {
                 Text(branch)
-                    .font(.system(size: 12.5).monospaced())
+                    .font(theme.font(.mono, size: 12.5))
                     .help(run.project.worktree ?? run.project.path)
             }
             source
@@ -88,8 +90,8 @@ struct DetailHeader: View {
                 Text("\(es ? "duró" : "took") \(duration(finished - run.createdAt))")
             }
         }
-        .font(.system(size: 12.5))
-        .foregroundStyle(Theme.muted)
+        .font(theme.font(.body, size: 12.5))
+        .foregroundStyle(theme.muted)
         .lineLimit(1)
     }
 
@@ -98,7 +100,7 @@ struct DetailHeader: View {
         let label = sourceLabel(run)
         if let raw = run.source.url, let url = URL(string: raw), url.scheme != nil {
             Link(destination: url) {
-                Text("\(es ? "fuente" : "source") \(Text(label).foregroundStyle(Theme.blue))")
+                Text("\(es ? "fuente" : "source") \(Text(label).foregroundStyle(theme.accent))")
             }
             .help(raw)
         } else {

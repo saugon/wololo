@@ -15,6 +15,7 @@ struct TimelineTab: View {
 
     @State private var feed: EventFeed?
     @State private var includeMinor = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let entries = feed.map { includeMinor ? $0.allEntries : $0.majorEntries } ?? []
@@ -24,8 +25,8 @@ struct TimelineTab: View {
                 Toggle("Mostrar eventos menores", isOn: $includeMinor)
                     .toggleStyle(.switch)
                     .controlSize(.mini)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.muted)
+                    .font(theme.font(.body, size: 12))
+                    .foregroundStyle(theme.muted)
             }
             .frame(minHeight: 32)
             .padding(.horizontal, 18)
@@ -33,8 +34,8 @@ struct TimelineTab: View {
 
             if feed?.isLoaded == true && entries.isEmpty {
                 Text("Todavía no hay eventos.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
                     .padding(18)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
@@ -75,15 +76,17 @@ struct TimelineTab: View {
 private struct TimelineRow: View {
     let entry: TimelineEntry
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 14) {
             Text(TimelineRow.clock.string(from: Date(timeIntervalSince1970: entry.ts)))
-                .font(.system(size: 12).monospaced())
-                .foregroundStyle(Theme.faint)
+                .font(theme.font(.mono, size: 12))
+                .foregroundStyle(theme.faint)
                 .frame(width: 44, alignment: .leading)
                 .help(Date(timeIntervalSince1970: entry.ts).formatted(date: .abbreviated, time: .standard))
             Text(entry.text)
-                .font(.system(size: 13))
+                .font(theme.font(.body, size: 13))
                 .foregroundStyle(color)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -91,7 +94,7 @@ private struct TimelineRow: View {
         }
         .padding(.vertical, 6)
         .overlay(alignment: .bottom) {
-            Theme.rowDivider.frame(height: 1)
+            theme.rowDivider.frame(height: 1)
         }
         .accessibilityElement(children: .combine)
     }
@@ -103,15 +106,16 @@ private struct TimelineRow: View {
         return formatter
     }()
 
-    /// As in the mockup: what you approved in green, what asks for you in amber, problems in red, bookkeeping muted.
+    /// As in the mockup: what you approved in the color of done, what asks for you in that of waiting, problems in
+    /// that of blocked, bookkeeping muted.
     private var color: Color {
-        if entry.isMinor { return Theme.muted }
+        if entry.isMinor { return theme.muted }
         switch entry.type {
-        case "gate.resolved", "question.answered", "unblocked", "resumed": return Theme.green
-        case "gate.requested", "question.asked", "decision", "stalled": return Color(hex: 0xF7C46C)
-        case "blocked", "run.failed": return Color(hex: 0xFF8A8E)
-        case "run.started", "run.finished", "pr.opened": return Theme.text
-        default: return Theme.secondary
+        case "gate.resolved", "question.answered", "unblocked", "resumed": return theme.dot(.done)
+        case "gate.requested", "question.asked", "decision", "stalled": return theme.style(.waitingUser).activity
+        case "blocked", "run.failed": return theme.style(.blocked).activity
+        case "run.started", "run.finished", "pr.opened": return theme.text
+        default: return theme.secondary
         }
     }
 }

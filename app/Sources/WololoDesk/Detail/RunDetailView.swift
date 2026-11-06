@@ -87,29 +87,32 @@ private struct MissingRunView: View {
     let directory: DataDirectory
     let back: () -> Void
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         let runs = (directory.runsURL.path as NSString).abbreviatingWithTildeInPath
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Este run ya no está en")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.display, size: 20, weight: .bold))
+                    .tracking(theme.tracking(.display, size: 20))
+                    .foregroundStyle(theme.text)
                     .accessibilityAddTraits(.isHeader)
                 Text(runs)
-                    .font(.system(size: 13).monospaced())
-                    .foregroundStyle(Theme.text)
+                    .font(theme.font(.mono, size: 13))
+                    .foregroundStyle(theme.text)
                     .textSelection(.enabled)
                     .lineLimit(2)
                     .truncationMode(.middle)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.ground, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.border, lineWidth: 1))
+                    .background(theme.ground, in: RoundedRectangle(cornerRadius: theme.r(8)))
+                    .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
                     .help(directory.runsURL.path)
-                Text("Se borró o se movió la carpeta de \(Text(id).font(.system(size: 13.5).monospaced())). El tablero muestra los runs que quedan.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Theme.secondary)
+                Text("Se borró o se movió la carpeta de \(Text(id).font(theme.font(.mono, size: 13.5))). El tablero muestra los runs que quedan.")
+                    .font(theme.font(.body, size: 14))
+                    .foregroundStyle(theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -120,8 +123,8 @@ private struct MissingRunView: View {
         }
         .padding(32)
         .frame(maxWidth: 560, alignment: .leading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.border, lineWidth: 1))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(12)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(12)).strokeBorder(theme.border, lineWidth: 1))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -139,6 +142,8 @@ private struct DetailTabs: View {
     static let barHeight: CGFloat = 49
     static let minPaneHeight: CGFloat = 320
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 4) {
@@ -151,7 +156,7 @@ private struct DetailTabs: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Detalle del run")
 
-            Theme.cardDivider.frame(height: 1)
+            theme.cardDivider.frame(height: 1)
 
             switch tab {
             case .timeline:
@@ -167,9 +172,9 @@ private struct DetailTabs: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.surface)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border, lineWidth: 1))
+        .background(theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: theme.r(10)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(10)).strokeBorder(theme.border, lineWidth: 1))
     }
 
     private func tabButton(_ item: LaunchOptions.DetailTab) -> some View {
@@ -178,12 +183,12 @@ private struct DetailTabs: View {
             tab = item
         } label: {
             Text(Self.title(item))
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(isOn ? Color.white : Theme.muted)
+                .font(theme.font(.body, size: 13, weight: .medium))
+                .foregroundStyle(isOn ? theme.title : theme.muted)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(isOn ? Theme.track : .clear, in: RoundedRectangle(cornerRadius: 6))
-                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .background(isOn ? theme.track : .clear, in: RoundedRectangle(cornerRadius: theme.r(6)))
+                .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isOn ? [.isSelected] : [])
@@ -220,14 +225,16 @@ struct DetailCard<Content: View>: View {
     var spacing: CGFloat = 12
     @ViewBuilder var content: Content
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: spacing) {
             content
         }
         .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.border, lineWidth: 1))
+        .background(theme.surface, in: RoundedRectangle(cornerRadius: theme.r(10)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(10)).strokeBorder(theme.border, lineWidth: 1))
         .accessibilityElement(children: .contain)
     }
 }
@@ -236,15 +243,17 @@ struct DetailCard<Content: View>: View {
 struct CardTitle: View {
     let text: String
 
+    @Environment(\.theme) private var theme
+
     init(_ text: String) {
         self.text = text
     }
 
     var body: some View {
         Text(text.uppercased())
-            .font(.system(size: 12, weight: .semibold))
-            .tracking(0.96)
-            .foregroundStyle(Theme.faint)
+            .font(theme.font(.display, size: 12, weight: .semibold))
+            .tracking(0.96 + theme.tracking(.display, size: 12))
+            .foregroundStyle(theme.faint)
             .lineLimit(1)
             .accessibilityLabel(text)
             .accessibilityAddTraits(.isHeader)
@@ -264,28 +273,29 @@ struct DetailButtonStyle: ButtonStyle {
         let isPrimary: Bool
 
         @State private var isHovered = false
+        @Environment(\.theme) private var theme
 
         var body: some View {
             configuration.label
                 .labelStyle(DetailButtonLabelStyle())
-                .font(.system(size: 13, weight: isPrimary ? .semibold : .regular))
-                .foregroundStyle(isPrimary ? Theme.ground : Theme.secondary)
+                .font(theme.font(.body, size: 13, weight: isPrimary ? .semibold : .regular))
+                .foregroundStyle(isPrimary ? theme.ground : theme.secondary)
                 .padding(.horizontal, 14)
                 .frame(minHeight: 36)
-                .background(background, in: RoundedRectangle(cornerRadius: 8))
+                .background(background, in: RoundedRectangle(cornerRadius: theme.r(8)))
                 .overlay {
                     if !isPrimary {
-                        RoundedRectangle(cornerRadius: 8).strokeBorder(isHovered ? Theme.hoverBorder : Theme.border, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(isHovered ? theme.borderHover : theme.border, lineWidth: 1)
                     }
                 }
                 .opacity(configuration.isPressed ? 0.8 : 1)
-                .contentShape(RoundedRectangle(cornerRadius: 8))
+                .contentShape(RoundedRectangle(cornerRadius: theme.r(8)))
                 .onHover { isHovered = $0 }
         }
 
         private var background: Color {
-            if isPrimary { return isHovered ? .white : Theme.text }
-            return isHovered ? Theme.hover : .clear
+            if isPrimary { return isHovered ? theme.title : theme.text }
+            return isHovered ? theme.surfaceHover : .clear
         }
     }
 }

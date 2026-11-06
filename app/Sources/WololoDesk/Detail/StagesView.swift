@@ -21,23 +21,25 @@ struct StagesView: View {
 private struct StageRowView: View {
     let row: StageRow
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 10) {
             dot
             Text(row.label)
-                .font(.system(size: 13, weight: row.state == .current ? .semibold : .regular))
-                .foregroundStyle(row.state == .pending ? Theme.faint : Theme.text)
+                .font(theme.font(.body, size: 13, weight: row.state == .current ? .semibold : .regular))
+                .foregroundStyle(row.state == .pending ? theme.faint : theme.text)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let note = row.note {
                 Text(note)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 12))
+                    .foregroundStyle(theme.faint)
                     .lineLimit(1)
             }
             Text(row.durationText)
-                .font(.system(size: 12).monospaced())
-                .foregroundStyle(Theme.muted)
+                .font(theme.font(.mono, size: 12))
+                .foregroundStyle(theme.muted)
                 .lineLimit(1)
                 .frame(minWidth: 52, alignment: .trailing)
         }
@@ -49,12 +51,12 @@ private struct StageRowView: View {
     private var dot: some View {
         let ring: Color
         switch row.state {
-        case .done: ring = Theme.green
-        case .current: ring = Theme.blue
-        case .pending: ring = Theme.hoverBorder
+        case .done: ring = theme.dot(.done)
+        case .current: ring = theme.dot(.running)
+        case .pending: ring = theme.borderHover
         }
         return Circle()
-            .fill(row.state == .done ? Theme.green : .clear)
+            .fill(row.state == .done ? theme.dot(.done) : .clear)
             .overlay(Circle().strokeBorder(ring, lineWidth: 2))
             .frame(width: 10, height: 10)
     }

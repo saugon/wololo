@@ -29,6 +29,7 @@ struct WidgetView: View {
     @State private var rowsHeight: CGFloat = 0
     @State private var chromeHeight: CGFloat = 0
     @State private var bottomHeight: CGFloat = 0
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let model = state.model
@@ -37,7 +38,7 @@ struct WidgetView: View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 header(waiting: menuBarCount(model.runs, now: model.now))
-                Theme.cardDivider.frame(height: 1)
+                theme.cardDivider.frame(height: 1)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { chromeHeight = $0 }
 
@@ -59,28 +60,29 @@ struct WidgetView: View {
         .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { heightChanged($0) }
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Theme.widget)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.widgetBorder, lineWidth: 1))
+        .background(theme.widget)
+        .clipShape(RoundedRectangle(cornerRadius: theme.r(12)))
+        .overlay(RoundedRectangle(cornerRadius: theme.r(12)).strokeBorder(theme.widgetBorder, lineWidth: 1))
         .preferredColorScheme(.dark)
     }
 
     private func header(waiting: Int) -> some View {
         HStack(spacing: 10) {
             BoardGlyph()
-                .stroke(Theme.blue, style: StrokeStyle(lineWidth: 1.8 * 18 / 24, lineCap: .round, lineJoin: .round))
+                .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8 * 18 / 24, lineCap: .round, lineJoin: .round))
                 .frame(width: 18, height: 18)
                 .accessibilityHidden(true)
             Text("wololo")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.text)
+                .font(theme.font(.display, size: 13, weight: .bold))
+                .tracking(theme.tracking(.display, size: 13))
+                .foregroundStyle(theme.text)
             if waiting > 0 {
                 Text(waitingLabel(waiting))
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Theme.ground)
+                    .font(theme.font(.body, size: 11.5, weight: .semibold))
+                    .foregroundStyle(theme.style(.waitingUser).badgeText)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 2)
-                    .background(Theme.amber, in: Capsule())
+                    .background(theme.style(.waitingUser).badge, in: Capsule())
                     .fixedSize()
             }
             Spacer(minLength: 0)
@@ -88,7 +90,7 @@ struct WidgetView: View {
                 Image(systemName: "arrow.up.forward.square")
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 28, height: 28)
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
             }
             .buttonStyle(WidgetIconButtonStyle())
             .help("Abrir la ventana")
@@ -97,7 +99,7 @@ struct WidgetView: View {
                 Image(systemName: "minus")
                     .font(.system(size: 13, weight: .semibold))
                     .frame(width: 28, height: 28)
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
             }
             .buttonStyle(WidgetIconButtonStyle())
             .help("Ocultar el widget (⌘⇧W desde el menú)")
@@ -122,7 +124,7 @@ struct WidgetView: View {
                         open: { openRun(run.id) },
                         goToTerminal: { TerminalAction.go(to: run, now: state.model.now, state: state, origin: .widget) }
                     )
-                    Theme.rowDivider.frame(height: 1)
+                    theme.rowDivider.frame(height: 1)
                 }
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { rowsHeight = $0 }
@@ -133,7 +135,7 @@ struct WidgetView: View {
 
     private func footer(active: Int, last: Run?, now: TimeInterval) -> some View {
         VStack(spacing: 0) {
-            Theme.cardDivider.frame(height: 1)
+            theme.cardDivider.frame(height: 1)
             HStack(spacing: 8) {
                 Text(activeLabel(active))
                     .fixedSize()
@@ -151,8 +153,8 @@ struct WidgetView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .font(.system(size: 11.5))
-            .foregroundStyle(Theme.faint)
+            .font(theme.font(.body, size: 11.5))
+            .foregroundStyle(theme.faint)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(WindowDragArea(zooms: false))
@@ -167,7 +169,7 @@ struct WidgetView: View {
             if let toast {
                 ToastView(toast: toast)
                     .id(toast.id)
-                    .contentShape(RoundedRectangle(cornerRadius: 10))
+                    .contentShape(RoundedRectangle(cornerRadius: theme.r(10)))
                     .onTapGesture { state.dismissToast(toast.id) }
                     .help("Click para cerrar")
                     .accessibilityAction(named: "Cerrar") { state.dismissToast(toast.id) }
@@ -181,8 +183,8 @@ struct WidgetView: View {
     private func empty(last: Run?, now: TimeInterval) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Sin runs activos")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.secondary)
+                .font(theme.font(.body, size: 13, weight: .semibold))
+                .foregroundStyle(theme.secondary)
             if let last {
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     Text("Último terminado: \(last.displayTitle)")
@@ -191,8 +193,8 @@ struct WidgetView: View {
                     Text(", \(ago(finishedAt(last), now: now, lang: .es))")
                         .fixedSize()
                 }
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.faint)
+                .font(theme.font(.body, size: 12))
+                .foregroundStyle(theme.faint)
                 .contentShape(Rectangle())
                 .onTapGesture { openRun(last.id) }
                 .help("Abrir el detalle de \(last.displayTitle)")

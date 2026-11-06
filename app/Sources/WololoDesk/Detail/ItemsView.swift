@@ -7,6 +7,8 @@ struct ItemsView: View {
     let run: Run
     let now: TimeInterval
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         DetailCard(spacing: 6) {
             HStack {
@@ -14,8 +16,8 @@ struct ItemsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if let chip = itemsChip(run) {
                     Text(chip.text)
-                        .font(.system(size: 12).monospaced())
-                        .foregroundStyle(Theme.muted)
+                        .font(theme.font(.mono, size: 12))
+                        .foregroundStyle(theme.muted)
                         .help(chip.title)
                 }
             }
@@ -23,8 +25,8 @@ struct ItemsView: View {
 
             if run.items.list.isEmpty {
                 Text("Todavía no hay plan.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
             }
             ForEach(run.items.list, id: \.n) { item in
                 ItemRow(item: item, mark: itemMark(item, in: run, now: now))
@@ -41,21 +43,23 @@ private struct ItemRow: View {
     let item: Run.ItemEntry
     let mark: ItemMark
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 10) {
             Text(glyph)
-                .font(.system(size: 13))
+                .font(theme.font(.body, size: 13))
                 .foregroundStyle(color)
                 .frame(width: 18)
             Text("\(item.n). \(item.title)")
-                .font(.system(size: 13))
-                .foregroundStyle(mark == .pending ? Theme.muted : Theme.text)
+                .font(theme.font(.body, size: 13))
+                .foregroundStyle(mark == .pending ? theme.muted : theme.text)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
             if let sha = item.sha, !sha.isEmpty {
                 Text(String(sha.prefix(7)))
-                    .font(.system(size: 11.5).monospaced())
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.mono, size: 11.5))
+                    .foregroundStyle(theme.faint)
                     .textSelection(.enabled)
                     .help(sha)
             }
@@ -76,10 +80,10 @@ private struct ItemRow: View {
 
     private var color: Color {
         switch mark {
-        case .done: return Theme.green
-        case .active: return Theme.blue
-        case .failing: return Theme.color(CIRole.failing)
-        case .pending: return Theme.pendingMark
+        case .done: return theme.dot(.done)
+        case .active: return theme.dot(.running)
+        case .failing: return theme.ci(.failing)
+        case .pending: return theme.pendingMark
         }
     }
 
@@ -96,33 +100,35 @@ private struct ItemRow: View {
 private struct PRRow: View {
     let pr: PRLine
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "arrow.triangle.pull")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.secondary)
+                .foregroundStyle(theme.secondary)
                 .frame(width: 15, height: 15)
             Group {
                 if let url = pr.url {
                     Link(pr.text, destination: url)
-                        .foregroundStyle(Theme.blue)
+                        .foregroundStyle(theme.accent)
                         .help(url.absoluteString)
                 } else {
                     Text(pr.text)
-                        .foregroundStyle(Theme.text)
+                        .foregroundStyle(theme.text)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             if let ci = pr.ci {
                 Text(ci)
-                    .foregroundStyle(Theme.color(pr.ciRole))
+                    .foregroundStyle(theme.ci(pr.ciRole))
             }
         }
-        .font(.system(size: 13))
+        .font(theme.font(.body, size: 13))
         .lineLimit(1)
         .padding(.top, 12)
         .overlay(alignment: .top) {
-            Theme.cardDivider.frame(height: 1)
+            theme.cardDivider.frame(height: 1)
         }
     }
 }

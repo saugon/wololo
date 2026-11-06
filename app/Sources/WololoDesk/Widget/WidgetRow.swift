@@ -11,6 +11,7 @@ struct WidgetRow: View {
     let goToTerminal: () -> Void
 
     @State private var isHovered = false
+    @Environment(\.theme) private var theme
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
@@ -18,27 +19,28 @@ struct WidgetRow: View {
         HStack(alignment: .top, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 Circle()
-                    .fill(Theme.dot(status))
+                    .fill(theme.dot(status))
                     .frame(width: 8, height: 8)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(run.displayTitle)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.text)
+                            .font(theme.font(.display, size: 13, weight: .semibold))
+                            .tracking(theme.tracking(.display, size: 13))
+                            .foregroundStyle(theme.text)
                             .lineLimit(1)
                             .truncationMode(.tail)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text(shortAgo(run.updatedAt, now: now, lang: run.lang))
-                            .font(.system(size: 11.5).monospacedDigit())
-                            .foregroundStyle(Theme.faint)
+                            .font(theme.font(.body, size: 11.5).monospacedDigit())
+                            .foregroundStyle(theme.faint)
                             .fixedSize()
                     }
                     HStack(spacing: 8) {
                         CappedWidth(width: 130) {
                             Text(run.project.display)
-                                .font(.system(size: 11).monospaced())
-                                .foregroundStyle(Theme.muted)
+                                .font(theme.font(.mono, size: 11))
+                                .foregroundStyle(theme.muted)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
@@ -48,15 +50,15 @@ struct WidgetRow: View {
                             progress: progress,
                             height: 3,
                             caption: .short,
-                            captionFont: .system(size: 11).monospacedDigit(),
+                            captionFont: theme.font(.body, size: 11).monospacedDigit(),
                             spacing: 8
                         )
                     }
                     let activity = activityLine(run, now: now)
                     if !activity.isEmpty {
                         Text(activity)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.style(status).activity)
+                            .font(theme.font(.body, size: 12))
+                            .foregroundStyle(theme.style(status).activity)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -67,7 +69,7 @@ struct WidgetRow: View {
                 label: run.displayTitle,
                 value: accessibilityValue(status, progress: progress),
                 isSelected: false,
-                cornerRadius: 6,
+                cornerRadius: theme.r(6),
                 action: open
             )
 
@@ -75,9 +77,9 @@ struct WidgetRow: View {
                 Image(systemName: "terminal")
                     .font(.system(size: 13, weight: .medium))
                     .frame(width: 28, height: 28)
-                    .contentShape(RoundedRectangle(cornerRadius: 6))
+                    .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
             }
-            .buttonStyle(WidgetIconButtonStyle(color: Theme.muted))
+            .buttonStyle(WidgetIconButtonStyle(color: theme.muted))
             .help(TerminalPlan(run, now: now).triesFocus
                 ? "Traer al frente la terminal de la sesión"
                 : "Abrir una terminal en la carpeta del run")
@@ -86,7 +88,7 @@ struct WidgetRow: View {
         .padding(.leading, 14)
         .padding(.trailing, 12)
         .padding(.vertical, 11)
-        .background(isHovered ? Theme.widgetHover : Color.clear)
+        .background(isHovered ? theme.widgetHover : Color.clear)
         .onHover { isHovered = $0 }
     }
 
@@ -120,25 +122,28 @@ private struct CappedWidth: Layout {
 
 /// The widget's square icon buttons: the glyph alone, with a rounded background under the pointer or while pressed.
 struct WidgetIconButtonStyle: ButtonStyle {
-    var color: Color = Theme.secondary
+    /// The theme's secondary text color when nil.
+    var color: Color?
 
     func makeBody(configuration: Configuration) -> some View {
-        HoverBackground(isPressed: configuration.isPressed) {
+        HoverBackground(isPressed: configuration.isPressed, color: color) {
             configuration.label
-                .foregroundStyle(color)
         }
     }
 
     private struct HoverBackground<Label: View>: View {
         let isPressed: Bool
+        let color: Color?
         @ViewBuilder let label: () -> Label
         @State private var isHovered = false
+        @Environment(\.theme) private var theme
 
         var body: some View {
             label()
+                .foregroundStyle(color ?? theme.secondary)
                 .background(
-                    isPressed ? Theme.hoverBorder : (isHovered ? Theme.border : Color.clear),
-                    in: RoundedRectangle(cornerRadius: 6)
+                    isPressed ? theme.borderHover : (isHovered ? theme.border : Color.clear),
+                    in: RoundedRectangle(cornerRadius: theme.r(6))
                 )
                 .onHover { isHovered = $0 }
         }

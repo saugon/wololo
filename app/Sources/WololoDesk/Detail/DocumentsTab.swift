@@ -14,6 +14,7 @@ struct DocumentsTab: View {
     @State private var failed = false
     /// The document `blocks` came from, as it was on disk then.
     @State private var loaded: (name: String, stamp: FileStamp?)?
+    @Environment(\.theme) private var theme
 
     private struct LoadKey: Hashable {
         let name: String?
@@ -26,15 +27,15 @@ struct DocumentsTab: View {
                 Color.clear
             } else if documents.isEmpty {
                 Text("Este run todavía no escribió documentos.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.faint)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
                     .padding(18)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 HStack(alignment: .top, spacing: 0) {
                     list
                         .frame(width: 200)
-                    Theme.cardDivider.frame(width: 1)
+                    theme.cardDivider.frame(width: 1)
                     article
                         .frame(maxWidth: .infinity)
                 }
@@ -53,14 +54,14 @@ struct DocumentsTab: View {
                         selected = document.name
                     } label: {
                         Text(document.name)
-                            .font(.system(size: 12.5).monospaced())
-                            .foregroundStyle(isOn ? Theme.text : Theme.secondary)
+                            .font(theme.font(.mono, size: 12.5))
+                            .foregroundStyle(isOn ? theme.text : theme.secondary)
                             .lineLimit(1)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(isOn ? Theme.divider : .clear, in: RoundedRectangle(cornerRadius: 6))
-                            .contentShape(RoundedRectangle(cornerRadius: 6))
+                            .background(isOn ? theme.divider : .clear, in: RoundedRectangle(cornerRadius: theme.r(6)))
+                            .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(isOn ? [.isSelected] : [])
@@ -75,8 +76,8 @@ struct DocumentsTab: View {
             Group {
                 if failed {
                     Text("No se pudo leer \(selected ?? "el documento").")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.faint)
+                        .font(theme.font(.body, size: 13))
+                        .foregroundStyle(theme.faint)
                 } else {
                     MarkdownView(blocks: blocks)
                 }
@@ -136,6 +137,8 @@ struct DocumentsTab: View {
 struct MarkdownView: View {
     let blocks: [MarkdownBlock]
 
+    @Environment(\.theme) private var theme
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
@@ -152,8 +155,8 @@ struct MarkdownView: View {
         switch block {
         case .heading(let level, let text):
             Text(inline(text))
-                .font(.system(size: level == 1 ? 18 : (level == 2 ? 15 : 14), weight: level == 1 ? .bold : .semibold))
-                .foregroundStyle(level == 3 ? Theme.heading : Theme.text)
+                .font(theme.font(.body, size: level == 1 ? 18 : (level == 2 ? 15 : 14), weight: level == 1 ? .bold : .semibold))
+                .foregroundStyle(level == 3 ? theme.heading : theme.text)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
         case .paragraph(let text):
@@ -161,8 +164,8 @@ struct MarkdownView: View {
         case .listItem(let number, let text):
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(number.map { "\($0)." } ?? "•")
-                    .font(.system(size: 13.5).monospacedDigit())
-                    .foregroundStyle(Theme.muted)
+                    .font(theme.font(.body, size: 13.5).monospacedDigit())
+                    .foregroundStyle(theme.muted)
                     .frame(minWidth: 14, alignment: .trailing)
                 body(text)
             }
@@ -170,25 +173,25 @@ struct MarkdownView: View {
         case .code(_, let text):
             ScrollView(.horizontal) {
                 Text(text)
-                    .font(.system(size: 12).monospaced())
-                    .foregroundStyle(Theme.secondary)
+                    .font(theme.font(.mono, size: 12))
+                    .foregroundStyle(theme.secondary)
                     .fixedSize()
                     .padding(12)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.ground, in: RoundedRectangle(cornerRadius: 6))
-            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.cardDivider, lineWidth: 1))
+            .background(theme.ground, in: RoundedRectangle(cornerRadius: theme.r(6)))
+            .overlay(RoundedRectangle(cornerRadius: theme.r(6)).strokeBorder(theme.cardDivider, lineWidth: 1))
         case .rule:
-            Theme.cardDivider.frame(height: 1)
+            theme.cardDivider.frame(height: 1)
         }
     }
 
     private func body(_ text: String) -> some View {
         Text(inline(text))
-            .font(.system(size: 13.5))
+            .font(theme.font(.body, size: 13.5))
             .lineSpacing(3)
-            .foregroundStyle(Theme.secondary)
-            .tint(Theme.blue)
+            .foregroundStyle(theme.secondary)
+            .tint(theme.accent)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
