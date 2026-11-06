@@ -67,8 +67,7 @@ final class BuiltInThemesTests: XCTestCase {
         XCTAssertEqual(spec.fonts.mono.weight, 500)
         XCTAssertEqual(spec.images.background?.size, 512)
         XCTAssertEqual(spec.images.divider?.width, 8)
-        XCTAssertEqual(spec.images.frame?.slice, 12)
-        XCTAssertEqual(spec.images.frame?.width, 6)
+        XCTAssertNil(spec.images.frame, "AoE draws no iron frames, as in the reference image")
         XCTAssertEqual(spec.images.band?.height, 10)
         XCTAssertEqual(spec.shapes.radius, 0)
         XCTAssertEqual(spec.shapes.bar, .blocks)
@@ -82,7 +81,7 @@ final class BuiltInThemesTests: XCTestCase {
         XCTAssertEqual(spec.columnText("finished"), ThemeSpec.ColumnText(title: "Unit ready", subtitle: "Terminado · 24 h"))
         XCTAssertEqual(spec.texts.projectsSection, "Buildings")
         XCTAssertEqual(spec.texts.counterWaiting, "idle")
-        for asset in [spec.images.background?.file, spec.images.divider?.file, spec.images.frame?.file, spec.images.band?.file] {
+        for asset in [spec.images.background?.file, spec.images.divider?.file, spec.images.band?.file] {
             let asset = try XCTUnwrap(asset)
             XCTAssertTrue(FileManager.default.fileExists(atPath: asset.url.path), asset.path)
         }

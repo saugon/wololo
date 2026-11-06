@@ -60,7 +60,6 @@
   "images": {
     "background": {"file": "background.png", "size": 512},
     "divider": {"file": "rod.png", "width": 8},
-    "frame": {"file": "frame.png", "slice": 12, "width": 6},
     "band": {"file": "band.png", "height": 10}
   },
   "shapes": {
