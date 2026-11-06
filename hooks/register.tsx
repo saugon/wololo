@@ -635,6 +635,56 @@ async function openInitEarly($: Engine, args: string) {
   await $.ui.open({ id: CONFIG_PANE, title: 'wololo · init', holdToasts: true, rows: 32 }).catch(() => undefined)
 }
 
+function initKey(question: InitQuestion, effective: unknown): string {
+  return `init-${question.id}-${question.choices[chosenIndex(question, effective)]?.id ?? ''}`
+}
+
+// Puts the keyboard on the init question now asked and scrolls it into view: a pane shorter than the wizard scrolls, and its arrows
+// scroll it: the ui.scroll hook turns them into moves between the options.
+async function revealInit($: Engine, key: string, active = true) {
+  await $.ui.focus({ requestId: CONFIG_PANE, key }).catch(() => undefined)
+  await $.ui.scroll({ to: { key: active ? 'init-active' : key }, in: CONFIG_PANE }).catch(() => undefined)
+}
+
+// What the arrows walk on the config screen now shown, and where the focus starts: the options of the init question asked, the ones
+// that end the questions, the sections to pick, or every field of a section screen (an Input too) and its buttons.
+type Stop = { key: string; show: string }
+
+// Each field's controls, and the box that holds its label, which a move scrolls into view whole.
+function fieldStops(fields: readonly Field[]): Stop[] {
+  return fields.flatMap(field =>
+    (field.kind === 'radio' ? field.options.map(option => `${field.path}=${option.value}`) : [field.path]).map(key => ({ key, show: `field-${field.path}` })),
+  )
+}
+
+const own = (keys: string[], show?: string): Stop[] => keys.map(key => ({ key, show: show ?? key }))
+
+// Puts the keyboard on the first field of a section screen, which draws no autoFocus of its own, with the screen at its top so its
+// title shows.
+async function revealField($: Engine, section: (typeof SECTIONS)[number] | undefined) {
+  const first = section ? fieldStops(section.fields)[0] : undefined
+  if (!first) return
+  await $.ui.focus({ requestId: CONFIG_PANE, key: first.key }).catch(() => undefined)
+  await $.ui.scroll({ to: 'start', in: CONFIG_PANE }).catch(() => undefined)
+}
+
+function arrowStops(dialog: ConfigDialog): { stops: Stop[]; start: number; top?: true } | null {
+  if (dialog.mode === 'config') {
+    const section = SECTIONS[dialog.section] ?? SECTIONS[0]
+    return { stops: [...fieldStops(section?.fields ?? []), ...own(['target-project', 'target-global', 'save'])], start: 0, top: true }
+  }
+  if (dialog.step === 'section') {
+    const section = SECTIONS.filter(item => dialog.chosen.includes(item.id))[dialog.cursor]
+    return { stops: [...fieldStops(section?.fields ?? []), ...own(['next', 'back'])], start: 0, top: true }
+  }
+  if (dialog.step === 'choose') return { stops: own([...SECTIONS.map(section => `choose-${section.id}`), 'continue', 'back']), start: 0 }
+  if (dialog.step !== 'ask') return null
+  const effective = effectiveOf(dialog)
+  const question = initQuestions(effective)[dialog.cursor]
+  if (!question) return { stops: own(['save-as-is', 'review', 'cancel'], 'init-active'), start: 0 }
+  return { stops: own(question.choices.map(choice => `init-${question.id}-${choice.id}`), 'init-active'), start: chosenIndex(question, effective) }
+}
+
 async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Record<string, unknown>): Promise<string> {
   if (!paths) return fail('wololo is not ready yet.')
   const info = await projectInfo($, await $.session.cwd())
@@ -662,6 +712,10 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
     await $.ui.close({ id: CONFIG_PANE }).catch(() => undefined)
     await update($, dialogAtom, () => null)
     return fail(`The config pane could not be shown (${opened.reason}). Show the config in the chat instead.`)
+  }
+  if (mode === 'review') {
+    const first = initQuestions(effectiveOf(dialog))[0]
+    if (first) void revealInit($, initKey(first, effectiveOf(dialog)))
   }
   return ok({ opened: true, project_key: info.key, project_path: projectPath })
 }
@@ -715,7 +769,7 @@ function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unk
     const current = fieldValue(field, effective)
     if (field.kind === 'radio') {
       return (
-        <Box flexDirection="column" marginTop={1}>
+        <Box key={`field-${field.path}`} flexDirection="column" marginTop={1}>
           <Text bold>{field.label[lang]}</Text>
           {field.options.map(option => (
             <Box flexDirection="row" columnGap={2}>
@@ -735,14 +789,14 @@ function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unk
     if (field.kind === 'check') {
       const isOn = current === 'true'
       return (
-        <Box flexDirection="row" columnGap={2} marginTop={1}>
+        <Box key={`field-${field.path}`} flexDirection="row" columnGap={2} marginTop={1}>
           <Button key={field.path} plain dimColor={!isOn} label={`${isOn ? '☑' : '☐'} ${field.label[lang]}`} onPress={() => setField($, field, !isOn)} />
           {field.help && <Text color="subtle">{field.help[lang]}</Text>}
         </Box>
       )
     }
     return (
-      <Box flexDirection="column" marginTop={1}>
+      <Box key={`field-${field.path}`} flexDirection="column" marginTop={1}>
         <Input
           key={field.path}
           label={field.label[lang]}
@@ -2483,6 +2537,24 @@ export const register: Register = (on, options) => {
     return closed
   }).catch(($, e, next) => next(e))
 
+  // A focused pane hands its arrows to the scroll, never to its Buttons. While init asks, an arrow moves the focus to the option
+  // above or below instead, and the window stays.
+  on('ui.scroll', { component: 'Pane', requestId: CONFIG_PANE }, async ($, e, next) => {
+    if (e.origin.kind !== 'person' || e.pointer || Math.abs(e.by) !== 1) return next(e)
+    const dialog = await read($, dialogAtom)
+    const stops = dialog ? arrowStops(dialog) : null
+    if (!dialog || !stops) return next(e)
+    const to = Math.max(0, Math.min(stops.stops.length - 1, (dialog.hover ?? stops.start) + e.by))
+    const stop = stops.stops[to]
+    if (!stop) return next(e)
+    await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, hover: to } : d))
+    await $.ui.focus({ requestId: CONFIG_PANE, key: stop.key }).catch(() => undefined)
+    // Not awaited: this hook sits on the same site's scroll, which the move below raises again. On a section screen the first stop takes
+    // it back to its top, so the section's title shows.
+    void $.ui.scroll({ to: to === 0 && stops.top ? 'start' : { key: stop.show }, in: CONFIG_PANE }).catch(() => undefined)
+    return { deny: 'wololo: the arrows move between the init options' }
+  }).catch(($, e, next) => next(e))
+
   on('ui.render', { component: 'Pane', requestId: CONFIG_PANE }, async ($, e) => {
     const els = $.ui.resolve(e) as unknown as Els
     const { Box, Button, Text } = els
@@ -2525,11 +2597,20 @@ export const register: Register = (on, options) => {
         const questions = initQuestions(effective)
         const at = detecting ? -1 : Math.min(dialog.cursor, questions.length)
         const inherited = merge(DEFAULT_CONFIG, dialog.files.global)
-        const pick = (question: InitQuestion, choice: InitChoice) =>
-          update($, dialogAtom, (d): ConfigDialog | null =>
-            d ? { ...d, files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) }, cursor: questions.indexOf(question) + 1, message: '' } : d,
+        const pick = async (question: InitQuestion, choice: InitChoice) => {
+          const index = questions.indexOf(question)
+          await update($, dialogAtom, (d): ConfigDialog | null =>
+            d ? { ...d, files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) }, cursor: index + 1, hover: undefined, message: '' } : d,
           )
-        const back = () => update($, dialogAtom, (d): ConfigDialog | null => (d && d.cursor > 0 ? { ...d, cursor: Math.min(d.cursor, questions.length) - 1, message: '' } : d))
+          const next = questions[index + 1]
+          await revealInit($, next ? initKey(next, effectiveOf({ ...dialog, files: { ...dialog.files, project: applyChoice(dialog.files.project, inherited, choice.set) } })) : 'save-as-is')
+        }
+        const back = async () => {
+          const to = Math.max(0, at - 1)
+          await update($, dialogAtom, (d): ConfigDialog | null => (d && d.cursor > 0 ? { ...d, cursor: to, hover: undefined, message: '' } : d))
+          const question = questions[to]
+          if (question) await revealInit($, initKey(question, effective))
+        }
         const rows = detecting ? [] : detectedRows(dialog.files.project, repo, String((effective as Config).pr?.base ?? 'main'), lang)
         const width = Math.max(0, ...rows.map(([label]) => label.length))
         return (
@@ -2581,7 +2662,7 @@ export const register: Register = (on, options) => {
                     </Box>
                   )
                 return (
-                  <Box flexDirection="column">
+                  <Box key="init-active" flexDirection="column">
                     <Text color="subtle">│</Text>
                     <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
                       <Box flexDirection="row" columnGap={2}>
@@ -2610,22 +2691,50 @@ export const register: Register = (on, options) => {
                 )
               })}
               {at === questions.length && (
-                <Box flexDirection="column">
+                <Box key="init-active" flexDirection="column">
                   <Text color="subtle">│</Text>
-                  <Box flexDirection="row" columnGap={2}>
-                    <Text color="claude">◆</Text>
-                    <Text bold>{es ? 'Listo para guardar' : 'Ready to save'}</Text>
+                  <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
+                    <Box flexDirection="row" columnGap={2}>
+                      <Text color="claude">◆</Text>
+                      <Text bold>{es ? '¿Guardo la config?' : 'Save the config?'}</Text>
+                    </Box>
+                    <Text color="subtle">{es ? 'listo' : 'done'}</Text>
                   </Box>
-                  <Box flexDirection="row" columnGap={2}>
-                    <Text color="subtle">│</Text>
-                    <Text color="subtle" wrap="truncate-middle">{dialog.paths.project}</Text>
-                  </Box>
-                  <Box flexDirection="row" columnGap={3}>
-                    <Text color="subtle">│</Text>
-                    <Button key="save-as-is" hotkey="g" variant="primary" autoFocus label={es ? 'Guardar' : 'Save'} onPress={async () => (await saveConfig($, lang)) && finishReview($, true)} />
-                    <Button key="review" hotkey="a" label={es ? 'Ajustar más por sección' : 'Adjust more by section'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose' } : d))} />
-                    <Button key="cancel" hotkey="c" label={es ? 'Cancelar' : 'Cancel'} onPress={() => finishReview($, false)} />
-                  </Box>
+                  {(
+                    [
+                      {
+                        key: 'save-as-is',
+                        label: es ? 'Guardar' : 'Save',
+                        help: dialog.paths.project.replace(/^\/(Users|home)\/[^/]+/, '~'),
+                        onPress: async () => (await saveConfig($, lang)) && finishReview($, true),
+                      },
+                      {
+                        key: 'review',
+                        label: es ? 'Ajustar más por sección' : 'Adjust more by section',
+                        help: es ? 'debate, tests, git, screenshots, vista, idiomas, presupuestos' : 'debate, tests, git, screenshots, view, languages, budgets',
+                        onPress: async () => {
+                          await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose', hover: undefined } : d))
+                          await revealInit($, `choose-${SECTIONS[0]?.id ?? ''}`, false)
+                        },
+                      },
+                      { key: 'cancel', label: es ? 'Cancelar' : 'Cancel', help: es ? 'no guarda nada' : 'saves nothing', onPress: () => finishReview($, false) },
+                    ] as const
+                  ).map((option, j) => (
+                    <Box flexDirection="row" columnGap={2}>
+                      <Text color="subtle">│</Text>
+                      <Button
+                        key={option.key}
+                        hotkey={String(j + 1)}
+                        plain
+                        dimColor={j !== 0}
+                        {...(j === 0 ? { autoFocus: true as const } : {})}
+                        label={`${j === 0 ? '●' : '○'} ${option.label}`}
+                        onPress={option.onPress}
+                      />
+                      <Text color="subtle" wrap="truncate-middle">{option.help}</Text>
+                    </Box>
+                  ))}
+                  <Text color="subtle">│</Text>
                 </Box>
               )}
               <Text color="subtle">└</Text>
@@ -2639,11 +2748,11 @@ export const register: Register = (on, options) => {
                     : 'The questions show once the repository is read · Esc closes'
                   : at === questions.length
                   ? es
-                    ? 'g guarda · a ajusta más · c cancela'
-                    : 'g saves · a adjusts more · c cancels'
+                    ? '↑↓ o Tab recorre · Enter elige · 1-3 atajo · Esc cancela'
+                    : '↑↓ or Tab move · Enter picks · 1-3 shortcut · Esc cancels'
                   : es
-                    ? `↑↓ recorre · Enter o 1-${questions[at]?.choices.length ?? 1} elige · Esc cancela`
-                    : `↑↓ move · Enter or 1-${questions[at]?.choices.length ?? 1} picks · Esc cancels`}
+                    ? `↑↓ o Tab recorre · Enter elige · 1-${questions[at]?.choices.length ?? 1} atajo · Esc cancela`
+                    : `↑↓ or Tab move · Enter picks · 1-${questions[at]?.choices.length ?? 1} shortcut · Esc cancels`}
               </Text>
             </Box>
             {footer}
@@ -2683,11 +2792,22 @@ export const register: Register = (on, options) => {
                 variant="primary"
                 label={dialog.chosen.length > 0 ? (es ? 'Continuar' : 'Continue') : es ? 'Guardar sin revisar' : 'Save without review'}
                 onPress={async () => {
-                  if (dialog.chosen.length > 0) await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'section', cursor: 0 } : d))
+                  if (dialog.chosen.length > 0) {
+                    await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'section', cursor: 0, hover: undefined } : d))
+                    await revealField($, SECTIONS.find(section => dialog.chosen.includes(section.id)))
+                  }
                   else if (await saveConfig($, lang)) await finishReview($, true)
                 }}
               />
-              <Button key="back" hotkey="b" label={es ? 'Atrás' : 'Back'} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'ask', cursor: initQuestions(effective).length } : d))} />
+              <Button
+                key="back"
+                hotkey="b"
+                label={es ? 'Atrás' : 'Back'}
+                onPress={async () => {
+                  await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'ask', cursor: initQuestions(effective).length, hover: undefined } : d))
+                  await revealInit($, 'save-as-is')
+                }}
+              />
             </Box>
             {footer}
           </Box>
@@ -2711,7 +2831,10 @@ export const register: Register = (on, options) => {
               variant="primary"
               label={isLast ? (es ? 'Guardar' : 'Save') : es ? 'Siguiente' : 'Next'}
               onPress={async () => {
-                if (!isLast) await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, cursor: d.cursor + 1 } : d))
+                if (!isLast) {
+                  await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, cursor: d.cursor + 1, hover: undefined } : d))
+                  await revealField($, chosen[dialog.cursor + 1])
+                }
                 else if (await saveConfig($, lang)) await finishReview($, true)
               }}
             />
@@ -2719,7 +2842,10 @@ export const register: Register = (on, options) => {
               key="back"
               hotkey="b"
               label={es ? 'Atrás' : 'Back'}
-              onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? (d.cursor > 0 ? { ...d, cursor: d.cursor - 1 } : { ...d, step: 'choose' }) : d))}
+              onPress={async () => {
+                await update($, dialogAtom, (d): ConfigDialog | null => (d ? (d.cursor > 0 ? { ...d, cursor: d.cursor - 1, hover: undefined } : { ...d, step: 'choose', hover: undefined }) : d))
+                await (dialog.cursor > 0 ? revealField($, chosen[dialog.cursor - 1]) : revealInit($, `choose-${SECTIONS[0]?.id ?? ''}`, false))
+              }}
             />
           </Box>
           {footer}
@@ -2738,7 +2864,7 @@ export const register: Register = (on, options) => {
               index === dialog.section ? (
                 <Text inverse bold color="suggestion">{` ${item.title[lang]} `}</Text>
               ) : (
-                <Button key={`section-${item.id}`} plain dimColor label={item.title[lang]} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, section: index } : d))} />
+                <Button key={`section-${item.id}`} plain dimColor label={item.title[lang]} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, section: index, hover: undefined } : d))} />
               ),
             )}
           </Box>

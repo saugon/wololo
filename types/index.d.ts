@@ -49,6 +49,8 @@ export type ConfigDialog = {
   step: 'detect' | 'ask' | 'choose' | 'section'
   chosen: string[]
   cursor: number
+  // The init option the arrows last moved the focus to, on the question now asked.
+  hover?: number
 }
 
 declare module 'claude-code' {
