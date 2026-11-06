@@ -214,7 +214,9 @@ final class ActivityTests: XCTestCase {
 
     func testOriginLabel() throws {
         XCTAssertEqual(originLabel(try makeRun("r", ["project": ["key": "saugon__wololo", "path": "/p"],
-                                                      "source": ["kind": "file", "ref": "docs/plan.md"]])), "saugon/wololo plan.md")
+                                                      "source": ["kind": "file", "ref": "docs/plan.md"]])), "saugon/wololo")
+        XCTAssertEqual(originLabel(try makeRun("r", ["project": ["key": "saugon__wololo", "path": "/p"],
+                                                      "source": ["kind": "text", "ref": "app"]])), "saugon/wololo")
     }
 
     func testPRChip() throws {

@@ -137,8 +137,9 @@ private func prNumber(_ pr: Run.PullRequest) -> Int? {
 }
 
 /// The card's origin in the reference layout, "acme/web #4312": the project and its source, without a separator.
+/// "acme/web #4312" for an issue; just the repo when the run came from text or a file, as the card shows it.
 public func originLabel(_ run: Run) -> String {
-    "\(run.project.display) \(sourceLabel(run))"
+    run.source.kind == "github_issue" ? "\(run.project.display) \(sourceLabel(run))" : run.project.display
 }
 
 public func sourceLabel(_ run: Run) -> String {

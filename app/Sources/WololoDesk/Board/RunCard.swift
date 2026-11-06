@@ -1,8 +1,8 @@
 import SwiftUI
 import WololoKit
 
-/// A run on the board: title, project and source, progress, the status badge with items, agents and PR as icons
-/// with numbers, and the activity line under a divider.
+/// A run on the board, as the reference draws it: the status icon and the title, the repo, the status and what the
+/// run is doing, the stage with the PR, agents and age, and the progress bar along the bottom edge.
 struct RunCard: View {
     let run: Run
     let now: TimeInterval
@@ -16,40 +16,52 @@ struct RunCard: View {
         let status = effectiveStatus(run, now: now)
         let style = theme.style(status)
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(run.displayTitle)
-                    .font(theme.font(.display, size: 15, weight: .semibold))
-                    .tracking(theme.tracking(.display, size: 15))
-                    .foregroundStyle(theme.text)
-                    .lineSpacing(2)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-                origin
-                ProgressBarView(progress: RunProgress(run, now: now), height: 4)
-                meta(status: status)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-
-            theme.cardDivider.frame(height: 1)
-
-            HStack(spacing: 12) {
-                Text(activityLine(run, now: now))
-                    .font(theme.font(.body, size: 13))
-                    .foregroundStyle(style.activity)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(alignment: .top, spacing: 8) {
+                    statusIcon(style.color)
+                    Text(run.displayTitle)
+                        .font(theme.font(.body, size: 15, weight: .semibold))
+                        .foregroundStyle(theme.title)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                Text(originLabel(run))
+                    .font(theme.font(.mono, size: 12))
+                    .foregroundStyle(theme.muted)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(ago(run.updatedAt, now: now, lang: run.lang))
-                    .font(theme.font(.body, size: 12.5))
-                    .foregroundStyle(theme.faint)
-                    .fixedSize()
+                    .truncationMode(.middle)
+                    .help(run.project.branch ?? run.project.display)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 7) {
+                        bullet(style.color)
+                        Text(status.label(run.lang))
+                            .font(theme.font(.body, size: 13, weight: .bold))
+                            .foregroundStyle(style.color)
+                            .lineLimit(1)
+                    }
+                    let activity = activityLine(run, now: now, prefixed: false)
+                    if !activity.isEmpty {
+                        Text(activity)
+                            .font(theme.font(.body, size: 14))
+                            .foregroundStyle(style.activity)
+                            .lineSpacing(2)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                meta
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 13)
+            .padding(.horizontal, 10)
+            .padding(.top, 9)
+            .padding(.bottom, 8)
+
+            progressBar
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(isHovered ? theme.surfaceHover : theme.surface, in: RoundedRectangle(cornerRadius: theme.r(10)))
+        .background(isHovered ? theme.surfaceHover : theme.surface)
+        .clipShape(RoundedRectangle(cornerRadius: theme.r(10)))
         .overlay(
             RoundedRectangle(cornerRadius: theme.r(10))
                 .strokeBorder(border, lineWidth: isSelected ? 1.5 : 1)
@@ -64,8 +76,8 @@ struct RunCard: View {
         )
     }
 
-    /// What VoiceOver reads after the title, since the card is a single button: status, stage, the icons' full
-    /// wording, the activity and when it changed.
+    /// What VoiceOver reads after the title, since the card is a single button: status, stage, the items, agents and
+    /// PR in full, the activity with its prefix and when it changed.
     private func accessibilityValue(_ status: RunStatus) -> String {
         let parts: [String?] = [
             status.label(run.lang),
@@ -84,44 +96,78 @@ struct RunCard: View {
         return isHovered ? theme.borderHover : theme.border
     }
 
-    private var origin: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 11, weight: .medium))
-                .frame(width: 14, height: 14)
-            Text("\(run.project.display) · \(sourceLabel(run))")
-                .font(theme.font(.mono, size: 12))
+    /// The icon left of the title, centered on its first line.
+    @ViewBuilder
+    private func statusIcon(_ color: Color) -> some View {
+        switch theme.spec.shapes.statusIcon {
+        case .dot, .hood, .image:
+            // The hood and a theme's image are drawn by the AoE work; until then they show the dot.
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+                .frame(height: 18)
+        }
+    }
+
+    @ViewBuilder
+    private func bullet(_ color: Color) -> some View {
+        switch theme.spec.shapes.bullet {
+        case .dot, .gem:
+            // The gem is drawn by the AoE work; until then it shows the dot.
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+                .frame(width: 8, height: 8)
+        }
+    }
+
+    /// The stage and the PR on the left, the agents and the age on the right; when both do not fit on one line, the
+    /// right side moves to a second line.
+    private var meta: some View {
+        let left = HStack(spacing: 8) {
+            Text(RunProgress(run, now: now).metaText)
+                .font(theme.font(.body, size: 13, weight: .semibold))
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
+            if let pr = prLabel(run) {
+                Text(pr).lineLimit(1).fixedSize()
+            }
         }
+        let right = HStack(spacing: 8) {
+            if let agents = agentsLabel(run, now: now) {
+                Text(agents).lineLimit(1).fixedSize()
+            }
+            Text(shortAgo(run.updatedAt, now: now, lang: run.lang))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                left.fixedSize()
+                Spacer(minLength: 0)
+                right
+            }
+            VStack(alignment: .trailing, spacing: 2) {
+                left.frame(maxWidth: .infinity, alignment: .leading)
+                right
+            }
+        }
+        .font(theme.font(.body, size: 13))
         .foregroundStyle(theme.muted)
-        .help(run.project.branch ?? run.project.display)
     }
 
-    /// The badge with the icons on its right; when a long badge leaves no room, the icons wrap below it.
-    private func meta(status: RunStatus) -> some View {
-        MetaRowLayout(spacing: 14, lineSpacing: 10) {
-            StatusBadge(status: status, lang: run.lang)
-            metaIcons
-        }
-    }
-
-    private var metaIcons: some View {
-        HStack(spacing: 14) {
-            if let items = itemsChip(run) {
-                MetaIcon(symbol: "checklist", chip: items, color: theme.secondary)
-            }
-            if let agents = agentsChip(run, now: now) {
-                MetaIcon(symbol: "cpu", chip: agents, color: theme.agent)
-            }
-            if let pr = prChip(run) {
-                MetaIcon(symbol: "arrow.triangle.pull", chip: pr, color: theme.secondary, dot: theme.ci(ciRole(run)))
-            }
+    @ViewBuilder
+    private var progressBar: some View {
+        let progress = RunProgress(run, now: now)
+        switch theme.spec.shapes.bar {
+        case .continuous, .blocks:
+            // The blocks are drawn by the AoE work; until then they show the continuous bar.
+            ProgressBarView(progress: progress, height: 4, caption: .none)
         }
     }
 }
 
-/// The status pill: the label in the run's language, on the status color.
+/// The status pill of the run detail: the label in the run's language, on the status color.
 struct StatusBadge: View {
     let status: RunStatus
     let lang: Lang
@@ -138,88 +184,6 @@ struct StatusBadge: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(style.badge, in: Capsule())
-    }
-}
-
-/// An icon with its number; the tooltip and the accessibility label carry the full wording, as
-/// "2 agentes: implementer, verifier".
-struct MetaIcon: View {
-    let symbol: String
-    let chip: MetaChip
-    let color: Color
-    var dot: Color?
-
-    @Environment(\.theme) private var theme
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: symbol)
-                .font(.system(size: 11.5, weight: .medium))
-                .frame(width: 14, height: 14)
-            Text(chip.text)
-                .font(theme.font(.body, size: 12).monospacedDigit())
-            if let dot {
-                Circle()
-                    .fill(dot)
-                    .frame(width: 7, height: 7)
-            }
-        }
-        .foregroundStyle(color)
-        .fixedSize()
-        .contentShape(Rectangle())
-        .help(chip.title)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(chip.title)
-    }
-}
-
-/// The card's meta row: the badge on the left and the icons on the right of the same line, or under the badge when
-/// both do not fit. Never wider than what the card offers.
-struct MetaRowLayout: Layout {
-    var spacing: CGFloat
-    var lineSpacing: CGFloat
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        let oneLine = sizes.map(\.width).reduce(0, +) + spacing * CGFloat(max(sizes.count - 1, 0))
-        let width = proposal.width ?? oneLine
-        if fitsOnOneLine(sizes, width: width) {
-            return CGSize(width: width, height: sizes.map(\.height).max() ?? 0)
-        }
-        let height = sizes.map(\.height).reduce(0, +) + lineSpacing * CGFloat(max(sizes.count - 1, 0))
-        return CGSize(width: width, height: height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
-        if fitsOnOneLine(sizes, width: bounds.width) {
-            let height = sizes.map(\.height).max() ?? 0
-            for (index, subview) in subviews.enumerated() {
-                // The first view (the badge) hugs the left edge; the rest line up from the right edge.
-                let x: CGFloat
-                if index == 0 {
-                    x = bounds.minX
-                } else {
-                    let trailing = sizes[index...].map(\.width).reduce(0, +) + spacing * CGFloat(sizes.count - 1 - index)
-                    x = bounds.maxX - trailing
-                }
-                subview.place(
-                    at: CGPoint(x: x, y: bounds.minY + (height - sizes[index].height) / 2),
-                    proposal: ProposedViewSize(sizes[index])
-                )
-            }
-        } else {
-            var y = bounds.minY
-            for (index, subview) in subviews.enumerated() {
-                let width = min(sizes[index].width, bounds.width)
-                subview.place(at: CGPoint(x: bounds.minX, y: y), proposal: ProposedViewSize(width: width, height: sizes[index].height))
-                y += sizes[index].height + lineSpacing
-            }
-        }
-    }
-
-    private func fitsOnOneLine(_ sizes: [CGSize], width: CGFloat) -> Bool {
-        sizes.map(\.width).reduce(0, +) + spacing * CGFloat(max(sizes.count - 1, 0)) <= width
     }
 }
 
