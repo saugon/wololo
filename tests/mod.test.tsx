@@ -710,11 +710,11 @@ test('a permission counts as waiting only when its dialog opens, and an ask a ho
   expect((await run()).waiting).toBe(null)
 })
 
-test('a background task the session no longer runs is closed at the end of the turn', async ($, on) => {
+test('the background tasks of a session are closed as gone when its process exits, and kept on /clear', async ($, on) => {
   fakeHost(on)
   let next = 0
   on('tool.call', (_, e) => (e.tool === 'Bash' ? { result: { backgroundTaskId: `t${++next}` } } : { result: {} }))
-  on('classic.Stop', () => ({}))
+  on('session.end', (_, e) => e)
   on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' as const } }))
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
@@ -726,10 +726,10 @@ test('a background task the session no longer runs is closed at the end of the t
       .filter(task => task.finished_at === null)
       .map(task => task.id)
   expect(await open()).toEqual(['t1', 't2'])
-  await $.classic.Stop({ stop_hook_active: false, background_tasks: [{ id: 't2', type: 'shell', status: 'running', description: 'Frontend' }] } as never)
-  expect(await open()).toEqual(['t2'])
-  await $.classic.Stop({ stop_hook_active: false } as never)
-  expect(await open()).toEqual(['t2'])
+  await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
+  expect(await open()).toEqual(['t1', 't2'])
+  await $.session.end({ reason: 'prompt_input_exit', sessionId: 's1' } as never)
+  expect(await open()).toEqual([])
 })
 
 test('a permission wait left by an earlier load of the mod is cleared when the session takes the run back', async ($, on) => {

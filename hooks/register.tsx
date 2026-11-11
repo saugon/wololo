@@ -80,6 +80,8 @@ const dialogAtom = atom({ plugin: 'wololo', key: 'dialog' } as const, null)
 const CONFIG_PANE = 'wololo-config'
 const ownerAtom = atom({ plugin: 'wololo', key: 'owner' } as const, '')
 const INSTANCE = Math.random().toString(36).slice(2, 10)
+// The session.end reasons on which the process exits, and its background shells with it. /clear and resume go on in the same process.
+const EXITS: ReadonlySet<string> = new Set(['prompt_input_exit', 'logout', 'other'])
 
 let paths: Paths | undefined
 let root = ''
@@ -1858,10 +1860,11 @@ async function noteNotifications($: Engine, text: string) {
   }
 }
 
-async function reconcileTasks($: Engine, alive: ReadonlyArray<{ id: string }> | undefined) {
-  if (!run || run.outcome || !alive) return
-  const ids = new Set(alive.map(task => task.id))
-  for (const task of run.tasks.filter(t => t.finished_at === null && t.kind !== 'external' && !ids.has(t.id))) {
+// A session's background shells die with its process: what is still open of them is closed as gone when the process exits (taking the run
+// back, owner.changed, closes them too). Codex jobs (external) outlive the session and are followed by checkJob.
+async function closeTasks($: Engine) {
+  if (!run || run.outcome) return
+  for (const task of run.tasks.filter(t => t.finished_at === null && t.kind !== 'external')) {
     await emit($, 'task.finished', { id: task.id, label: task.label, status: 'gone' })
   }
 }
@@ -1992,6 +1995,7 @@ export const register: Register = (on, options) => {
 
   on('session.end', async ($, e, next) => {
     await quietly(async () => {
+      if (EXITS.has(e.reason) && (await isOwner($))) await closeTasks($)
       await flush($)
     })
     return next(e)
@@ -2026,11 +2030,6 @@ export const register: Register = (on, options) => {
     }
     if (!e.agentId && e.tool_use_id) asks.set(e.tool_use_id, { tool: e.tool, what: describeCall(e.tool, input), key: askKey(e.tool, input) })
     return verdict
-  }).catch(($, e, next) => next(e))
-
-  on('classic.Stop', async ($, e, next) => {
-    await quietly(() => reconcileTasks($, e.background_tasks))
-    return next(e)
   }).catch(($, e, next) => next(e))
 
   on('classic.PermissionRequest', async ($, e, next) => {
