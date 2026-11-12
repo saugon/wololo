@@ -1,7 +1,30 @@
 import { atom, read, update } from 'claude-code'
 import type { ElementTable, EngineInterface, Register, TurnUsage } from 'claude-code'
 
-import { ADAPTER_POINTS, type AdapterPoint, type Config, DEFAULT_CONFIG, envPrefix, expand, LAUNCH_FLAGS, merge, type Overrides, parseFlags, parseJson, planTouched, ports, projectKey, resolve, riskyFiles, shellQuote, slugify, touchedPattern, validate, withEnv, withOverrides } from './config'
+import {
+  ADAPTER_POINTS,
+  type AdapterPoint,
+  type Config,
+  DEFAULT_CONFIG,
+  envPrefix,
+  expand,
+  LAUNCH_FLAGS,
+  merge,
+  type Overrides,
+  parseFlags,
+  parseJson,
+  planTouched,
+  ports,
+  projectKey,
+  resolve,
+  riskyFiles,
+  shellQuote,
+  slugify,
+  touchedPattern,
+  validate,
+  withEnv,
+  withOverrides,
+} from './config'
 import {
   type AdapterJob,
   type EventType,
@@ -28,8 +51,30 @@ import {
   timeKind,
 } from './model'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
-import { type PolicyContext, commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isInside, isReadInside, pushDenial, segments } from './policy'
-import { type Field, type InitChoice, type InitQuestion, SECTIONS, applyChoice, chosenIndex, detectedRows, fieldValue, initQuestions, parseInput, setAt } from './configui'
+import {
+  type PolicyContext,
+  commandRules,
+  githubWriteDenial,
+  isAllowedBash,
+  isAllowedPath,
+  isInside,
+  isReadInside,
+  pushDenial,
+  segments,
+} from './policy'
+import {
+  type Field,
+  type InitChoice,
+  type InitQuestion,
+  SECTIONS,
+  applyChoice,
+  chosenIndex,
+  detectedRows,
+  fieldValue,
+  initQuestions,
+  parseInput,
+  setAt,
+} from './configui'
 import { helpLangOf, helpNow, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
 import { changedSinceApproval, checkEvent, hintFor, stageForFile } from './rules'
@@ -51,7 +96,19 @@ import {
   writeJson,
 } from './store'
 import type { ConfigDialog, Row, ViewState } from '../types'
-import { type MirrorRun, type StatusCard, type WorktreeInfo, barLabels, buildView, fitChips, mirrorCards, statusCards, statusTable, thinBar, wrapLines } from './ui'
+import {
+  type MirrorRun,
+  type StatusCard,
+  type WorktreeInfo,
+  barLabels,
+  buildView,
+  fitChips,
+  mirrorCards,
+  statusCards,
+  statusTable,
+  thinBar,
+  wrapLines,
+} from './ui'
 
 type Engine = EngineInterface
 
@@ -111,7 +168,10 @@ let pendingPermission: { toolUseId: string; tool: string; what: string } | null 
 let asks = new Map<string, { tool: string; what: string; key: string }>()
 let worktreeInfo: WorktreeInfo | null = null
 let homeDir = ''
-let pendingUsage = new Map<string, { stage: StageId; role: string; input: number; output: number; cache_read: number; cache_write: number; usd: number }>()
+let pendingUsage = new Map<
+  string,
+  { stage: StageId; role: string; input: number; output: number; cache_read: number; cache_write: number; usd: number }
+>()
 let lastUsd: number | null = null
 let timeMark: { stage: StageId; kind: TimeKind; since: number } | null = null
 let pendingTime = new Map<string, { stage: StageId; kind: TimeKind; seconds: number }>()
@@ -171,7 +231,9 @@ const TABS = [
 
 function tabName(lang: string, which: 'summary' | 'items' | 'history'): string {
   const names =
-    lang === 'es' ? { summary: 'Resumen', items: 'Ítems', history: 'Historial' } : { summary: 'Summary', items: 'Items', history: 'History' }
+    lang === 'es'
+      ? { summary: 'Resumen', items: 'Ítems', history: 'Historial' }
+      : { summary: 'Summary', items: 'Items', history: 'History' }
   return names[which]
 }
 
@@ -333,7 +395,16 @@ async function refresh($: Engine, ts?: number) {
   run.status = status
   noteTime(at)
   const history = historyCache && pending.length === 0 ? historyCache : undefined
-  const view = buildView(run, status, recent, at, paths ? runDir(paths, run.id) : undefined, history, worktreeInfo ?? undefined, homeDir || undefined)
+  const view = buildView(
+    run,
+    status,
+    recent,
+    at,
+    paths ? runDir(paths, run.id) : undefined,
+    history,
+    worktreeInfo ?? undefined,
+    homeDir || undefined,
+  )
   await update($, viewAtom, () => view)
   $.ui.status(config.view.statusline ? view.statusLine : undefined)
   if (status !== previous && config.view.notify.includes(status)) {
@@ -554,7 +625,13 @@ async function flushOrphaned($: Engine) {
     }
     if (diskLast >= (events[0]?.seq ?? Infinity)) of.last_seq = Math.max(of.last_seq, renumber(events, diskLast))
     try {
-      if (!(await appendLines($, `${dir}/events.jsonl`, events.map(ev => JSON.stringify(ev))))) {
+      if (
+        !(await appendLines(
+          $,
+          `${dir}/events.jsonl`,
+          events.map(ev => JSON.stringify(ev)),
+        ))
+      ) {
         keep()
         continue
       }
@@ -655,7 +732,10 @@ type Stop = { key: string; show: string }
 // Each field's controls, and the box that holds its label, which a move scrolls into view whole.
 function fieldStops(fields: readonly Field[]): Stop[] {
   return fields.flatMap(field =>
-    (field.kind === 'radio' ? field.options.map(option => `${field.path}=${option.value}`) : [field.path]).map(key => ({ key, show: `field-${field.path}` })),
+    (field.kind === 'radio' ? field.options.map(option => `${field.path}=${option.value}`) : [field.path]).map(key => ({
+      key,
+      show: `field-${field.path}`,
+    })),
   )
 }
 
@@ -684,7 +764,13 @@ function arrowStops(dialog: ConfigDialog): { stops: Stop[]; start: number; top?:
   const effective = effectiveOf(dialog)
   const question = initQuestions(effective)[dialog.cursor]
   if (!question) return { stops: own(['save-as-is', 'review', 'cancel'], 'init-active'), start: 0 }
-  return { stops: own(question.choices.map(choice => `init-${question.id}-${choice.id}`), 'init-active'), start: chosenIndex(question, effective) }
+  return {
+    stops: own(
+      question.choices.map(choice => `init-${question.id}-${choice.id}`),
+      'init-active',
+    ),
+    start: chosenIndex(question, effective),
+  }
 }
 
 async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Record<string, unknown>): Promise<string> {
@@ -707,7 +793,14 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
   }
   await update($, dialogAtom, () => dialog)
   const opened = await $.ui
-    .open({ id: CONFIG_PANE, title: mode === 'review' ? 'wololo · init' : 'wololo · config', focus: true, closeOnEscape: true, holdToasts: true, rows: 32 })
+    .open({
+      id: CONFIG_PANE,
+      title: mode === 'review' ? 'wololo · init' : 'wololo · config',
+      focus: true,
+      closeOnEscape: true,
+      holdToasts: true,
+      rows: 32,
+    })
     .catch((error: unknown) => ({ isPlaced: false as const, reason: error instanceof Error ? error.message : String(error) }))
   if (!opened.isPlaced) {
     // An undrawn pane would leave the person waiting on a dialog they cannot see.
@@ -745,7 +838,9 @@ async function saveConfig($: Engine, lang: string): Promise<boolean> {
   }
   await writeJson($, dialog.paths[dialog.target], content)
   if (run) config = await runConfig($, run.project.key)
-  await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, dirty: false, message: lang === 'es' ? `Guardado en ${d.paths[d.target]}` : `Saved to ${d.paths[d.target]}` } : d))
+  await update($, dialogAtom, (d): ConfigDialog | null =>
+    d ? { ...d, dirty: false, message: lang === 'es' ? `Guardado en ${d.paths[d.target]}` : `Saved to ${d.paths[d.target]}` } : d,
+  )
   return true
 }
 
@@ -755,7 +850,10 @@ async function finishReview($: Engine, saved: boolean) {
   await update($, dialogAtom, () => null)
   if (run && !run.outcome) {
     live.question = null
-    await emit($, 'question.answered', { pairs: [{ header: 'init', question: 'config', answer: saved ? 'saved' : 'cancelled' }], response: null })
+    await emit($, 'question.answered', {
+      pairs: [{ header: 'init', question: 'config', answer: saved ? 'saved' : 'cancelled' }],
+      response: null,
+    })
   }
   const text = saved
     ? `wololo: the person reviewed and saved the project config at ${dialog?.paths.project ?? 'its path'}. Continue.`
@@ -792,17 +890,24 @@ function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unk
       const isOn = current === 'true'
       return (
         <Box key={`field-${field.path}`} flexDirection="row" columnGap={2} marginTop={1}>
-          <Button key={field.path} plain dimColor={!isOn} label={`${isOn ? '☑' : '☐'} ${field.label[lang]}`} onPress={() => setField($, field, !isOn)} />
+          <Button
+            key={field.path}
+            plain
+            dimColor={!isOn}
+            label={`${isOn ? '☑' : '☐'} ${field.label[lang]}`}
+            onPress={() => setField($, field, !isOn)}
+          />
           {field.help && <Text color="subtle">{field.help[lang]}</Text>}
         </Box>
       )
     }
     return (
       <Box key={`field-${field.path}`} flexDirection="column" marginTop={1}>
+        <Text bold>{field.label[lang]}</Text>
         <Input
           key={field.path}
-          label={field.label[lang]}
           value={current}
+          rows={field.kind === 'list' ? Math.min(8, Math.max(3, current.split('\n').length + 1)) : 1}
           placeholder={field.help?.[lang] ?? ''}
           onSubmit={async text => {
             const parsed = parseInput(field, text)
@@ -826,12 +931,21 @@ async function pauseRun($: Engine): Promise<{ text: string }> {
         : `wololo: another wololo instance owns this run in this session. Take it back here with /wololo resume ${run.id}, or reload the session.`,
     }
   }
-  if (run.paused) return { text: es ? 'wololo: el run ya está pausado. /wololo resume lo retoma.' : 'wololo: the run is already paused. /wololo resume picks it up.' }
+  if (run.paused)
+    return {
+      text: es
+        ? 'wololo: el run ya está pausado. /wololo resume lo retoma.'
+        : 'wololo: the run is already paused. /wololo resume picks it up.',
+    }
   if (!run.pause_requested_at) await emit($, 'pause.requested', { by: 'person' })
   if (run.status === 'paused') {
     await emit($, 'paused', { note: es ? 'pausado entre pasos, sin nada corriendo' : 'paused between steps, nothing running' })
     await flush($)
-    return { text: es ? 'wololo: run pausado. Podés cerrar la sesión; /wololo resume lo retoma.' : 'wololo: run paused. You can close the session; /wololo resume picks it up.' }
+    return {
+      text: es
+        ? 'wololo: run pausado. Podés cerrar la sesión; /wololo resume lo retoma.'
+        : 'wololo: run paused. You can close the session; /wololo resume picks it up.',
+    }
   }
   await flush($)
   return {
@@ -846,10 +960,14 @@ async function statusOutput($: Engine, args: string): Promise<{ text: string }> 
   await flush($)
   const ts = await nowSeconds($)
   const isAll = /\ball\b/.test(args)
-  const listed = (await listRuns($, paths)).map(r => ({ run: r, status: effectiveStatus(r, ts) })).filter(x => isAll || !isTerminal(x.status))
+  const listed = (await listRuns($, paths))
+    .map(r => ({ run: r, status: effectiveStatus(r, ts) }))
+    .filter(x => isAll || !isTerminal(x.status))
   const runs = []
   for (const item of listed) {
-    const entries = timeline(await readEvents($, runDir(paths, item.run.id)), item.run.lang).filter(entry => entry.isMajor && entry.icon !== '→')
+    const entries = timeline(await readEvents($, runDir(paths, item.run.id)), item.run.lang).filter(
+      entry => entry.isMajor && entry.icon !== '→',
+    )
     runs.push({ ...item, last: entries[entries.length - 1] })
   }
   const lang = run?.lang ?? config.languages.chat
@@ -858,13 +976,17 @@ async function statusOutput($: Engine, args: string): Promise<{ text: string }> 
   const mirrored = await mirrorRuns($, cwd)
   const project = (await projectInfo($, cwd))?.key.split('__').slice(-1)[0] ?? ''
   statusRenders.set(stamp, [...statusCards(runs, ts), ...mirrorCards(mirrored, project, lang)])
-  const lines = mirrored.map(m => `runner ${m.issue ? `#${m.issue}` : m.id} · ${m.state} · ${m.waiting_on}${m.exit === 2 && m.unblock ? ` · ${m.unblock}` : ''}`)
+  const lines = mirrored.map(
+    m => `runner ${m.issue ? `#${m.issue}` : m.id} · ${m.state} · ${m.waiting_on}${m.exit === 2 && m.unblock ? ` · ${m.unblock}` : ''}`,
+  )
   return { text: [statusTable(runs, ts), ...(lines.length > 0 ? ['', ...lines] : []), '', stamp].join('\n') }
 }
 
 async function keepAwake($: Engine) {
   await $.process
-    .run(['sh', '-c', `command -v caffeinate >/dev/null && (caffeinate -i -t ${AWAKE_LEASE_SECONDS} >/dev/null 2>&1 &)`], { timeoutMs: 5_000 })
+    .run(['sh', '-c', `command -v caffeinate >/dev/null && (caffeinate -i -t ${AWAKE_LEASE_SECONDS} >/dev/null 2>&1 &)`], {
+      timeoutMs: 5_000,
+    })
     .catch(() => undefined)
 }
 
@@ -879,7 +1001,9 @@ async function mirrorRuns($: Engine, cwd: string): Promise<MirrorRun[]> {
   const listed = await answer(config.mirror.list)
   const data = listed && isObject(listed.json.data) ? listed.json.data : {}
   const rows = Array.isArray(data.runs) ? data.runs.filter(isObject) : []
-  const open = rows.filter(row => !['merged', 'staged', 'already_satisfied', 'cancelled', 'superseded', 'accepted'].includes(String(row.state)))
+  const open = rows.filter(
+    row => !['merged', 'staged', 'already_satisfied', 'cancelled', 'superseded', 'accepted'].includes(String(row.state)),
+  )
   const mirrored: MirrorRun[] = []
   for (const row of open.slice(0, 8)) {
     const id = String(row.id)
@@ -1013,7 +1137,9 @@ function restore(held: Held) {
 }
 
 function notOwner(id?: string): string {
-  return fail(`Another wololo instance owns this run in this session. Take it back here with /wololo resume ${id ?? '<run>'}, or reload the session.`)
+  return fail(
+    `Another wololo instance owns this run in this session. Take it back here with /wololo resume ${id ?? '<run>'}, or reload the session.`,
+  )
 }
 
 async function freeSlot($: Engine, ts: number): Promise<number> {
@@ -1137,7 +1263,10 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
 async function riskyChange($: Engine, type: string, data: Record<string, unknown>): Promise<string | null> {
   if (!run) return null
   const lowering = type === 'risk.set' && data.risk !== 'high'
-  const late = type === 'stage.entered' && ['evidence', 'gate_b', 'pr'].includes(String(data.stage)) && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
+  const late =
+    type === 'stage.entered' &&
+    ['evidence', 'gate_b', 'pr'].includes(String(data.stage)) &&
+    stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
   if (!lowering && !(late && run.risk !== 'high')) return null
   const files = riskyFiles(await changedFiles($, workdir(), run.project.base ?? config.pr.base), config.risk_paths)
   if (files.length === 0) return null
@@ -1153,7 +1282,13 @@ async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; tri
   const recorded = parseJson(await readText($, `${dir}/servers.json`)).value
   const entries = Array.isArray(recorded) ? recorded : isObject(recorded) ? Object.values(recorded) : []
   // A start command as ps shows it: its first two words, without the VAR=value assignments before it.
-  const starts = config.commands.start.map(start => start.cmd.split(/\s+/).filter(word => !/^\w+=/.test(word)).slice(0, 2).join(' '))
+  const starts = config.commands.start.map(start =>
+    start.cmd
+      .split(/\s+/)
+      .filter(word => !/^\w+=/.test(word))
+      .slice(0, 2)
+      .join(' '),
+  )
   for (const entry of entries) {
     const pid = isObject(entry) ? Number(entry.pid) : NaN
     if (!Number.isInteger(pid) || pid <= 1) continue
@@ -1168,7 +1303,11 @@ async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; tri
   for (const file of (found?.stdout ?? '').split('\n').filter(Boolean)) {
     const tail = await $.process.run(['tail', '-c', String(LOG_KEEP_BYTES), file], { timeoutMs: 10_000 }).catch(() => undefined)
     if (!tail || tail.exitCode !== 0) continue
-    await writeAtomic($, file, `[wololo kept the last ${LOG_KEEP_BYTES / 1024 / 1024} MB of this log when the run finished]\n${tail.stdout}`)
+    await writeAtomic(
+      $,
+      file,
+      `[wololo kept the last ${LOG_KEEP_BYTES / 1024 / 1024} MB of this log when the run finished]\n${tail.stdout}`,
+    )
     trimmed.push(file.slice(dir.length + 1))
   }
   return { stopped, trimmed }
@@ -1177,7 +1316,10 @@ async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; tri
 // The tree `git add -A && git commit` would make of the work tree now, built in a scratch index so the real one is left alone.
 async function worktreeTree($: Engine, worktree: string, dir: string): Promise<string | null> {
   const env = { GIT_INDEX_FILE: `${dir}/verified.index` }
-  for (const args of [['read-tree', 'HEAD'], ['add', '-A']]) {
+  for (const args of [
+    ['read-tree', 'HEAD'],
+    ['add', '-A'],
+  ]) {
     const ran = await $.process.run(['git', ...args], { cwd: worktree, env, timeoutMs: 30_000 }).catch(() => undefined)
     if (!ran || ran.exitCode !== 0) return null
   }
@@ -1187,8 +1329,13 @@ async function worktreeTree($: Engine, worktree: string, dir: string): Promise<s
 
 // The hashes a gate approves: spec.md and plan.md in the run directory, and the worktree's committed tree.
 async function snapshot($: Engine, dir: string, worktree: string | null): Promise<Snapshot> {
-  const hash = async (name: string) => ((await readText($, `${dir}/${name}`)) === undefined ? null : await git($, dir, ['hash-object', `${dir}/${name}`]))
-  return { spec: await hash('spec.md'), plan: await hash('plan.md'), tree: worktree ? await git($, worktree, ['rev-parse', 'HEAD^{tree}']) : null }
+  const hash = async (name: string) =>
+    (await readText($, `${dir}/${name}`)) === undefined ? null : await git($, dir, ['hash-object', `${dir}/${name}`])
+  return {
+    spec: await hash('spec.md'),
+    plan: await hash('plan.md'),
+    tree: worktree ? await git($, worktree, ['rev-parse', 'HEAD^{tree}']) : null,
+  }
 }
 
 async function recordEvent($: Engine, input: Record<string, unknown>): Promise<string> {
@@ -1197,8 +1344,10 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   // The tool's input arrives frozen; copy it so the snapshot and tree hashes can be added.
   const data: Record<string, unknown> = isObject(input.data) ? { ...input.data } : {}
   const worktree = run.project.worktree
-  if (worktree && type === 'item.verified' && data.result !== 'fail') data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
-  if (worktree && type === 'item.committed' && typeof data.sha === 'string') data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])
+  if (worktree && type === 'item.verified' && data.result !== 'fail')
+    data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
+  if (worktree && type === 'item.committed' && typeof data.sha === 'string')
+    data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])
   const problem = checkEvent(run, type, data, config.budgets)
   if (problem) return fail(problem)
   if (config.risk_paths.length > 0 && worktree) {
@@ -1372,16 +1521,32 @@ async function adapterVars($: Engine): Promise<Record<string, string>> {
 
 // Starts a step that may outlast the ten minutes a command is given, detached so it lives on without the session, writing its output and
 // then its exit code next to job. Returns the command that waits for it, or why it could not start.
-async function startJob($: Engine, point: string, step: number, cmd: string, known: Record<string, string>): Promise<{ wait: string } | string> {
+async function startJob(
+  $: Engine,
+  point: string,
+  step: number,
+  cmd: string,
+  known: Record<string, string>,
+): Promise<{ wait: string } | string> {
   if (!run || !paths) return 'No active run.'
   const job = `${runDir(paths, run.id)}/adapters/${point}-${step}-${hex(6)}`
   const q = (suffix: string) => shellQuote(`${job}${suffix}`)
-  await $.fs.write(`${job}.sh`, [`cd ${shellQuote(workdir())} || exit 1`, `${cmd} > ${q('.out')} 2> ${q('.err')}`, `echo $? > ${q('.code.tmp')}`, `mv ${q('.code.tmp')} ${q('.code')}`, ''].join('\n'))
+  await $.fs.write(
+    `${job}.sh`,
+    [
+      `cd ${shellQuote(workdir())} || exit 1`,
+      `${cmd} > ${q('.out')} 2> ${q('.err')}`,
+      `echo $? > ${q('.code.tmp')}`,
+      `mv ${q('.code.tmp')} ${q('.code')}`,
+      '',
+    ].join('\n'),
+  )
   const started = await $.process
     .run(['sh', '-c', `nohup sh ${q('.sh')} </dev/null >/dev/null 2>&1 & echo $!`], { cwd: workdir(), timeoutMs: 10_000 })
     .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error) }))
   const pid = Number(started.stdout.trim())
-  if (started.exitCode !== 0 || !Number.isInteger(pid) || pid <= 0) return `\`${cmd}\` could not start in the background: ${started.stderr.trim() || 'no pid'}`
+  if (started.exitCode !== 0 || !Number.isInteger(pid) || pid <= 0)
+    return `\`${cmd}\` could not start in the background: ${started.stderr.trim() || 'no pid'}`
   await $.fs.write(`${job}.wait`, `while [ ! -f ${q('.code')} ] && kill -0 ${pid} 2>/dev/null; do sleep 15; done\n`)
   const wait = `sh ${q('.wait')}`
   await emit($, 'adapter.started', { point, step, cmd, job, pid, known, wait })
@@ -1395,7 +1560,10 @@ async function startJob($: Engine, point: string, step: number, cmd: string, kno
 async function finishedJob($: Engine, job: AdapterJob): Promise<Ran | null> {
   const code = await readText($, `${job.job}.code`)
   if (code === undefined) {
-    const alive = await $.process.run(['kill', '-0', String(job.pid)], { timeoutMs: 5_000 }).then(r => r.exitCode === 0, () => false)
+    const alive = await $.process.run(['kill', '-0', String(job.pid)], { timeoutMs: 5_000 }).then(
+      r => r.exitCode === 0,
+      () => false,
+    )
     if (alive) return null
   }
   const stdout = ((await readText($, `${job.job}.out`)) ?? '').slice(-JOB_OUTPUT_BYTES)
@@ -1415,7 +1583,9 @@ async function checkJob($: Engine) {
   jobStatusAt = ts
   const vars = await adapterVars($)
   if ([...status.matchAll(/\{(\w+)\}/g)].some(m => !vars[m[1] ?? ''])) return
-  const ran = await $.process.run(['sh', '-c', withEnv(expand(status, vars), envPrefix(config.env))], { cwd: workdir(), timeoutMs: 60_000 }).catch(() => null)
+  const ran = await $.process
+    .run(['sh', '-c', withEnv(expand(status, vars), envPrefix(config.env))], { cwd: workdir(), timeoutMs: 60_000 })
+    .catch(() => null)
   const answer = ran ? parseJson(ran.stdout.trim().split('\n').pop() ?? '').value : undefined
   if (!isObject(answer)) return
   const text = [answer.state, answer.waiting_on].filter(part => typeof part === 'string' && part).join(' · ')
@@ -1429,7 +1599,9 @@ async function runAdapter($: Engine, input: Record<string, unknown>): Promise<st
   const point = String(input.point) as AdapterPoint
   const job = run.adapter_job ?? null
   if (job && job.point !== point) {
-    return fail(`The ${job.point} adapter still runs \`${job.cmd}\` in the background. Wait for it with \`${job.wait}\` (run_in_background), then call run_adapter for ${job.point} again.`)
+    return fail(
+      `The ${job.point} adapter still runs \`${job.cmd}\` in the background. Wait for it with \`${job.wait}\` (run_in_background), then call run_adapter for ${job.point} again.`,
+    )
   }
   const adapter = config.adapters[point]
   if (!adapter) return ok({ ran: false, reason: `config.adapters has nothing for ${point}: the stage does its own work.` })
@@ -1486,7 +1658,16 @@ async function runAdapter($: Engine, input: Record<string, unknown>): Promise<st
     const state = typeof answer?.state === 'string' ? answer.state : null
     const waiting = typeof answer?.waiting_on === 'string' ? answer.waiting_on : null
     const unblock = typeof answer?.unblock === 'string' ? answer.unblock : null
-    await emit($, 'adapter.ran', { point, cmd, ok: !refused, exit: ran.exitCode, code, state, message: refused ? message : null, captured: got })
+    await emit($, 'adapter.ran', {
+      point,
+      cmd,
+      ok: !refused,
+      exit: ran.exitCode,
+      code,
+      state,
+      message: refused ? message : null,
+      captured: got,
+    })
     results.push({ cmd, exit: ran.exitCode, ok: !refused, code, state, waiting_on: waiting, unblock, data: answer?.data ?? null })
     if (refused && !(code && step.accept_codes?.includes(code))) {
       // The tool refused: the run stops on its words.
@@ -1587,8 +1768,17 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
         },
         title: { type: 'string', description: 'Short human title of what the run delivers.' },
         mode: { type: 'string', enum: ['full', 'checkpoints', 'guided'], description: 'Overrides the configured autonomy for this run.' },
-        review: { type: 'string', enum: ['local', 'pr'], description: 'Overrides config.review.approval: approve the change at Aprobar PR (local) or on the PR once CI is green (pr).' },
-        flags: { type: 'array', items: { type: 'string' }, description: 'The --flags the person launched the run with, as typed (--base=<branch> with its value). Unknown flags are refused.' },
+        review: {
+          type: 'string',
+          enum: ['local', 'pr'],
+          description: 'Overrides config.review.approval: approve the change at Aprobar PR (local) or on the PR once CI is green (pr).',
+        },
+        flags: {
+          type: 'array',
+          items: { type: 'string' },
+          description:
+            'The --flags the person launched the run with, as typed (--base=<branch> with its value). Unknown flags are refused.',
+        },
         risk: { type: 'string', enum: ['low', 'high', 'unknown'] },
       },
       required: ['source', 'title'],
@@ -1658,7 +1848,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'review_config',
     description:
-      'Opens the config review for the person, as /wololo init asks: what was detected, the first-time questions (autonomy, isolation, approval, PR, suite, spec in the issue), then save or adjust more by section. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person\'s save or cancel arrives as a message.',
+      "Opens the config review for the person, as /wololo init asks: what was detected, the first-time questions (autonomy, isolation, approval, PR, suite, spec in the issue), then save or adjust more by section. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person's save or cancel arrives as a message.",
     inputSchema: { type: 'object', properties: { proposal: { type: 'object' } }, required: ['proposal'] },
   },
   {
@@ -1796,9 +1986,15 @@ async function handleOwnTool($: Engine, name: string, input: Record<string, unkn
       const opened = await openConfig($, 'review', proposal)
       if (run && !run.outcome && !opened.startsWith('ERROR')) {
         live.question = 'init: revisar la config'
-        await emit($, 'question.asked', { question: 'init: revisar la config del proyecto', count: 1, questions: [{ header: 'init', question: 'config' }] })
+        await emit($, 'question.asked', {
+          question: 'init: revisar la config del proyecto',
+          count: 1,
+          questions: [{ header: 'init', question: 'config' }],
+        })
       }
-      return opened.startsWith('ERROR') ? opened : ok({ opened: true, next: 'End your turn. The person reviews the config in the pane; their save or cancel arrives as a message.' })
+      return opened.startsWith('ERROR')
+        ? opened
+        : ok({ opened: true, next: 'End your turn. The person reviews the config in the pane; their save or cancel arrives as a message.' })
     }
     case 'publish':
       return publish($, input)
@@ -1945,9 +2141,7 @@ export const register: Register = (on, options) => {
       await $.command
         .register({ name: 'wololo-pause', description: 'Pauses the wololo run at the next clean point, so the session can be closed' })
         .catch(() => undefined)
-      await $.command
-        .register({ name: 'wololo-help', description: 'What every wololo command and key does' })
-        .catch(() => undefined)
+      await $.command.register({ name: 'wololo-help', description: 'What every wololo command and key does' }).catch(() => undefined)
       await $.command
         .register({ name: 'wololo-status', description: 'Shows every wololo run across projects (add "all" for finished ones)' })
         .catch(() => undefined)
@@ -1985,7 +2179,16 @@ export const register: Register = (on, options) => {
           // the run's events, so a reload shows what this load's code makes of it. The run itself stays closed.
           const dir = runDir(paths, loaded.id)
           const events = await readEvents($, dir)
-          const view = buildView(loaded, loaded.status, events.slice(-RECENT), await nowSeconds($), dir, undefined, undefined, homeDir || undefined)
+          const view = buildView(
+            loaded,
+            loaded.status,
+            events.slice(-RECENT),
+            await nowSeconds($),
+            dir,
+            undefined,
+            undefined,
+            homeDir || undefined,
+          )
           await update($, viewAtom, () => view)
         }
       }
@@ -2028,7 +2231,8 @@ export const register: Register = (on, options) => {
       if (e.tool === 'Agent' && isRunAgent(input.subagent_type))
         return { decision: 'allow' as const, reason: "wololo: one of the run's own agents" }
     }
-    if (!e.agentId && e.tool_use_id) asks.set(e.tool_use_id, { tool: e.tool, what: describeCall(e.tool, input), key: askKey(e.tool, input) })
+    if (!e.agentId && e.tool_use_id)
+      asks.set(e.tool_use_id, { tool: e.tool, what: describeCall(e.tool, input), key: askKey(e.tool, input) })
     return verdict
   }).catch(($, e, next) => next(e))
 
@@ -2046,7 +2250,9 @@ export const register: Register = (on, options) => {
       return {
         decision: {
           behavior: 'allow' as const,
-          updatedPermissions: [{ type: 'addDirectories' as const, directories: [ctx.workdir, ctx.runDir], destination: 'session' as const }],
+          updatedPermissions: [
+            { type: 'addDirectories' as const, directories: [ctx.workdir, ctx.runDir], destination: 'session' as const },
+          ],
         },
       }
     }
@@ -2329,7 +2535,10 @@ export const register: Register = (on, options) => {
             </Box>
             <Box flexDirection="row">
               {barLabels(band.progress.segments, barWidth).map(label => (
-                <Text color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'} bold={label.state === 'current'}>
+                <Text
+                  color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'}
+                  bold={label.state === 'current'}
+                >
                   {label.text}
                 </Text>
               ))}
@@ -2351,7 +2560,8 @@ export const register: Register = (on, options) => {
                     onPress={async () => {
                       await update($, tabAtom, () => item.id)
                       void $.ui.focus({ requestId: e.requestId, key: `tab-${item.id}` }).catch(() => undefined)
-                      if (item.id === 'items') void $.ui.scroll({ to: { key: 'row-current' }, in: e.requestId, block: 'center' }).catch(() => undefined)
+                      if (item.id === 'items')
+                        void $.ui.scroll({ to: { key: 'row-current' }, in: e.requestId, block: 'center' }).catch(() => undefined)
                     }}
                   />
                 ))}
@@ -2367,7 +2577,14 @@ export const register: Register = (on, options) => {
                 )}
               </Box>
               <Box flexShrink={0}>
-                <Button key="toggle" hotkey="m" plain dimColor label={lang === 'es' ? '▴ menos' : '▴ less'} onPress={() => update($, expandedAtom, () => false)} />
+                <Button
+                  key="toggle"
+                  hotkey="m"
+                  plain
+                  dimColor
+                  label={lang === 'es' ? '▴ menos' : '▴ less'}
+                  onPress={() => update($, expandedAtom, () => false)}
+                />
               </Box>
             </Box>
             <Box flexDirection="column" marginTop={1}>
@@ -2387,13 +2604,26 @@ export const register: Register = (on, options) => {
             </Box>
             {/* The card scrolls whole, so the way back sits at both ends of it, never over a row. */}
             <Box flexDirection="row" justifyContent="flex-end">
-              <Button key="toggle-end" plain dimColor label={lang === 'es' ? '▴ menos' : '▴ less'} onPress={() => update($, expandedAtom, () => false)} />
+              <Button
+                key="toggle-end"
+                plain
+                dimColor
+                label={lang === 'es' ? '▴ menos' : '▴ less'}
+                onPress={() => update($, expandedAtom, () => false)}
+              />
             </Box>
           </Box>
         )}
         {!isExpanded && (
           <Box position="absolute" bottom={0} right={0}>
-            <Button key="toggle" hotkey="m" plain dimColor label={lang === 'es' ? '▾ más' : '▾ more'} onPress={() => update($, expandedAtom, () => true)} />
+            <Button
+              key="toggle"
+              hotkey="m"
+              plain
+              dimColor
+              label={lang === 'es' ? '▾ más' : '▾ more'}
+              onPress={() => update($, expandedAtom, () => true)}
+            />
           </Box>
         )}
       </Box>
@@ -2481,7 +2711,9 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1}>
-          <Text bold color="subtle">wololo · runs</Text>
+          <Text bold color="subtle">
+            wololo · runs
+          </Text>
           {cards.length === 0 && <Text color="subtle">{es ? 'No hay runs activos.' : 'No active runs.'}</Text>}
           {cards.map((card, index) => (
             <Box flexDirection="column" marginTop={index === 0 ? 0 : 1}>
@@ -2565,9 +2797,12 @@ export const register: Register = (on, options) => {
     const dialog = await read($, dialogAtom)
     const lang: 'es' | 'en' = (run?.lang ?? config.languages.chat) === 'en' ? 'en' : 'es'
     const es = lang === 'es'
-    if (!dialog) return <Text dimColor>{es ? 'No hay nada abierto. /wololo config lo abre.' : 'Nothing open. /wololo config opens it.'}</Text>
+    if (!dialog)
+      return <Text dimColor>{es ? 'No hay nada abierto. /wololo config lo abre.' : 'Nothing open. /wololo config opens it.'}</Text>
     const effective = effectiveOf(dialog)
-    const footer = dialog.message ? <Text color={dialog.message.startsWith(es ? 'Guardado' : 'Saved') ? 'success' : 'error'}>{dialog.message}</Text> : null
+    const footer = dialog.message ? (
+      <Text color={dialog.message.startsWith(es ? 'Guardado' : 'Saved') ? 'success' : 'error'}>{dialog.message}</Text>
+    ) : null
     const repo = dialog.projectKey.replace('__', '/')
     const close = (
       <Box flexShrink={0}>
@@ -2604,14 +2839,32 @@ export const register: Register = (on, options) => {
         const pick = async (question: InitQuestion, choice: InitChoice) => {
           const index = questions.indexOf(question)
           await update($, dialogAtom, (d): ConfigDialog | null =>
-            d ? { ...d, files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) }, cursor: index + 1, hover: undefined, message: '' } : d,
+            d
+              ? {
+                  ...d,
+                  files: { ...d.files, project: applyChoice(d.files.project, inherited, choice.set) },
+                  cursor: index + 1,
+                  hover: undefined,
+                  message: '',
+                }
+              : d,
           )
           const next = questions[index + 1]
-          await revealInit($, next ? initKey(next, effectiveOf({ ...dialog, files: { ...dialog.files, project: applyChoice(dialog.files.project, inherited, choice.set) } })) : 'save-as-is')
+          await revealInit(
+            $,
+            next
+              ? initKey(
+                  next,
+                  effectiveOf({ ...dialog, files: { ...dialog.files, project: applyChoice(dialog.files.project, inherited, choice.set) } }),
+                )
+              : 'save-as-is',
+          )
         }
         const back = async () => {
           const to = Math.max(0, at - 1)
-          await update($, dialogAtom, (d): ConfigDialog | null => (d && d.cursor > 0 ? { ...d, cursor: to, hover: undefined, message: '' } : d))
+          await update($, dialogAtom, (d): ConfigDialog | null =>
+            d && d.cursor > 0 ? { ...d, cursor: to, hover: undefined, message: '' } : d,
+          )
           const question = questions[to]
           if (question) await revealInit($, initKey(question, effective))
         }
@@ -2621,20 +2874,30 @@ export const register: Register = (on, options) => {
           <Box flexDirection="column">
             <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
               <Box flexDirection="column">
-                <Text bold color="claude">{'█ █ █ █▀█ █   █▀█ █   █▀█'}</Text>
+                <Text bold color="claude">
+                  {'█ █ █ █▀█ █   █▀█ █   █▀█'}
+                </Text>
                 <Box flexDirection="row" columnGap={2}>
-                  <Text bold color="claude">{'▀▄▀▄▀ █▄█ █▄▄ █▄█ █▄▄ █▄█'}</Text>
+                  <Text bold color="claude">
+                    {'▀▄▀▄▀ █▄█ █▄▄ █▄█ █▄▄ █▄█'}
+                  </Text>
                   <Text color="subtle" wrap="truncate-end">{`init · ${repo}`}</Text>
                 </Box>
               </Box>
               {close}
             </Box>
             <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} marginTop={1}>
-              <Text bold color="claude">{es ? 'Lo que encontré' : 'What I found'}</Text>
+              <Text bold color="claude">
+                {es ? 'Lo que encontré' : 'What I found'}
+              </Text>
               {detecting && (
                 <Box flexDirection="row" columnGap={1}>
                   <Text color="warning">∴</Text>
-                  <Text wrap="truncate-end">{es ? 'Leyendo el repo: comandos, tests, agentes y rama base…' : 'Reading the repository: commands, tests, agents and base branch…'}</Text>
+                  <Text wrap="truncate-end">
+                    {es
+                      ? 'Leyendo el repo: comandos, tests, agentes y rama base…'
+                      : 'Reading the repository: commands, tests, agents and base branch…'}
+                  </Text>
                 </Box>
               )}
               {rows.map(([label, value]) => (
@@ -2687,7 +2950,11 @@ export const register: Register = (on, options) => {
                           label={`${j === current ? '●' : '○'} ${choice.label[lang]}`}
                           onPress={() => pick(question, choice)}
                         />
-                        {choice.help && <Text color="subtle" wrap="truncate-end">{choice.help[lang]}</Text>}
+                        {choice.help && (
+                          <Text color="subtle" wrap="truncate-end">
+                            {choice.help[lang]}
+                          </Text>
+                        )}
                       </Box>
                     ))}
                     <Text color="subtle">│</Text>
@@ -2715,13 +2982,20 @@ export const register: Register = (on, options) => {
                       {
                         key: 'review',
                         label: es ? 'Ajustar más por sección' : 'Adjust more by section',
-                        help: es ? 'debate, tests, git, screenshots, vista, idiomas, presupuestos' : 'debate, tests, git, screenshots, view, languages, budgets',
+                        help: es
+                          ? 'debate, tests, git, screenshots, vista, idiomas, presupuestos'
+                          : 'debate, tests, git, screenshots, view, languages, budgets',
                         onPress: async () => {
                           await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'choose', hover: undefined } : d))
                           await revealInit($, `choose-${SECTIONS[0]?.id ?? ''}`, false)
                         },
                       },
-                      { key: 'cancel', label: es ? 'Cancelar' : 'Cancel', help: es ? 'no guarda nada' : 'saves nothing', onPress: () => finishReview($, false) },
+                      {
+                        key: 'cancel',
+                        label: es ? 'Cancelar' : 'Cancel',
+                        help: es ? 'no guarda nada' : 'saves nothing',
+                        onPress: () => finishReview($, false),
+                      },
                     ] as const
                   ).map((option, j) => (
                     <Box flexDirection="row" columnGap={2}>
@@ -2735,7 +3009,9 @@ export const register: Register = (on, options) => {
                         label={`${j === 0 ? '●' : '○'} ${option.label}`}
                         onPress={option.onPress}
                       />
-                      <Text color="subtle" wrap="truncate-middle">{option.help}</Text>
+                      <Text color="subtle" wrap="truncate-middle">
+                        {option.help}
+                      </Text>
                     </Box>
                   ))}
                   <Text color="subtle">│</Text>
@@ -2751,12 +3027,12 @@ export const register: Register = (on, options) => {
                     ? 'Las preguntas aparecen cuando termine de leer el repo · Esc cierra'
                     : 'The questions show once the repository is read · Esc closes'
                   : at === questions.length
-                  ? es
-                    ? '↑↓ o Tab recorre · Enter elige · 1-3 atajo · Esc cancela'
-                    : '↑↓ or Tab move · Enter picks · 1-3 shortcut · Esc cancels'
-                  : es
-                    ? `↑↓ o Tab recorre · Enter elige · 1-${questions[at]?.choices.length ?? 1} atajo · Esc cancela`
-                    : `↑↓ or Tab move · Enter picks · 1-${questions[at]?.choices.length ?? 1} shortcut · Esc cancels`}
+                    ? es
+                      ? '↑↓ o Tab recorre · Enter elige · 1-3 atajo · Esc cancela'
+                      : '↑↓ or Tab move · Enter picks · 1-3 shortcut · Esc cancels'
+                    : es
+                      ? `↑↓ o Tab recorre · Enter elige · 1-${questions[at]?.choices.length ?? 1} atajo · Esc cancela`
+                      : `↑↓ or Tab move · Enter picks · 1-${questions[at]?.choices.length ?? 1} shortcut · Esc cancels`}
               </Text>
             </Box>
             {footer}
@@ -2797,10 +3073,14 @@ export const register: Register = (on, options) => {
                 label={dialog.chosen.length > 0 ? (es ? 'Continuar' : 'Continue') : es ? 'Guardar sin revisar' : 'Save without review'}
                 onPress={async () => {
                   if (dialog.chosen.length > 0) {
-                    await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'section', cursor: 0, hover: undefined } : d))
-                    await revealField($, SECTIONS.find(section => dialog.chosen.includes(section.id)))
-                  }
-                  else if (await saveConfig($, lang)) await finishReview($, true)
+                    await update($, dialogAtom, (d): ConfigDialog | null =>
+                      d ? { ...d, step: 'section', cursor: 0, hover: undefined } : d,
+                    )
+                    await revealField(
+                      $,
+                      SECTIONS.find(section => dialog.chosen.includes(section.id)),
+                    )
+                  } else if (await saveConfig($, lang)) await finishReview($, true)
                 }}
               />
               <Button
@@ -2808,7 +3088,9 @@ export const register: Register = (on, options) => {
                 hotkey="b"
                 label={es ? 'Atrás' : 'Back'}
                 onPress={async () => {
-                  await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, step: 'ask', cursor: initQuestions(effective).length, hover: undefined } : d))
+                  await update($, dialogAtom, (d): ConfigDialog | null =>
+                    d ? { ...d, step: 'ask', cursor: initQuestions(effective).length, hover: undefined } : d,
+                  )
                   await revealInit($, 'save-as-is')
                 }}
               />
@@ -2824,8 +3106,8 @@ export const register: Register = (on, options) => {
         <Box flexDirection="column">
           {header}
           <Box marginTop={1}>
-              <Text bold>{`${section?.title[lang] ?? ''} (${dialog.cursor + 1}/${chosen.length})`}</Text>
-            </Box>
+            <Text bold>{`${section?.title[lang] ?? ''} (${dialog.cursor + 1}/${chosen.length})`}</Text>
+          </Box>
           <Text color="subtle">{section?.help[lang] ?? ''}</Text>
           {section ? fieldRows(els, $, section.fields, effective, lang) : null}
           <Box flexDirection="row" columnGap={3} marginTop={1}>
@@ -2838,8 +3120,7 @@ export const register: Register = (on, options) => {
                 if (!isLast) {
                   await update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, cursor: d.cursor + 1, hover: undefined } : d))
                   await revealField($, chosen[dialog.cursor + 1])
-                }
-                else if (await saveConfig($, lang)) await finishReview($, true)
+                } else if (await saveConfig($, lang)) await finishReview($, true)
               }}
             />
             <Button
@@ -2847,8 +3128,12 @@ export const register: Register = (on, options) => {
               hotkey="b"
               label={es ? 'Atrás' : 'Back'}
               onPress={async () => {
-                await update($, dialogAtom, (d): ConfigDialog | null => (d ? (d.cursor > 0 ? { ...d, cursor: d.cursor - 1, hover: undefined } : { ...d, step: 'choose', hover: undefined }) : d))
-                await (dialog.cursor > 0 ? revealField($, chosen[dialog.cursor - 1]) : revealInit($, `choose-${SECTIONS[0]?.id ?? ''}`, false))
+                await update($, dialogAtom, (d): ConfigDialog | null =>
+                  d ? (d.cursor > 0 ? { ...d, cursor: d.cursor - 1, hover: undefined } : { ...d, step: 'choose', hover: undefined }) : d,
+                )
+                await (dialog.cursor > 0
+                  ? revealField($, chosen[dialog.cursor - 1])
+                  : revealInit($, `choose-${SECTIONS[0]?.id ?? ''}`, false))
               }}
             />
           </Box>
@@ -2863,12 +3148,20 @@ export const register: Register = (on, options) => {
         {header}
         <Box flexDirection="row" columnGap={1} marginTop={1}>
           <Box flexDirection="column" borderStyle="round" borderColor="subtle" paddingX={1} flexShrink={0}>
-            <Text bold color="subtle">{es ? 'Secciones' : 'Sections'}</Text>
+            <Text bold color="subtle">
+              {es ? 'Secciones' : 'Sections'}
+            </Text>
             {SECTIONS.map((item, index) =>
               index === dialog.section ? (
                 <Text inverse bold color="suggestion">{` ${item.title[lang]} `}</Text>
               ) : (
-                <Button key={`section-${item.id}`} plain dimColor label={item.title[lang]} onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, section: index, hover: undefined } : d))} />
+                <Button
+                  key={`section-${item.id}`}
+                  plain
+                  dimColor
+                  label={item.title[lang]}
+                  onPress={() => update($, dialogAtom, (d): ConfigDialog | null => (d ? { ...d, section: index, hover: undefined } : d))}
+                />
               ),
             )}
           </Box>
@@ -2897,7 +3190,9 @@ export const register: Register = (on, options) => {
         </Box>
         <Box flexDirection="row" columnGap={3} marginTop={1}>
           <Button key="save" hotkey="s" variant="primary" label={es ? 'Guardar' : 'Save'} onPress={() => saveConfig($, lang)} />
-          <Text color="subtle">{es ? 'Tab/flechas recorren · Enter elige · Esc cierra' : 'Tab/arrows move · Enter picks · Esc closes'}</Text>
+          <Text color="subtle">
+            {es ? 'Tab/flechas recorren · Enter elige · Esc cierra' : 'Tab/arrows move · Enter picks · Esc closes'}
+          </Text>
         </Box>
         {footer}
       </Box>
@@ -2919,7 +3214,13 @@ export const register: Register = (on, options) => {
             {band.title}
           </Text>
           <Box flexShrink={0}>
-            <Button key="close" hotkey="x" plain label={lang === 'es' ? '× cerrar' : '× close'} onPress={() => void $.ui.close({ id: PANE }).catch(() => undefined)} />
+            <Button
+              key="close"
+              hotkey="x"
+              plain
+              label={lang === 'es' ? '× cerrar' : '× close'}
+              onPress={() => void $.ui.close({ id: PANE }).catch(() => undefined)}
+            />
           </Box>
         </Box>
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
@@ -2949,7 +3250,10 @@ export const register: Register = (on, options) => {
             </Box>
             <Box flexDirection="row">
               {barLabels(band.progress.segments, Math.max(24, e.props.bodyColumns - 7)).map(label => (
-                <Text color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'} bold={label.state === 'current'}>
+                <Text
+                  color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'}
+                  bold={label.state === 'current'}
+                >
                   {label.text}
                 </Text>
               ))}
@@ -2958,19 +3262,19 @@ export const register: Register = (on, options) => {
         )}
         <Box flexDirection="row" columnGap={3} marginTop={1}>
           {TABS.map(item => (
-                <Button
-                  key={`tab-${item.id}`}
-                  hotkey={item.key}
-                  variant={item.id === tab ? 'primary' : undefined}
-                  plain={item.id === tab ? undefined : true}
-                  dimColor={item.id !== tab}
-                  label={tabName(lang, item.id)}
-                  onPress={async () => {
-                    await update($, tabAtom, () => item.id)
-                    void $.ui.focus({ requestId: PANE, key: `tab-${item.id}` }).catch(() => undefined)
-                  }}
-                />
-              ))}
+            <Button
+              key={`tab-${item.id}`}
+              hotkey={item.key}
+              variant={item.id === tab ? 'primary' : undefined}
+              plain={item.id === tab ? undefined : true}
+              dimColor={item.id !== tab}
+              label={tabName(lang, item.id)}
+              onPress={async () => {
+                await update($, tabAtom, () => item.id)
+                void $.ui.focus({ requestId: PANE, key: `tab-${item.id}` }).catch(() => undefined)
+              }}
+            />
+          ))}
           {tab === 'history' && (
             <Button
               key="detail"

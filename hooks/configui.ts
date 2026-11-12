@@ -104,7 +104,7 @@ export const SECTIONS: Section[] = [
         kind: 'list',
         path: 'debate.risk_signals',
         label: t('Palabras de riesgo', 'Risk words'),
-        help: t('separadas por ;', 'separated by ;'),
+        help: t('una por línea', 'one per line'),
       },
     ],
   },
@@ -134,13 +134,13 @@ export const SECTIONS: Section[] = [
         kind: 'list',
         path: 'tests.rules_from',
         label: t('Reglas del proyecto en', 'Project rules in'),
-        help: t('archivos, separados por ;', 'files, separated by ;'),
+        help: t('un archivo por línea', 'one file per line'),
       },
       {
         kind: 'list',
         path: 'tests.suite',
         label: t('Suite completa', 'Full suite'),
-        help: t('comandos, separados por ;', 'commands, separated by ;'),
+        help: t('un comando por línea', 'one command per line'),
       },
       {
         kind: 'radio',
@@ -155,7 +155,7 @@ export const SECTIONS: Section[] = [
         kind: 'list',
         path: 'tests.e2e',
         label: t('Suite e2e', 'E2E suite'),
-        help: t('comandos, separados por ;', 'commands, separated by ;'),
+        help: t('un comando por línea', 'one command per line'),
       },
       {
         kind: 'radio',
@@ -291,7 +291,7 @@ export function setAt(value: Record<string, unknown>, path: string, next: unknow
 
 export function fieldValue(field: Field, effective: unknown): string {
   const value = getAt(effective, field.path)
-  if (Array.isArray(value)) return value.map(String).join('; ')
+  if (Array.isArray(value)) return value.map(String).join('\n')
   if (value === null || value === undefined) return ''
   return String(value)
 }
@@ -302,7 +302,7 @@ export function parseInput(field: Field, text: string): { value?: unknown; error
     return {
       value: trimmed
         ? trimmed
-            .split(';')
+            .split('\n')
             .map(part => part.trim())
             .filter(Boolean)
         : [],
@@ -338,9 +338,24 @@ export const INIT_QUESTIONS: InitQuestion[] = [
     title: t('Autonomía', 'Autonomy'),
     ask: t('¿Cuánto te pregunta el run?', 'How much does the run ask you?'),
     choices: [
-      { id: 'checkpoints', label: t('checkpoints', 'checkpoints'), help: t('frena para aprobar el spec y el PR', 'stops to approve the spec and the PR'), set: { autonomy: 'checkpoints' } },
-      { id: 'guided', label: t('guided', 'guided'), help: t('además pregunta en cada duda relevante', 'also asks at every relevant doubt'), set: { autonomy: 'guided' } },
-      { id: 'full', label: t('full', 'full'), help: t('no pregunta: decide solo y anota cada supuesto', 'never asks: decides alone and notes each assumption'), set: { autonomy: 'full' } },
+      {
+        id: 'checkpoints',
+        label: t('checkpoints', 'checkpoints'),
+        help: t('frena para aprobar el spec y el PR', 'stops to approve the spec and the PR'),
+        set: { autonomy: 'checkpoints' },
+      },
+      {
+        id: 'guided',
+        label: t('guided', 'guided'),
+        help: t('además pregunta en cada duda relevante', 'also asks at every relevant doubt'),
+        set: { autonomy: 'guided' },
+      },
+      {
+        id: 'full',
+        label: t('full', 'full'),
+        help: t('no pregunta: decide solo y anota cada supuesto', 'never asks: decides alone and notes each assumption'),
+        set: { autonomy: 'full' },
+      },
     ],
   },
   {
@@ -348,8 +363,18 @@ export const INIT_QUESTIONS: InitQuestion[] = [
     title: t('Dónde trabaja', 'Where it works'),
     ask: t('¿Dónde trabaja cada run?', 'Where does each run work?'),
     choices: [
-      { id: 'worktree', label: t('un worktree por run', 'a worktree per run'), help: t('tu checkout queda libre', 'your checkout stays free'), set: { isolation: 'worktree' } },
-      { id: 'branch', label: t('una rama en el checkout', 'a branch in place'), help: t('necesita el árbol limpio', 'needs a clean tree'), set: { isolation: 'branch' } },
+      {
+        id: 'worktree',
+        label: t('un worktree por run', 'a worktree per run'),
+        help: t('tu checkout queda libre', 'your checkout stays free'),
+        set: { isolation: 'worktree' },
+      },
+      {
+        id: 'branch',
+        label: t('una rama en el checkout', 'a branch in place'),
+        help: t('necesita el árbol limpio', 'needs a clean tree'),
+        set: { isolation: 'branch' },
+      },
     ],
   },
   {
@@ -366,9 +391,19 @@ export const INIT_QUESTIONS: InitQuestion[] = [
     title: t('PR', 'PR'),
     ask: t('¿Cómo abre el PR?', 'How does it open the PR?'),
     choices: [
-      { id: 'draft', label: t('como draft', 'as a draft'), help: t('lo marca listo con CI en verde', 'marks it ready once CI is green'), set: { 'pr.enabled': true, 'pr.draft': true } },
+      {
+        id: 'draft',
+        label: t('como draft', 'as a draft'),
+        help: t('lo marca listo con CI en verde', 'marks it ready once CI is green'),
+        set: { 'pr.enabled': true, 'pr.draft': true },
+      },
       { id: 'ready', label: t('listo para revisar', 'ready for review'), set: { 'pr.enabled': true, 'pr.draft': false } },
-      { id: 'none', label: t('sin PR', 'no PR'), help: t('deja la rama y el resumen', 'leaves the branch and the summary'), set: { 'pr.enabled': false } },
+      {
+        id: 'none',
+        label: t('sin PR', 'no PR'),
+        help: t('deja la rama y el resumen', 'leaves the branch and the summary'),
+        set: { 'pr.enabled': false },
+      },
     ],
   },
   {
@@ -378,7 +413,12 @@ export const INIT_QUESTIONS: InitQuestion[] = [
     when: effective => (getAt(effective, 'tests.suite') as unknown[] | undefined)?.length !== 0,
     choices: [
       { id: 'local', label: t('local, antes del PR', 'locally, before the PR'), set: { 'tests.suite_runs': 'local' } },
-      { id: 'ci', label: t('en CI', 'in CI'), help: t('el run solo corre los tests que toca', 'the run only runs the tests it touches'), set: { 'tests.suite_runs': 'ci' } },
+      {
+        id: 'ci',
+        label: t('en CI', 'in CI'),
+        help: t('el run solo corre los tests que toca', 'the run only runs the tests it touches'),
+        set: { 'tests.suite_runs': 'ci' },
+      },
     ],
   },
   {
@@ -386,8 +426,18 @@ export const INIT_QUESTIONS: InitQuestion[] = [
     title: t('Spec en el issue', 'Spec in the issue'),
     ask: t('¿Publica el spec en el issue?', 'Does it publish the spec in the issue?'),
     choices: [
-      { id: 'yes', label: t('sí', 'yes'), help: t('una versión corta en el cuerpo del issue', 'a short version in the issue body'), set: { 'spec.to_github': true } },
-      { id: 'no', label: t('no', 'no'), help: t('queda en los archivos del run', "stays in the run's files"), set: { 'spec.to_github': false } },
+      {
+        id: 'yes',
+        label: t('sí', 'yes'),
+        help: t('una versión corta en el cuerpo del issue', 'a short version in the issue body'),
+        set: { 'spec.to_github': true },
+      },
+      {
+        id: 'no',
+        label: t('no', 'no'),
+        help: t('queda en los archivos del run', "stays in the run's files"),
+        set: { 'spec.to_github': false },
+      },
     ],
   },
 ]
@@ -399,7 +449,9 @@ export function initQuestions(effective: unknown): InitQuestion[] {
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 export function chosenIndex(question: InitQuestion, effective: unknown): number {
-  const index = question.choices.findIndex(choice => Object.entries(choice.set).every(([path, value]) => same(getAt(effective, path), value)))
+  const index = question.choices.findIndex(choice =>
+    Object.entries(choice.set).every(([path, value]) => same(getAt(effective, path), value)),
+  )
   return index < 0 ? 0 : index
 }
 
@@ -425,11 +477,19 @@ export function applyChoice(project: Record<string, unknown>, inherited: unknown
 export function detectedRows(project: unknown, repo: string, base: string, lang: 'es' | 'en'): Array<[string, string]> {
   const es = lang === 'es'
   const list = (path: string) => ((getAt(project, path) as unknown[] | undefined) ?? []).map(item => (isObject(item) ? item : String(item)))
-  const touched = [...new Set(list('tests.touched').map(item => (isObject(item) ? String(item.cmd ?? '') : item)).filter(Boolean))]
-  const start = list('commands.start').map(item => (isObject(item) ? `${String(item.name ?? '')}${item.port ? ` :${String(item.port)}` : ''}` : item))
-  const agents = Object.entries(isObject(getAt(project, 'project_agents')) ? (getAt(project, 'project_agents') as Record<string, unknown>) : {}).map(
-    ([role, agent]) => `${role} → ${String(agent)}`,
+  const touched = [
+    ...new Set(
+      list('tests.touched')
+        .map(item => (isObject(item) ? String(item.cmd ?? '') : item))
+        .filter(Boolean),
+    ),
+  ]
+  const start = list('commands.start').map(item =>
+    isObject(item) ? `${String(item.name ?? '')}${item.port ? ` :${String(item.port)}` : ''}` : item,
   )
+  const agents = Object.entries(
+    isObject(getAt(project, 'project_agents')) ? (getAt(project, 'project_agents') as Record<string, unknown>) : {},
+  ).map(([role, agent]) => `${role} → ${String(agent)}`)
   const rows: Array<[string, string[]]> = [
     ['Repo', [`${repo} · base ${base}`]],
     ['Tests', touched],
