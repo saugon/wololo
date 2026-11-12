@@ -313,6 +313,13 @@ export default {
         }
       }
     },
+    "block_since": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "When the latest block started, kept after the person's answer lifts it, so that answer can still extend a budget, once."
+    },
     "agents": {
       "type": "array",
       "items": {
@@ -382,6 +389,13 @@ export default {
               "string",
               "null"
             ]
+          },
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The subagent that started it, when one did; it closes when that agent finishes."
           }
         }
       }
@@ -575,7 +589,14 @@ export default {
         },
         "budget_extensions": {
           "type": "object",
-          "description": "How many times the person extended each budget (design_reversals, ci_fix_attempts, run_minutes).",
+          "description": "How many times the person extended each budget by a whole budget more (design_reversals, ci_fix_attempts, run_minutes); runs from before extensions said how much.",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        },
+        "budget_added": {
+          "type": "object",
+          "description": "What the person added to each budget, in its unit (minutes for run_minutes).",
           "additionalProperties": {
             "type": "integer"
           }

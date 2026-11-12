@@ -50,9 +50,10 @@ const BUDGET_WHAT: Record<BudgetName, string> = {
 
 // A spent budget stops the run in every mode: the person decides whether it goes on.
 function overBudget(run: Run, type: string, data: Record<string, unknown>, budgets: Budgets): string | null {
-  const allowed = (name: BudgetName) => budgets[name] * (1 + (run.counts.budget_extensions?.[name] ?? 0))
+  const allowed = (name: BudgetName) =>
+    budgets[name] * (1 + (run.counts.budget_extensions?.[name] ?? 0)) + (run.counts.budget_added?.[name] ?? 0)
   const spent = (name: BudgetName, used: number) =>
-    `${budgets[name]} ${BUDGET_WHAT[name]} (budgets.${name}) are spent, ${Math.round(used)} used: record blocked, ask the person, and record unblocked {budget: "${name}"} once they say to go on.`
+    `${allowed(name)} ${BUDGET_WHAT[name]} (budgets.${name} and its extensions) are spent, ${Math.round(used)} used: record blocked, ask the person how much to add (offer amounts), and record unblocked {budget: "${name}", amount} with what they chose.`
   if (type === 'item.started' && data.reversal === true) {
     const used = run.counts.reversals_by_item?.[Number(data.n)] ?? 0
     if (used >= allowed('design_reversals')) return spent('design_reversals', used)
@@ -153,10 +154,13 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       if (data.budget === undefined) return null
       if (!['design_reversals', 'ci_fix_attempts', 'run_minutes'].includes(String(data.budget)))
         return 'data.budget must be design_reversals, ci_fix_attempts or run_minutes.'
-      // Extending a budget is the person's call, in every mode.
-      const since = run.blocked?.since
+      // Extending a budget is the person's call, in every mode. Their answer lifts the block by itself, so what counts is an answer
+      // after the latest block, lifted or not, and each answer extends once.
+      const since = run.blocked?.since ?? run.block_since ?? undefined
       if (since === undefined || !run.last_answer || run.last_answer.at < since)
-        return 'Extending a budget needs the person: record blocked, ask with AskUserQuestion, then record unblocked {budget}.'
+        return 'Extending a budget needs the person: record blocked, ask with AskUserQuestion, then record unblocked {budget, amount}.'
+      if (typeof data.amount !== 'number' || !Number.isInteger(data.amount) || data.amount <= 0)
+        return `data.amount is required: how much the person added to ${String(data.budget)}, a whole number above 0 in its unit (minutes for run_minutes).`
       return null
     }
     case 'debate.turn':

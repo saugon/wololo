@@ -130,3 +130,30 @@ test('a background task cannot outlive the session that started it', async () =>
   expect(run.tasks[0]?.status).toBe('gone')
   expect(deriveStatus(run, IDLE)).toBe('stalled')
 })
+
+test("a background shell a subagent started closes when that agent finishes, and stops keeping the run busy", async () => {
+  const list = events(
+    ['run.started', { title: 'Pagos', source: { kind: 'text', ref: 'x', url: null }, mode: 'full', slot: 1, session_id: 's1', cwd: '/repo' }, 100],
+    ['stage.entered', { stage: 'context' }, 110],
+    ['agent.started', { id: 'a1', role: 'implementer', description: 'Implement item 1' }, 120],
+    ['task.started', { id: 't1', label: 'Run the storefront suite', kind: 'other', agent: 'a1' }, 130],
+    ['task.started', { id: 't2', label: 'make dev', kind: 'server' }, 140],
+  )
+  const working = rebuild('r1', list)
+  expect(working.tasks.map(t => t.agent)).toEqual(['a1', null])
+  const done = apply(working, { v: 1, seq: 6, ts: 200, run: 'r1', type: 'agent.finished', data: { id: 'a1', status: 'completed' } })
+  expect(done.tasks.map(t => [t.id, t.finished_at, t.status])).toEqual([
+    ['t1', 200, 'gone'],
+    ['t2', null, null],
+  ])
+  const idle = apply(done, { v: 1, seq: 7, ts: 210, run: 'r1', type: 'task.finished', data: { id: 't2', status: 'completed' } })
+  expect(deriveStatus(idle, IDLE)).toBe('stalled')
+})
+
+test('an item past the plan, such as the review leftovers, grows it', async () => {
+  let run = rebuild('r1', started)
+  run = apply(run, { v: 1, seq: 3, ts: 120, run: 'r1', type: 'plan.ready', data: { items: ['a', 'b'] } })
+  run = apply(run, { v: 1, seq: 4, ts: 130, run: 'r1', type: 'item.started', data: { n: 3, title: 'Pendientes de la revisión' } })
+  expect(run.items.total).toBe(3)
+  expect(run.items.list?.map(item => item.title)).toEqual(['a', 'b', 'Pendientes de la revisión'])
+})

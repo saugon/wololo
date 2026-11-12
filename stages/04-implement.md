@@ -8,7 +8,7 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
 2. **Implement.** Spawn `config.project_agents.implementer`, or `wololo:implementer`. Give it:
    - the item;
    - the paths to `spec.md` and `plan.md`;
-   - the findings of the previous attempt, if any;
+   - the findings of the previous attempt, if any, and the minor findings carried to this item (step 4);
    - the work-tree preamble from SKILL.md, and the reminder that it does not commit.
 3. **Verify.** Call `mcp__wololo__tests {scope: "touched"}`. It returns:
    - the test files this run created or changed;
@@ -27,9 +27,13 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
    - `both`: both.
 
    What to do with each finding:
-   - **blocking or major**: fix it through the implementer, then verify and review again: the run takes a commit only of what was reviewed after its last verification;
-   - **minor**: fix it, or accept it with a reason.
-   - In `guided`, ask the person about the findings you would accept.
+   - **blocking or major**: fix it through the implementer, then verify and review again: the run takes a commit only of what was reviewed after its last verification. Fix the minors of the same review in that same round.
+   - **minor**, when nothing blocking or major came with it: never open a round for it alone (implementer, verifier and reviewer again cost 5 to 20 minutes). Commit the item as reviewed and either:
+     - **carry it** to the next item that touches the same files, handing it to that item's implementer, or to a final item `Pendientes de la revisión` / `Review leftovers` that you add once at the end of `plan.md` (its number is the last one plus 1; `item.started` grows the plan) and that collects the rest: one round for all of them;
+     - **accept it** with a reason, when it is cosmetic or the reviewer's preference.
+
+     Write each in `log.md` as carried (to which item) or accepted (why). A carried minor that the run ends without doing is listed in the PR as left out.
+   - In `guided`, ask the person about the findings you would accept or carry.
 
    Record `item.reviewed {n, findings, verdict}`.
 5. **Commit.** `git add -A && git commit -m "<message in the repository's style>"`, with no trailers. Record `item.committed {n, sha, title}`. The run refuses it when the commit's tree is not the one it verified: something changed after verification, so verify and review again.
@@ -45,7 +49,7 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
    ## item N: <title>                                   <short sha>
    attempts: <passes>, <design reversals> reversals
    gates: <PASS|FAIL:<what>>  tree:<short hash>
-   review: <n findings>: <severity> <one line each> → <fixed|accepted: why>
+   review: <n findings>: <severity> <one line each> → <fixed|carried to item M|accepted: why>
    decisions: <what the person ruled, and which way>
    corrected: <any plan or spec sentence that turned out false, and who found it>
    left out: <what was deliberately not done, and why>

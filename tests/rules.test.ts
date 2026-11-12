@@ -180,20 +180,22 @@ test('an item gets as many design reversals as the budget allows, then the perso
     ['item.started', { n: 1, title: 'a', reversal: true }, 8],
     ['blocked', { reason: 'budget' }, 9],
   ])
-  expect(checkEvent(blocked, 'unblocked', { budget: 'design_reversals' })).toMatch(/needs the person/)
+  expect(checkEvent(blocked, 'unblocked', { budget: 'design_reversals', amount: 1 })).toMatch(/needs the person/)
   const extended = implementing([
     ['item.started', { n: 1, title: 'a', reversal: true }, 7],
     ['item.started', { n: 1, title: 'a', reversal: true }, 8],
     ['blocked', { reason: 'budget' }, 9],
     ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Sigo?', answer: 'Sí' }], answered: true }, 10],
   ])
-  expect(checkEvent(extended, 'unblocked', { budget: 'design_reversals' })).toBe(null)
+  expect(checkEvent(extended, 'unblocked', { budget: 'design_reversals' })).toMatch(/data\.amount is required/)
+  expect(checkEvent(extended, 'unblocked', { budget: 'design_reversals', amount: 0 })).toMatch(/data\.amount is required/)
+  expect(checkEvent(extended, 'unblocked', { budget: 'design_reversals', amount: 1 })).toBe(null)
   const after = implementing([
     ['item.started', { n: 1, title: 'a', reversal: true }, 7],
     ['item.started', { n: 1, title: 'a', reversal: true }, 8],
     ['blocked', { reason: 'budget' }, 9],
     ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Sigo?', answer: 'Sí' }], answered: true }, 10],
-    ['unblocked', { budget: 'design_reversals' }, 11],
+    ['unblocked', { budget: 'design_reversals', amount: 1 }, 11],
   ])
   expect(checkEvent(after, 'item.started', { n: 1, title: 'a', reversal: true }, budgets)).toBe(null)
 })
@@ -226,6 +228,33 @@ test("a run that spent its minutes stops moving on until the person extends them
   // Waiting for the person does not count.
   long.time = { implement: { work: 100 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
   expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toBe(null)
+})
+
+test('the answer that lifts a budget block can still extend it, by the amount the person chose, and only once', async () => {
+  const time = { implement: { work: 25 * 60, agents: 226 * 60, tests: 0, you: 0, roles: {} } }
+  // What run #4734 went through: the answer lifts the block by itself, before the orchestrator records the extension.
+  const answered = implementing([
+    ['blocked', { reason: 'run_minutes agotado (251 de 240)' }, 9],
+    ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Cómo sigo?', answer: 'Extender 120 min' }], answered: true }, 10],
+    ['unblocked', { auto: true, by: 'answer' }, 10],
+  ])
+  answered.time = time
+  expect(answered.blocked).toBe(null)
+  expect(checkEvent(answered, 'unblocked', { budget: 'run_minutes', amount: 120 })).toBe(null)
+  const extended = implementing([
+    ['blocked', { reason: 'run_minutes agotado (251 de 240)' }, 9],
+    ['question.answered', { pairs: [{ header: 'Presupuesto', question: '¿Cómo sigo?', answer: 'Extender 120 min' }], answered: true }, 10],
+    ['unblocked', { auto: true, by: 'answer' }, 10],
+    ['unblocked', { budget: 'run_minutes', amount: 120 }, 11],
+  ])
+  extended.time = time
+  expect(extended.counts.budget_added).toEqual({ run_minutes: 120 })
+  expect(checkEvent(extended, 'item.started', { n: 13, title: 'm' }, budgets)).toBe(null)
+  // The same answer does not extend twice.
+  expect(checkEvent(extended, 'unblocked', { budget: 'run_minutes', amount: 120 })).toMatch(/needs the person/)
+  // 120 more is 360 in all: past that, it stops again, and says how many it allowed.
+  extended.time = { implement: { work: 25 * 60, agents: 340 * 60, tests: 0, you: 0, roles: {} } }
+  expect(checkEvent(extended, 'item.started', { n: 14, title: 'n' }, budgets)).toMatch(/^360 minutes .*amount/)
 })
 
 test('each attempt goes verify, review, commit, and commits the tree that was verified', async () => {

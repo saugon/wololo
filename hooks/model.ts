@@ -167,6 +167,8 @@ export type TaskEntry = {
   started_at: number
   finished_at: number | null
   status: string | null
+  // The subagent that started it, when one did: its notification goes to that agent, never to the orchestrator, so it closes with it.
+  agent?: string | null
 }
 
 export type Tokens = { input: number; output: number; cache_read: number; cache_write: number }
@@ -270,6 +272,8 @@ export type Run = {
   status: Status
   waiting: Waiting | null
   blocked: { reason: string; since: number } | null
+  // When the latest block started, kept after the person's answer lifts it, so that answer can still extend a budget, once.
+  block_since?: number | null
   agents: AgentEntry[]
   tasks: TaskEntry[]
   items: {
@@ -287,10 +291,12 @@ export type Run = {
     reversals: number
     nudges: number
     unsigned: number
-    // Toward the budgets: reversals per item, CI runs that failed, and how many times the person extended each budget.
+    // Toward the budgets: reversals per item, CI runs that failed, how many times the person extended each budget by a whole budget
+    // more (runs from before extensions said how much), and what they added to each, in the budget's unit.
     reversals_by_item?: Record<number, number>
     ci_failures?: number
     budget_extensions?: Partial<Record<BudgetName, number>>
+    budget_added?: Partial<Record<BudgetName, number>>
   }
   pr: {
     url: string
@@ -546,6 +552,10 @@ export function apply(run: Run, ev: RunEvent): Run {
         agent.finished_at = ev.ts
         const took = ev.ts - agent.started_at
         if (r.stage && took > 0) addTime(r, r.stage.id, was => ({ ...was, roles: { ...was.roles, [agent.role]: (was.roles[agent.role] ?? 0) + took } }))
+        for (const task of r.tasks.filter(t => t.agent === agent.id && t.finished_at === null)) {
+          task.finished_at = ev.ts
+          task.status = 'gone'
+        }
       }
       break
     }
@@ -559,6 +569,7 @@ export function apply(run: Run, ev: RunEvent): Run {
         started_at: ev.ts,
         finished_at: null,
         status: null,
+        agent: typeof d.agent === 'string' ? d.agent : null,
       })
       r.tasks = r.tasks.slice(-40)
       break
@@ -579,6 +590,8 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'item.started':
       r.items.current = { n: num(d.n), title: str(d.title), since: ev.ts }
+      // An item past the plan (the review leftovers) grows it.
+      r.items.total = Math.max(r.items.total, num(d.n))
       setItem(r, num(d.n), str(d.title), { state: 'active', verified: null, reviewed_at: null })
       r.counts.attempts += 1
       if (d.reversal === true) {
@@ -637,6 +650,7 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'blocked':
       r.blocked = { reason: str(d.reason), since: ev.ts }
+      r.block_since = ev.ts
       break
     case 'pause.requested':
       r.pause_requested_at = ev.ts
@@ -652,8 +666,12 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'unblocked':
       r.blocked = null
-      if (typeof d.budget === 'string')
-        r.counts.budget_extensions = { ...(r.counts.budget_extensions ?? {}), [d.budget]: (r.counts.budget_extensions?.[d.budget as BudgetName] ?? 0) + 1 }
+      if (typeof d.budget === 'string') {
+        const name = d.budget as BudgetName
+        if (typeof d.amount === 'number') r.counts.budget_added = { ...(r.counts.budget_added ?? {}), [name]: (r.counts.budget_added?.[name] ?? 0) + d.amount }
+        else r.counts.budget_extensions = { ...(r.counts.budget_extensions ?? {}), [name]: (r.counts.budget_extensions?.[name] ?? 0) + 1 }
+        r.block_since = null
+      }
       break
     case 'stalled':
       r.counts.nudges += 1

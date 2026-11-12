@@ -2120,7 +2120,12 @@ export const register: Register = (on, options) => {
         const taskId =
           ran.deny === undefined && !ran.isError ? (ran.result as { backgroundTaskId?: string } | undefined)?.backgroundTaskId : undefined
         if (taskId)
-          await emit($, 'task.started', { id: taskId, label: e.description ?? e.command.slice(0, 60), kind: classifyTask(e.command) })
+          await emit($, 'task.started', {
+            id: taskId,
+            label: e.description ?? e.command.slice(0, 60),
+            kind: classifyTask(e.command),
+            ...(e.agentId ? { agent: e.agentId } : {}),
+          })
         return ran
       }
 
