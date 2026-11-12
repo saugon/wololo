@@ -79,6 +79,14 @@ export function stageText(run: Run): string {
   return items ? `${label} · ${items}` : label
 }
 
+// While an item is being built, the card's detail line says which one, and what the orchestrator noted it is doing, in place of the
+// background shells: those say little, and one a subagent left open stays there until the session ends.
+function bandDetail(run: Run, status: Status, now: number, withAgents: boolean): string {
+  const item = run.stage?.id === 'implement' ? run.items.current : null
+  if (item && (status === 'running' || status === 'waiting_agents')) return [item.title, run.doing?.text].filter(Boolean).join(' · ')
+  return statusDetail(run, status, now, withAgents)
+}
+
 export function thinBar(segments: readonly Segment[], width: number): Array<{ text: string; state: Segment['state']; filled: boolean }> {
   const cells = Math.max(3, Math.floor(width / Math.max(1, segments.length)))
   return segments.flatMap(segment => {
@@ -302,7 +310,7 @@ export function buildView(
     stage: stageLabel(run),
     activity: activity(run, status, now),
     badge: badge(lang, status),
-    detail: statusDetail(run, status, now, agents.length === 0),
+    detail: bandDetail(run, status, now, agents.length === 0),
     agents,
     tone,
     progress: progressOf(run),

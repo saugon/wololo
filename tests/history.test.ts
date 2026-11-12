@@ -109,6 +109,7 @@ test('the summary starts with what is going on now, then the stages', async () =
   expect(view.details.slice(0, 3).map(row => row.text)).toEqual(['Ahora', '  Ítem 6: Front: estado por mesa', '  ◉ revisor 1m  Review item 6'])
   expect(view.details.find(row => row.text.startsWith('✓ Aprobar spec'))?.text).toBe('✓ Aprobar spec: aprobado (vos), esperó 2m')
   expect(view.band.stageText).toBe('Implementación · ítem 6 de 6')
+  expect(view.band.detail).toBe('Front: estado por mesa')
   expect(view.header).toContain('5/8 Implementación · ítem 6 de 6')
 })
 
@@ -191,7 +192,7 @@ test('the card names the live agents by role and model, and counts the ones that
   const run = rebuild('r1', list)
   const view = buildView(run, 'waiting_agents', list, 1_800_000_780)
   expect(view.band.agents.map(chip => `${chip.icon} ${chip.text}`)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exploradores (haiku) 2m', '+ 1 listo', '✕ 1 falló'])
-  expect(view.band.detail).toBe('')
+  expect(view.band.detail).toBe('b')
   expect(view.header).toContain('revisor (3m), 2 exploradores (2m)')
   expect(view.details.slice(2, 8).map(row => row.text)).toEqual([
     '  ◉ revisor       opus   3m  Review item 2',
