@@ -141,6 +141,9 @@ const ownerAtom = atom({ plugin: 'wololo', key: 'owner' } as const, '')
 const INSTANCE = Math.random().toString(36).slice(2, 10)
 // The session.end reasons on which the process exits, and its background shells with it. /clear and resume go on in the same process.
 const EXITS: ReadonlySet<string> = new Set(['prompt_input_exit', 'logout', 'other'])
+// The sessions this process ran a run in and let go of on /clear: a resume from the cleared session takes it back without waiting for
+// the old one's heartbeat to go stale.
+const released = new Set<string>()
 
 let paths: Paths | undefined
 let root = ''
@@ -1518,6 +1521,8 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
 
 async function resumeRun($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!paths) return fail('wololo is not ready yet.')
+  // After a /clear the process goes on under another session id: the run is taken by that one.
+  await followSession($)
   const id = String(input.run_id ?? run?.id ?? '')
   // In an instance that no longer owns the session, its run is not what the session runs: another one may be resumed in its place.
   if (run && !run.outcome && run.id !== id && (await isOwner($)))
@@ -1529,7 +1534,7 @@ async function resumeRun($: Engine, input: Record<string, unknown>): Promise<str
   const status = effectiveStatus(found, ts)
   if (found.outcome || isTerminal(status)) return fail(`Run ${id} already finished (${found.outcome ?? status}).`)
   const isStale = ts - found.owner.heartbeat_at > ORPHAN_AFTER_SECONDS
-  if (found.owner.session_id !== sessionId && !isStale) {
+  if (found.owner.session_id !== sessionId && !isStale && !released.has(found.owner.session_id)) {
     return fail(`Run ${id} is owned by a live session (heartbeat ${Math.round(ts - found.owner.heartbeat_at)}s ago). Resume it there.`)
   }
   await update($, ownerAtom, () => INSTANCE)
@@ -2156,6 +2161,29 @@ async function noteNotifications($: Engine, text: string) {
   }
 }
 
+// A /clear starts a conversation that knows nothing of the run, so the run does not follow it: it is paused where it was, with its card
+// and pane gone, and /wololo resume takes it back. Its background shells go on in the process and are left to the resume.
+async function releaseRun($: Engine, endingSession: string) {
+  if (!run || run.outcome || !(await isOwner($))) return
+  const es = run.lang === 'es'
+  if (!run.paused)
+    await emit($, 'paused', {
+      note: es ? 'la sesión se limpió con /clear' : 'the session was cleared with /clear',
+    })
+  await flush($)
+  released.add(endingSession || sessionId)
+  loadGeneration += 1
+  run = undefined
+  historyCache = undefined
+  recent = []
+  pending = []
+  worktreeInfo = null
+  live = { isTurnRunning: false, question: null, permission: null }
+  await refresh($)
+  await $.ui.close({ id: PANE }).catch(() => undefined)
+  for (const tool of TOOLS) if (RUN_TOOLS.has(tool.name)) await $.tool.register({ ...tool, isDeferred: true }).catch(() => undefined)
+}
+
 // A session's background shells die with its process: what is still open of them is closed as gone when the process exits (taking the run
 // back, owner.changed, closes them too). Codex jobs (external) outlive the session and are followed by checkJob.
 async function closeTasks($: Engine) {
@@ -2307,6 +2335,7 @@ export const register: Register = (on, options) => {
     await quietly(async () => {
       if (EXITS.has(e.reason) && (await isOwner($))) await closeTasks($)
       await flush($)
+      if (e.reason === 'clear') await releaseRun($, e.sessionId)
     })
     return next(e)
   })

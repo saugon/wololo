@@ -12,7 +12,7 @@ type Before = (kind: BeforeKind, what: string) => string | number | undefined | 
 // commands holds every process the plugin ran, its argv joined.
 type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; commands: string[]; before: Before }
 
-function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string } = {}): Host {
+function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string; session?: () => string } = {}): Host {
   const opens: Array<{ id: string; focus?: boolean }> = []
   const files = new Map<string, string>()
   const gh: string[] = []
@@ -27,7 +27,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   const host: Host = { opens, files, gh, tools, ps, dead, killed, shells, answers, git, commands: [], before: () => undefined }
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
-  on('session.id', () => ({ value: 's1' }))
+  on('session.id', () => ({ value: options.session?.() ?? 's1' }))
   on('session.cwd', () => ({ value: REPO }))
   on('tool.register', (_, e) => {
     tools.set(e.name, e.isDeferred === true)
@@ -757,7 +757,7 @@ test('a permission counts as waiting only when its dialog opens, and an ask a ho
   expect((await run()).waiting).toBe(null)
 })
 
-test('the background tasks of a session are closed as gone when its process exits, and kept on /clear', async ($, on) => {
+test('the background tasks of a session are closed as gone when its process exits', async ($, on) => {
   fakeHost(on)
   let next = 0
   on('tool.call', (_, e) => (e.tool === 'Bash' ? { result: { backgroundTaskId: `t${++next}` } } : { result: {} }))
@@ -773,10 +773,31 @@ test('the background tasks of a session are closed as gone when its process exit
       .filter(task => task.finished_at === null)
       .map(task => task.id)
   expect(await open()).toEqual(['t1', 't2'])
-  await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
-  expect(await open()).toEqual(['t1', 't2'])
   await $.session.end({ reason: 'prompt_input_exit', sessionId: 's1' } as never)
   expect(await open()).toEqual([])
+})
+
+test('/clear lets go of the run: it is paused with no card, and /wololo resume takes it back right away', async ($, on) => {
+  let session = 's1'
+  const host = fakeHost(on, { session: () => session })
+  on('tool.call', () => ({ result: {} }))
+  on('session.end', (_, e) => e)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  const id = started.run_id as string
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+
+  await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
+  session = 's2'
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)).toContain('No active run')
+  const saved = JSON.parse(host.files.get(`${DATA}/runs/${id}/run.json`) ?? '{}') as { paused: { note: string } | null; owner: { session_id: string } }
+  expect(saved.paused?.note).toContain('/clear')
+  expect(saved.owner.session_id).toBe('s1')
+
+  const resumed = parse((await $.tool.call({ tool: 'mcp__wololo__resume', run_id: id } as never)).result)
+  expect(resumed.stage).toBe('context')
+  const back = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  expect([back.owner.session_id, back.paused]).toEqual(['s2', null])
 })
 
 test('a permission wait left by an earlier load of the mod is cleared when the session takes the run back', async ($, on) => {
