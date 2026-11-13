@@ -307,8 +307,13 @@ test('the summary names the worktree, its branch against the base, its HEAD and 
     ],
   }
   const summary = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').pane.summary
-  expect(block(summary, 'git')).toEqual(['wololo/txt-salones ← main  ↑14 ↓2', '09d8f8a Front: toggle Plana/3D', '1 archivo sin commitear'])
-  expect(block(summary, 'puertos')).toEqual(['slot 1 · backend 4110 escuchando · foods 3111 libre'])
+  expect(block(summary, 'git')).toEqual([
+    'rama     wololo/txt-salones',
+    'base     main · 14 commits adelante, 2 atrás',
+    'último   09d8f8a Front: toggle Plana/3D',
+    'cambios  1 archivo sin commitear',
+  ])
+  expect(block(summary, 'puertos')).toEqual(['slot     1', 'backend  4110  en uso', 'foods    3111  libre'])
   expect(block(summary, 'ruta')).toEqual(['~/shop/.claude/worktrees/wololo-r1'])
   expect(summary.slice(-3).map(entry => entry.label)).toEqual(['git', 'puertos', 'ruta'])
 })

@@ -154,36 +154,49 @@ function home(path: string, homeDir: string | undefined): string {
 
 const span = (text: string, tone?: Span['tone'], bold?: boolean): Span => ({ text, ...(tone ? { tone } : {}), ...(bold ? { bold } : {}) })
 
-// The git, ports and path rows: the branch against its base, HEAD and what is left uncommitted, the run's slot, and the directory.
+// The git, ports and path rows, each fact under its own name: the branch, its base and how far the branch is from it, HEAD,
+// what is left uncommitted, the run's slot and ports, and the directory.
 function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string | undefined): Block[] {
   const es = run.lang === 'es'
   const dir = run.project.worktree ?? run.project.path
   if (!dir) return []
   const blocks: Block[] = []
-  const git: Line[] = []
-  if (run.project.branch) {
-    const line: Line = [span(run.project.branch, 'text')]
-    if (run.project.base) line.push(span(' ← ', 'subtle'), span(run.project.base, 'text'))
-    const moved: Line = []
-    if (info?.ahead !== null && info?.ahead !== undefined) moved.push(span(`↑${info.ahead}`, 'success'))
-    if (info?.behind) moved.push(span(`${moved.length > 0 ? ' ' : ''}↓${info.behind}`, 'warning'))
-    if (moved.length > 0) line.push(span('  '), ...moved)
-    git.push(line)
+  const named = (rows: Array<[string, Span[]]>): Line[] => {
+    const width = Math.max(...rows.map(([name]) => name.length))
+    return rows.map(([name, rest]) => [span(`${name.padEnd(width)}  `, 'subtle'), ...rest])
   }
-  if (info?.head) git.push([span(info.head, 'suggestion'), span(info.subject ? ` ${info.subject}` : '', 'text')])
+  const git: Array<[string, Span[]]> = []
+  if (run.project.branch) git.push([es ? 'rama' : 'branch', [span(run.project.branch, 'text')]])
+  if (run.project.base) {
+    const line: Span[] = [span(run.project.base, 'text')]
+    const ahead = info?.ahead ?? null
+    const behind = info?.behind ?? null
+    if (ahead !== null && behind !== null) {
+      line.push(span(' · ', 'subtle'))
+      if (ahead === 0 && behind === 0) line.push(span(es ? 'al día' : 'up to date', 'success'))
+      else {
+        const parts: Span[] = []
+        if (ahead > 0) parts.push(span(es ? `${ahead} commits adelante` : `${ahead} commits ahead`, 'success'))
+        if (behind > 0) parts.push(span(es ? `${behind} atrás` : `${behind} behind`, 'warning'))
+        parts.forEach((part, i) => line.push(...(i > 0 ? [span(', ', 'subtle')] : []), part))
+      }
+    }
+    git.push(['base', line])
+  }
+  if (info?.head) git.push([es ? 'último' : 'last', [span(info.head, 'suggestion'), span(info.subject ? ` ${info.subject}` : '', 'text')]])
   if (info?.dirty) {
     const files = es ? (info.dirty === 1 ? 'archivo sin commitear' : 'archivos sin commitear') : info.dirty === 1 ? 'uncommitted file' : 'uncommitted files'
-    git.push([span(`${info.dirty} ${files}`, 'warning')])
+    git.push([es ? 'cambios' : 'changes', [span(`${info.dirty} ${files}`, 'warning')]])
   }
-  if (git.length > 0) blocks.push({ label: 'git', lines: git, gap: true })
+  if (git.length > 0) blocks.push({ label: 'git', lines: named(git), gap: true })
   if (info && info.ports.length > 0) {
-    const line: Line = [span(`slot ${run.slot}`, 'text')]
+    const ports: Array<[string, Span[]]> = [['slot', [span(String(run.slot), 'text')]]]
     for (const port of info.ports) {
-      line.push(span(' · ', 'subtle'), span(`${port.name} ${port.port}`, 'text'))
-      if (port.listening !== null)
-        line.push(span(port.listening ? (es ? ' escuchando' : ' listening') : es ? ' libre' : ' free', port.listening ? 'claude' : 'success'))
+      const state =
+        port.listening === null ? [] : port.listening ? [span(es ? '  en uso' : '  in use', 'claude')] : [span(es ? '  libre' : '  free', 'subtle')]
+      ports.push([port.name, [span(String(port.port), 'text'), ...state]])
     }
-    blocks.push({ label: es ? 'puertos' : 'ports', lines: [line] })
+    blocks.push({ label: es ? 'puertos' : 'ports', lines: named(ports) })
   }
   blocks.push({ label: es ? 'ruta' : 'path', lines: [[span(home(dir, homeDir), 'text')]], gap: blocks.length === 0 })
   return blocks
