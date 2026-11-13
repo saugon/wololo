@@ -28,6 +28,8 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('▶', `${es ? 'Run iniciado' : 'Run started'}: ${str(d.title)} (${str(d.mode)})`)
     case 'owner.changed':
       return one('↺', es ? 'Retomado en otra sesión' : 'Resumed in another session')
+    case 'branch.renamed':
+      return one('⎇', `${es ? 'Rama renombrada' : 'Branch renamed'}: ${str(d.from)} → ${str(d.to)}`)
     case 'risk.set':
       return one('·', `${es ? 'Riesgo' : 'Risk'} ${str(d.risk)}${d.reason ? `: ${str(d.reason)}` : ''}`, false)
     case 'stage.entered':

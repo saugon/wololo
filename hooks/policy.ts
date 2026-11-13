@@ -55,15 +55,30 @@ export function isAllowedPush(segment: string, branch: string | null): boolean {
   return target.test(segment)
 }
 
-export function pushDenial(command: string, branch: string | null): string | null {
+export function hasPush(command: string): boolean {
+  return segments(command).some(isPush)
+}
+
+// current: the branch the run's worktree is on, when it differs from the run's, to say why the push is refused.
+export function pushDenial(command: string, branch: string | null, current: string | null = null): string | null {
   for (const segment of segments(command)) {
     if (isPush(segment) && !isAllowedPush(segment, branch)) {
-      return branch
-        ? `wololo: during a run, push only the run branch, exactly as \`git push -u origin ${branch}\`.`
-        : 'wololo: this run has no branch to push.'
+      if (!branch) return 'wololo: this run has no branch to push.'
+      const rule = `wololo: during a run, push only the run branch, exactly as \`git push -u origin ${branch}\`.`
+      return current && current !== branch
+        ? `${rule} The worktree is on \`${current}\`, which wololo does not take as the run's branch: a branch created beside it, or the base, is no rename. To push under the new name, rename the run's branch itself (\`git branch -m ${branch} <new name>\`); otherwise switch back to \`${branch}\`.`
+        : rule
     }
   }
   return null
+}
+
+// The run's branch was renamed when it no longer exists and the worktree is on another branch that is not the base: the
+// name to record, or null. A branch created beside it (switch -c, checkout -b) leaves the run's in place, and is no rename.
+export function renamedBranch(branch: string | null, current: string | null, branchExists: boolean, base: string): string | null {
+  if (!branch || !current || current === branch || branchExists) return null
+  if (current === base.replace(/^origin\//, '')) return null
+  return current
 }
 
 // What writes to GitHub: during a run that goes through the publish tool only, which checks the config and GitHub's limits.

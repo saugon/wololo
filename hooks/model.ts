@@ -54,6 +54,7 @@ export type Outcome = 'done' | 'failed' | 'cancelled'
 export const EVENT_TYPES = [
   'run.started',
   'owner.changed',
+  'branch.renamed',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -455,6 +456,9 @@ export function apply(run: Run, ev: RunEvent): Run {
         task.finished_at = ev.ts
         task.status = 'gone'
       }
+      break
+    case 'branch.renamed':
+      if (typeof d.to === 'string' && d.to) r.project.branch = d.to
       break
     case 'risk.set':
       r.risk = (d.risk as Risk) ?? r.risk
@@ -1116,6 +1120,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'run.finished',
   'stalled',
   'github.published',
+  'branch.renamed',
 ])
 
 export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSeconds: number | null): string[] {

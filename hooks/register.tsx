@@ -60,6 +60,8 @@ import {
   isInside,
   isReadInside,
   pushDenial,
+  renamedBranch,
+  hasPush,
   segments,
 } from './policy'
 import {
@@ -1127,6 +1129,20 @@ async function listening($: Engine, port: number): Promise<boolean | null> {
   return ran.exitCode === 0 && ran.stdout.trim().length > 0
 }
 
+// The branch the run's worktree is on. When the run's branch was renamed (in the session or outside it), records the new
+// name, so that the push, the PR and the card follow it.
+async function syncBranch($: Engine): Promise<string | null> {
+  if (!run || run.outcome || !run.project.worktree) return null
+  const dir = run.project.worktree
+  const current = await git($, dir, ['branch', '--show-current'])
+  const branch = run.project.branch
+  if (!current || !branch || current === branch) return current || null
+  const exists = (await git($, dir, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])) !== null
+  const to = renamedBranch(branch, current, exists, run.project.base ?? config.pr.base)
+  if (to) await emit($, 'branch.renamed', { from: branch, to })
+  return current
+}
+
 async function inspectWorktree($: Engine) {
   if (!run || run.outcome) {
     worktreeInfo = null
@@ -1134,6 +1150,7 @@ async function inspectWorktree($: Engine) {
   }
   const dir = run.project.worktree ?? run.project.path
   if (!dir) return
+  await syncBranch($)
   const base = run.project.base ?? config.pr.base
   const upstream = base.startsWith('origin/') ? base : `origin/${base}`
   const [head, counts, status] = await Promise.all([
@@ -2287,10 +2304,13 @@ export const register: Register = (on, options) => {
 
   on('tool.check', async ($, e, next) => {
     if (e.tool.startsWith(TOOL_PREFIX)) return { decision: 'allow' as const, reason: 'wololo: its own run bookkeeping' }
-    const ctx = policyContext()
+    let ctx = policyContext()
     const input = isObject(e.input) ? e.input : {}
     if (ctx && e.tool === 'Bash' && typeof input.command === 'string') {
-      const denial = pushDenial(input.command, ctx.branch)
+      // A push reads the worktree's branch first: a rename made since the last heartbeat is recorded before it is judged.
+      const current = hasPush(input.command) ? await syncBranch($).catch(() => null) : null
+      ctx = policyContext() ?? ctx
+      const denial = pushDenial(input.command, ctx.branch, current)
       if (denial) return { decision: 'deny' as const, reason: denial }
     }
     const githubDenial = ctx ? githubWriteDenial(e.tool, input) : null

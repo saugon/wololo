@@ -32,6 +32,7 @@ export default {
       "enum": [
         "run.started",
         "owner.changed",
+        "branch.renamed",
         "risk.set",
         "stage.entered",
         "stage.completed",

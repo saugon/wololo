@@ -170,3 +170,11 @@ test('an item past the plan, such as the review leftovers, grows it', async () =
   expect(run.items.total).toBe(3)
   expect(run.items.list?.map(item => item.title)).toEqual(['a', 'b', 'Pendientes de la revisión'])
 })
+
+test('a renamed branch becomes the run branch, and is in what happened since the person last looked', async () => {
+  let run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 120, run: 'r1', type: 'owner.changed', data: { session_id: 's1', cwd: '/repo', branch: 'wololo/4312-pagos' } })
+  const renamed: RunEvent = { v: 1, seq: 4, ts: 130, run: 'r1', type: 'branch.renamed', data: { from: 'wololo/4312-pagos', to: 'feat/4312-pagos' } }
+  run = apply(run, renamed)
+  expect(run.project.branch).toBe('feat/4312-pagos')
+  expect(sinceLastSeen(run, [renamed], 125).length).toBe(1)
+})

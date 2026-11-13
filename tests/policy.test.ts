@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { touchedPattern } from '../hooks/config'
-import { commandRules, githubWriteDenial, isAllowedBash, isAllowedPath, isReadInside, pushDenial } from '../hooks/policy'
+import { commandRules, githubWriteDenial, hasPush, isAllowedBash, isAllowedPath, isReadInside, pushDenial, renamedBranch } from '../hooks/policy'
 
 const ctx = { branch: 'wololo/4312-pagos', workdir: '/w/vertex.wololo/r1', runDir: '/h/.claude/wololo/runs/r1', commands: ['make test', 'INST=1 make backend.run'], patterns: [touchedPattern('mix test {files}')] }
 
@@ -12,6 +12,29 @@ test('only the run branch can be pushed, never with force', async () => {
   expect(pushDenial('git push --force origin wololo/4312-pagos', ctx.branch)).not.toBe(null)
   expect(pushDenial('git status && git push', ctx.branch)).not.toBe(null)
   expect(pushDenial('git commit -m "x"', ctx.branch)).toBe(null)
+})
+
+test('a refused push says when the worktree is on another branch, and how to rename the run branch', async () => {
+  const denial = pushDenial('git push -u origin feat/4312-pagos', ctx.branch, 'feat/4312-pagos')
+  expect(denial).toContain('git push -u origin wololo/4312-pagos')
+  expect(denial).toContain('git branch -m wololo/4312-pagos <new name>')
+  expect(pushDenial('git push origin main', ctx.branch, ctx.branch)).not.toContain('worktree is on')
+  expect(pushDenial('git push -u origin wololo/4312-pagos', ctx.branch, 'feat/4312-pagos')).toBe(null)
+})
+
+test('a push is found in any segment of the command', async () => {
+  expect(hasPush('git add . && git push -u origin x')).toBe(true)
+  expect(hasPush('git -C /w push origin x')).toBe(true)
+  expect(hasPush('git status && echo push')).toBe(false)
+})
+
+test('the run branch counts as renamed only when it is gone and the worktree is on another branch, not the base', async () => {
+  expect(renamedBranch('wololo/4312-pagos', 'feat/4312-pagos', false, 'main')).toBe('feat/4312-pagos')
+  expect(renamedBranch('wololo/4312-pagos', 'feat/4312-pagos', true, 'main')).toBe(null)
+  expect(renamedBranch('wololo/4312-pagos', 'wololo/4312-pagos', false, 'main')).toBe(null)
+  expect(renamedBranch('wololo/4312-pagos', 'main', false, 'origin/main')).toBe(null)
+  expect(renamedBranch('wololo/4312-pagos', null, false, 'main')).toBe(null)
+  expect(renamedBranch(null, 'feat/4312-pagos', false, 'main')).toBe(null)
 })
 
 test('git and gh steps of the run are allowed, everything else is left to the person', async () => {
