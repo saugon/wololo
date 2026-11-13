@@ -766,7 +766,7 @@ function arrowStops(dialog: ConfigDialog): { stops: Stop[]; start: number; top?:
   if (dialog.step === 'choose') return { stops: own([...SECTIONS.map(section => `choose-${section.id}`), 'continue', 'back']), start: 0 }
   if (dialog.step !== 'ask') return null
   const effective = effectiveOf(dialog)
-  const question = initQuestions(effective)[dialog.cursor]
+  const question = initQuestions(effective, dialog.proposed)[dialog.cursor]
   if (!question) return { stops: own(['save-as-is', 'review', 'cancel'], 'init-active'), start: 0 }
   return {
     stops: own(
@@ -794,6 +794,7 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
     step: 'ask',
     chosen: [],
     cursor: 0,
+    ...(mode === 'review' && proposal ? { proposed: proposal } : {}),
   }
   await update($, dialogAtom, () => dialog)
   const opened = await $.ui
@@ -813,7 +814,7 @@ async function openConfig($: Engine, mode: 'config' | 'review', proposal?: Recor
     return fail(`The config pane could not be shown (${opened.reason}). Show the config in the chat instead.`)
   }
   if (mode === 'review') {
-    const first = initQuestions(effectiveOf(dialog))[0]
+    const first = initQuestions(effectiveOf(dialog), dialog.proposed)[0]
     if (first) void revealInit($, initKey(first, effectiveOf(dialog)))
   }
   return ok({ opened: true, project_key: info.key, project_path: projectPath })
@@ -1939,7 +1940,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'review_config',
     description:
-      "Opens the config review for the person, as /wololo init asks: what was detected, the first-time questions (autonomy, isolation, approval, PR, suite, spec in the issue), then save or adjust more by section. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person's save or cancel arrives as a message.",
+      "Opens the config review for the person, as /wololo init asks: what was detected, the first-time questions (who delivers, when it proposes adapters; autonomy, isolation, approval, PR, suite, spec in the issue), then save or adjust more by section. Pass the proposed project config (only the keys that differ from the defaults). It returns at once; end your turn: the person's save or cancel arrives as a message.",
     inputSchema: { type: 'object', properties: { proposal: { type: 'object' } }, required: ['proposal'] },
   },
   {
@@ -2941,7 +2942,7 @@ export const register: Register = (on, options) => {
     if (dialog.mode === 'review') {
       if (dialog.step === 'ask' || dialog.step === 'detect') {
         const detecting = dialog.step === 'detect'
-        const questions = initQuestions(effective)
+        const questions = initQuestions(effective, dialog.proposed)
         const at = detecting ? -1 : Math.min(dialog.cursor, questions.length)
         const inherited = merge(DEFAULT_CONFIG, dialog.files.global)
         const pick = async (question: InitQuestion, choice: InitChoice) => {
@@ -3197,7 +3198,7 @@ export const register: Register = (on, options) => {
                 label={es ? 'Atrás' : 'Back'}
                 onPress={async () => {
                   await update($, dialogAtom, (d): ConfigDialog | null =>
-                    d ? { ...d, step: 'ask', cursor: initQuestions(effective).length, hover: undefined } : d,
+                    d ? { ...d, step: 'ask', cursor: initQuestions(effective, d.proposed).length, hover: undefined } : d,
                   )
                   await revealInit($, 'save-as-is')
                 }}

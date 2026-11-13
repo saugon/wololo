@@ -74,6 +74,8 @@ export type ConfigDialog = {
   cursor: number
   // The init option the arrows last moved the focus to, on the question now asked.
   hover?: number
+  // The config init proposed, which the questions that depend on what was detected (the runner) read.
+  proposed?: Record<string, unknown>
 }
 
 declare module 'claude-code' {

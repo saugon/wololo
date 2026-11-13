@@ -442,8 +442,38 @@ export const INIT_QUESTIONS: InitQuestion[] = [
   },
 ]
 
-export function initQuestions(effective: unknown): InitQuestion[] {
-  return INIT_QUESTIONS.filter(question => !question.when || question.when(effective))
+// Who delivers the change, asked only when init proposed adapters (a runner the project documents): the runner keeps the proposed
+// adapters (and the mirror of its own runs), wololo drops them. It hangs on the proposal, not on the answer, so picking wololo
+// does not take the question away.
+export function deliveryQuestion(proposed: unknown): InitQuestion | null {
+  const adapters = getAt(proposed, 'adapters')
+  if (!isObject(adapters) || Object.keys(adapters).length === 0) return null
+  const mirror = getAt(proposed, 'mirror')
+  const points = Object.keys(adapters).join(', ')
+  return {
+    id: 'delivery',
+    title: t('Entrega', 'Delivery'),
+    ask: t('¿Quién entrega el cambio?', 'Who delivers the change?'),
+    choices: [
+      {
+        id: 'runner',
+        label: t('el runner del proyecto', "the project's runner"),
+        help: t(`toma ${points}`, `takes ${points}`),
+        set: { adapters, ...(isObject(mirror) ? { mirror } : {}) },
+      },
+      {
+        id: 'wololo',
+        label: t('wololo', 'wololo'),
+        help: t('hace cada etapa solo; el runner no se usa', 'does every stage itself; the runner is not used'),
+        set: { adapters: {}, ...(isObject(mirror) ? { mirror: { list: '', run: '' } } : {}) },
+      },
+    ],
+  }
+}
+
+export function initQuestions(effective: unknown, proposed?: unknown): InitQuestion[] {
+  const delivery = deliveryQuestion(proposed)
+  return [...(delivery ? [delivery] : []), ...INIT_QUESTIONS.filter(question => !question.when || question.when(effective))]
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
@@ -497,6 +527,7 @@ export function detectedRows(project: unknown, repo: string, base: string, lang:
     ['E2E', list('tests.e2e').map(String)],
     ['App', start],
     [es ? 'Agentes' : 'Agents', agents],
+    ['Runner', isObject(getAt(project, 'adapters')) ? Object.keys(getAt(project, 'adapters') as Record<string, unknown>) : []],
     ['Docs', list('paths.context').map(String)],
   ]
   return rows.filter(([, values]) => values.length > 0).map(([label, values]) => [label, values.join(' · ')])
