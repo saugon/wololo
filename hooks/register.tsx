@@ -1436,6 +1436,10 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   // The tool's input arrives frozen; copy it so the snapshot and tree hashes can be added.
   const data: Record<string, unknown> = isObject(input.data) ? { ...input.data } : {}
   const worktree = run.project.worktree
+  if (type === 'base.changed') {
+    if (typeof data.to === 'string') data.to = data.to.trim().replace(/^origin\//, '')
+    data.from = run.project.base ?? config.pr.base
+  }
   if (worktree && type === 'item.verified' && data.result !== 'fail')
     data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
   if (worktree && type === 'item.committed' && typeof data.sha === 'string')
@@ -1879,7 +1883,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, pr.opened {url, number, draft}, pr.ready {}, screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -2001,6 +2005,10 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
     .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
   if (ran.exitCode !== 0) return fail(`gh ${args.slice(0, 2).join(' ')} failed: ${ran.stderr.trim().slice(-1_000)}`)
   const url = urlIn(`${ran.stdout}\n${ran.stderr}`)
+  // A PR opened against another base moves the run's base there, so the card and the push compare against what the PR does.
+  const prBase = kind === 'pr_create' && typeof input.base === 'string' ? input.base.trim().replace(/^origin\//, '') : ''
+  const runBase = (run.project.base ?? config.pr.base).replace(/^origin\//, '')
+  if (prBase && prBase !== runBase) await emit($, 'base.changed', { from: runBase, to: prBase, reason: 'pr_create' })
   await emit($, 'github.published', { kind, mode: decision.send, url, file, length: body.length })
   return ok({ published: true, mode: decision.send, url, full_text: bodyFile, length: body.length })
 }

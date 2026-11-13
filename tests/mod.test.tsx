@@ -302,6 +302,27 @@ test('publish sends a summary when the text does not fit, and nothing to GitHub 
   expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/summary.md'])
 })
 
+test('the run follows its base when the branch moves onto another one, by hand or by opening the PR against it', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Stacked', flags: ['--base=feat/11-envios'] } as never)).result)
+  const base = async () => ((parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run).project.base)
+  expect(await base()).toBe('feat/11-envios')
+
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'base.changed', data: { to: 'origin/release/2.4', reason: 'feat/11-envios merged' } } as never)).result)
+  expect(await base()).toBe('release/2.4')
+
+  host.files.set('/tmp/pr-body.md', 'body')
+  const sent = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_create', title: 'feat: x', base: 'main', head: 'wololo/12-stacked', body_file: '/tmp/pr-body.md' } as never)).result,
+  )
+  expect(sent.published).toBe(true)
+  expect(await base()).toBe('main')
+  const history = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'history' } as never)).result)
+  expect((history.lines as string[]).filter(line => line.includes('Base'))).toHaveLength(2)
+})
+
 test('with spec.to_github off, issue writes stay in files', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))

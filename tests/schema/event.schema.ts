@@ -33,6 +33,7 @@ export default {
         "run.started",
         "owner.changed",
         "branch.renamed",
+        "base.changed",
         "risk.set",
         "stage.entered",
         "stage.completed",

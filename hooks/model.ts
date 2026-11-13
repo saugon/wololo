@@ -55,6 +55,7 @@ export const EVENT_TYPES = [
   'run.started',
   'owner.changed',
   'branch.renamed',
+  'base.changed',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -101,6 +102,7 @@ export const EVENT_TYPES = [
 export type EventType = (typeof EVENT_TYPES)[number]
 
 export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
+  'base.changed',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -459,6 +461,9 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'branch.renamed':
       if (typeof d.to === 'string' && d.to) r.project.branch = d.to
+      break
+    case 'base.changed':
+      if (typeof d.to === 'string' && d.to) r.project.base = d.to
       break
     case 'risk.set':
       r.risk = (d.risk as Risk) ?? r.risk
@@ -1121,6 +1126,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'stalled',
   'github.published',
   'branch.renamed',
+  'base.changed',
 ])
 
 export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSeconds: number | null): string[] {
@@ -1143,6 +1149,8 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `CI: ${String(d.state)}`
         case 'pr.opened':
           return `PR: ${String(d.url)}`
+        case 'base.changed':
+          return `Base: ${String(d.from ?? '?')} → ${String(d.to)}`
         case 'github.published':
           return `GitHub ${String(d.kind)}${d.mode === 'summary' ? ' (resumen)' : ''}: ${String(d.url ?? '')}`.trim()
         case 'blocked':

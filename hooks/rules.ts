@@ -95,6 +95,8 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       }
       return null
     }
+    case 'base.changed':
+      return text(data.to) ? null : 'base.changed needs data.to, the branch the run now builds on.'
     case 'stage.completed':
       return stageIndex(data.stage as StageId) < 0 ? `Unknown stage "${String(data.stage)}".` : null
     case 'gate.requested':

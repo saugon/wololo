@@ -178,3 +178,10 @@ test('a renamed branch becomes the run branch, and is in what happened since the
   expect(run.project.branch).toBe('feat/4312-pagos')
   expect(sinceLastSeen(run, [renamed], 125).length).toBe(1)
 })
+
+test('a changed base becomes the run base, and is in what happened since the person last looked', async () => {
+  const changed: RunEvent = { v: 1, seq: 3, ts: 130, run: 'r1', type: 'base.changed', data: { from: 'feat/4542-andreani', to: 'main' } }
+  const run = apply(rebuild('r1', started), changed)
+  expect(run.project.base).toBe('main')
+  expect(sinceLastSeen(run, [changed], 125)).toEqual(['Base: feat/4542-andreani → main'])
+})

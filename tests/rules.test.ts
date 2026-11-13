@@ -310,3 +310,8 @@ test('a run approved on the PR passes Aprobar PR by itself, and still asks Aprob
   ])
   expect(started.review).toBe('pr')
 })
+
+test('a changed base needs the branch it moves to', async () => {
+  expect(checkEvent(runAt('checkpoints'), 'base.changed', { to: 'main' })).toBe(null)
+  expect(checkEvent(runAt('checkpoints'), 'base.changed', {})).toMatch(/data.to/)
+})
