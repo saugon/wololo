@@ -95,7 +95,7 @@ import {
   writeAtomic,
   writeJson,
 } from './store'
-import type { ConfigDialog, Row, ViewState } from '../types'
+import type { Block, ConfigDialog, Line, Row, Tab, ViewState } from '../types'
 import {
   type MirrorRun,
   type StatusCard,
@@ -225,15 +225,16 @@ async function settlePermission($: Engine, toolUseId: string, outcome: 'approved
 
 const TABS = [
   { id: 'summary', key: 'r' },
+  { id: 'detail', key: 'd' },
   { id: 'items', key: 'i' },
   { id: 'history', key: 'h' },
 ] as const
 
-function tabName(lang: string, which: 'summary' | 'items' | 'history'): string {
+function tabName(lang: string, which: Tab): string {
   const names =
     lang === 'es'
-      ? { summary: 'Resumen', items: 'Ítems', history: 'Historial' }
-      : { summary: 'Summary', items: 'Items', history: 'History' }
+      ? { summary: 'Resumen', detail: 'Detalle', items: 'Ítems', history: 'Historial' }
+      : { summary: 'Summary', detail: 'Detail', items: 'Items', history: 'History' }
   return names[which]
 }
 
@@ -242,8 +243,9 @@ function detailLabel(lang: string, withDetail: boolean): string {
   return withDetail ? 'less detail' : 'more detail'
 }
 
-function tabRows(view: ViewState, tab: 'summary' | 'items' | 'history', withDetail: boolean, lang: string): Row[] {
+function tabRows(view: ViewState, tab: Tab, withDetail: boolean, lang: string): Row[] {
   if (tab === 'summary') return view.details ?? []
+  if (tab === 'detail') return view.more ?? []
   if (tab === 'items') {
     return (view.items ?? []).length > 0
       ? (view.items ?? [])
@@ -862,6 +864,78 @@ async function finishReview($: Engine, saved: boolean) {
 }
 
 type Els = ElementTable<'terminal'>
+
+// The pane's left column, wide enough for its longest label and two cells of air; below PANE_NARROW the labels go above instead.
+const PANE_GUTTER = 11
+const PANE_NARROW = 70
+
+// The pane's and the card's grey is the theme's readable one: subtle is near the background on a dark theme, kept for rules and the bar's rest.
+function paneColor(tone: string): string {
+  return tone === 'subtle' ? 'inactive' : paint(tone)
+}
+
+function paneLine(els: Els, line: Line | Array<Line[number] & { inverse?: boolean; href?: string }>, isTable: boolean) {
+  const { Text } = els
+  const only = line.length === 1 ? line[0] : undefined
+  if (only && !isTable)
+    return (
+      <Text color={paneColor(only.tone ?? 'text')} bold={only.bold} wrap="wrap">
+        {only.text || ' '}
+      </Text>
+    )
+  return (
+    <Text wrap="truncate-end">
+      {line.map(part =>
+        'href' in part && part.href ? (
+          <els.Link href={part.href}>
+            <Text color={paneColor(part.tone ?? 'text')}>{part.text}</Text>
+          </els.Link>
+        ) : (
+          <Text color={paneColor(part.tone ?? 'text')} bold={part.bold} inverse={'inverse' in part ? part.inverse : undefined}>
+            {part.text}
+          </Text>
+        ),
+      )}
+    </Text>
+  )
+}
+
+// One section of the pane: its head lines (a table's column names) over the label row, then the label beside its lines.
+function paneBlock(
+  els: Els,
+  columns: number,
+  block: Block | (Omit<Block, 'lines'> & { lines: Array<Array<Line[number] & { inverse?: boolean; href?: string }>> }),
+) {
+  const { Box, Text } = els
+  const isTable = block.table === true
+  if (columns < PANE_NARROW) {
+    return (
+      <Box flexDirection="column" marginTop={block.gap ? 1 : 0}>
+        <Text color="inactive">{block.label}</Text>
+        <Box flexDirection="column" paddingLeft={2}>
+          {[...(block.head ?? []), ...block.lines].map(line => paneLine(els, line, isTable))}
+        </Box>
+      </Box>
+    )
+  }
+  return (
+    <Box flexDirection="column" marginTop={block.gap ? 1 : 0}>
+      {(block.head ?? []).map(line => (
+        <Box flexDirection="row" paddingLeft={PANE_GUTTER}>
+          {paneLine(els, line, isTable)}
+        </Box>
+      ))}
+      <Box flexDirection="row">
+        <Box width={PANE_GUTTER} flexShrink={0}>
+          <Text color="inactive">{block.label}</Text>
+        </Box>
+        <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+          {block.lines.map(line => paneLine(els, line, isTable))}
+        </Box>
+      </Box>
+    </Box>
+  )
+}
 
 function fieldRows(els: Els, $: Engine, fields: readonly Field[], effective: unknown, lang: 'es' | 'en') {
   const { Box, Button, Input, Text } = els
@@ -2065,6 +2139,13 @@ async function closeTasks($: Engine) {
   }
 }
 
+// The port a background command serves on, when it says so: PORT=4060 (or BACKEND_PORT=4060), --port 4060 or -p 4060.
+export function portOf(command: string): number | null {
+  const found =
+    /\b[A-Z_]*PORT=(\d{2,5})\b/.exec(command) ?? /--port[= ](\d{2,5})\b/.exec(command) ?? /(?:^|\s)-p\s+(\d{2,5})\b/.exec(command)
+  return found?.[1] ? Number(found[1]) : null
+}
+
 function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' | 'other' {
   if (/\bgh\s+(pr\s+checks|run\s+watch)\b/.test(command)) return 'ci'
   if (/\bcodex\b/.test(command)) return 'external'
@@ -2330,6 +2411,7 @@ export const register: Register = (on, options) => {
             id: taskId,
             label: e.description ?? e.command.slice(0, 60),
             kind: classifyTask(e.command),
+            ...(portOf(e.command) !== null ? { port: portOf(e.command) } : {}),
             ...(e.agentId ? { agent: e.agentId } : {}),
           })
         return ran
@@ -2453,7 +2535,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
     if (!view || !config.view.band || e.props.hasSurvey) return next(e)
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const { Box, Button, Link, Text } = $.ui.resolve(e)
     const band = view.band
     const isExpanded = await read($, expandedAtom)
     const tab = await read($, tabAtom)
@@ -2485,7 +2567,7 @@ export const register: Register = (on, options) => {
                 wololo
               </Text>
             </Box>
-            <Text color="subtle">·</Text>
+            <Text color="inactive">·</Text>
             <Text bold wrap="truncate-end">
               {band.heading ?? band.title.replace(/^wololo · /, '')}
             </Text>
@@ -2501,12 +2583,18 @@ export const register: Register = (on, options) => {
             </Box>
             <Text bold wrap="truncate-end">
               {band.stageText ?? band.stage}
+              {band.pr && <Text color="inactive">{' · '}</Text>}
+              {band.pr && (
+                <Link href={band.pr.url}>
+                  <Text color="suggestion">{band.pr.label}</Text>
+                </Link>
+              )}
             </Text>
           </Box>
           {detailLines.length > 0 && (
             <Box flexDirection="column" paddingLeft={1}>
               {detailLines.map(line => (
-                <Text color={isWaitingTone ? paint(band.tone) : 'subtle'} wrap="truncate-end">
+                <Text color={isWaitingTone ? paint(band.tone) : 'inactive'} wrap="truncate-end">
                   {line}
                 </Text>
               ))}
@@ -2515,8 +2603,8 @@ export const register: Register = (on, options) => {
           {chips.length > 0 && (
             <Box flexDirection="row" paddingLeft={1}>
               {chips.flatMap((chip, index) => [
-                ...(index > 0 ? [<Text color="subtle">{' · '}</Text>] : []),
-                <Text color={paint(chip.color)}>{chip.label}</Text>,
+                ...(index > 0 ? [<Text color="inactive">{' · '}</Text>] : []),
+                <Text color={paneColor(chip.color)}>{chip.label}</Text>,
               ])}
             </Box>
           )}
@@ -2536,7 +2624,7 @@ export const register: Register = (on, options) => {
             <Box flexDirection="row">
               {barLabels(band.progress.segments, barWidth).map(label => (
                 <Text
-                  color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'}
+                  color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'inactive'}
                   bold={label.state === 'current'}
                 >
                   {label.text}
@@ -2568,7 +2656,7 @@ export const register: Register = (on, options) => {
                 {tab === 'history' && (
                   <Button
                     key="detail"
-                    hotkey="d"
+                    hotkey="c"
                     plain
                     dimColor
                     label={detailLabel(lang, withDetail)}
@@ -2589,14 +2677,14 @@ export const register: Register = (on, options) => {
             </Box>
             <Box flexDirection="column" marginTop={1}>
               {rows.map(row =>
-                tab === 'items' && row.text.startsWith('▶') ? (
+                tab === 'items' && row.text.startsWith('●') ? (
                   <Box key="row-current">
-                    <Text color={paint(row.tone)} wrap="truncate-end">
+                    <Text color={paneColor(row.tone)} wrap="truncate-end">
                       {row.text}
                     </Text>
                   </Box>
                 ) : (
-                  <Text color={paint(row.tone)} wrap="truncate-end">
+                  <Text color={paneColor(row.tone)} wrap="truncate-end">
                     {row.text || ' '}
                   </Text>
                 ),
@@ -3201,66 +3289,118 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const view = await read($, viewAtom)
-    const { Box, Button, Text } = $.ui.resolve(e)
-    if (!view) return <Text dimColor>No active wololo run in this session.</Text>
+    const els = $.ui.resolve(e) as unknown as Els
+    const { Box, Button, Text } = els
+    // A view an earlier load of the mod left has no pane yet; the next refresh draws one.
+    if (!view?.pane) return <Text dimColor>No active wololo run in this session.</Text>
     const tab = await read($, tabAtom)
     const withDetail = await read($, detailAtom)
     const lang = run?.lang ?? 'es'
+    const es = lang === 'es'
     const band = view.band
+    const pane = view.pane
+    const columns = Math.max(24, e.props.bodyColumns)
+    // Narrow, each label sits above its lines; wide, in a gutter beside them, and the tabs line up with the content.
+    const isNarrow = columns < PANE_NARROW
+    const indent = isNarrow ? 0 : PANE_GUTTER
+    const rule = (from: number) => (
+      <Text color="subtle" wrap="truncate-end">
+        {'─'.repeat(Math.max(1, columns - from))}
+      </Text>
+    )
+    const progress = band.progress
+    const head = `${pane.stage.icon} ${pane.stage.label}`
+    const barWidth = Math.max(10, columns - indent - head.length - pane.stage.position.length - 4 - 6)
+    const chips = progress.segments.map(segment => ({
+      mark: segment.state === 'done' ? '✓' : segment.state === 'current' ? '●' : '○',
+      text: segment.short,
+      state: segment.state,
+    }))
+    const tabRowsShown = tab === 'summary' || tab === 'detail' ? null : tabRows(view, tab, withDetail, lang)
     return (
       <Box flexDirection="column">
         <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
-          <Text bold wrap="truncate-end">
-            {band.title}
-          </Text>
-          <Box flexShrink={0}>
+          <Box flexDirection="row" columnGap={2} flexShrink={1}>
+            {pane.ref !== '' && (
+              <Box flexShrink={0}>
+                <Text color="inactive">{pane.ref}</Text>
+              </Box>
+            )}
+            <Text bold wrap="truncate-end">
+              {pane.title}
+            </Text>
+          </Box>
+          <Box flexDirection="row" columnGap={3} flexShrink={0}>
+            <Text color="inactive">wololo</Text>
             <Button
               key="close"
               hotkey="x"
               plain
-              label={lang === 'es' ? '× cerrar' : '× close'}
+              label={es ? 'cerrar' : 'close'}
               onPress={() => void $.ui.close({ id: PANE }).catch(() => undefined)}
             />
           </Box>
         </Box>
-        <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
-          <Text inverse bold color={paint(band.tone)}>{` ${band.badge} `}</Text>
-          <Text bold>{band.stage}</Text>
-          {band.detail !== '' && <Text color={paint(band.tone)}>{`· ${band.detail}`}</Text>}
-        </Box>
-        {(band.agents ?? []).length > 0 && (
-          <Box flexDirection="row">
-            {fitChips(band.agents ?? [], Math.max(20, e.props.bodyColumns)).flatMap((chip, index) => [
-              ...(index > 0 ? [<Text color="subtle">{' · '}</Text>] : []),
-              <Text color={paint(chip.color)}>{chip.label}</Text>,
-            ])}
+        {rule(0)}
+        {paneBlock(els, columns, {
+          label: es ? 'estado' : 'status',
+          lines: [
+            [
+              { text: ` ${pane.status.badge} `, tone: band.tone, bold: true, inverse: true },
+              ...(pane.status.since ? [{ text: `   ${pane.status.since}`, tone: 'subtle' }] : []),
+              ...(band.pr
+                ? [
+                    { text: '   PR ', tone: 'subtle' },
+                    { text: band.pr.label, tone: 'suggestion', href: band.pr.url },
+                  ]
+                : []),
+            ],
+          ],
+          gap: true,
+        })}
+        <Box flexDirection={isNarrow ? 'column' : 'row'} marginTop={1}>
+          <Box width={isNarrow ? undefined : PANE_GUTTER} flexShrink={0}>
+            <Text color="inactive">{es ? 'etapa' : 'stage'}</Text>
           </Box>
-        )}
-        {band.progress && (
-          <Box flexDirection="column" marginTop={1}>
-            <Box flexDirection="row" justifyContent="space-between" columnGap={2}>
-              <Box flexDirection="row">
-                {thinBar(band.progress.segments, Math.max(24, e.props.bodyColumns - 7)).map(part => (
-                  <Text color={!part.filled ? 'subtle' : part.state === 'done' ? paint('success') : paint(band.tone)}>{part.text}</Text>
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} paddingLeft={isNarrow ? 2 : 0}>
+            <Box flexDirection="row" columnGap={2}>
+              <Box flexShrink={0}>
+                <Text color={paint(band.tone)} bold>
+                  {head}
+                </Text>
+              </Box>
+              {pane.stage.position !== '' && (
+                <Box flexShrink={0}>
+                  <Text>{pane.stage.position}</Text>
+                </Box>
+              )}
+              <Box flexDirection="row" flexShrink={1}>
+                {thinBar(progress.segments, barWidth).map(part => (
+                  <Text color={!part.filled ? 'subtle' : part.state === 'done' ? 'text' : paint(band.tone)}>{part.text}</Text>
                 ))}
               </Box>
               <Box flexShrink={0}>
-                <Text bold>{`${band.progress.percent}%`}</Text>
+                <Text bold>{`${progress.percent}%`}</Text>
               </Box>
             </Box>
-            <Box flexDirection="row">
-              {barLabels(band.progress.segments, Math.max(24, e.props.bodyColumns - 7)).map(label => (
-                <Text
-                  color={label.state === 'current' ? paint(band.tone) : label.state === 'done' ? 'text' : 'subtle'}
-                  bold={label.state === 'current'}
-                >
-                  {label.text}
+            <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+              {chips.map(chip => (
+                <Text>
+                  <Text
+                    color={chip.state === 'done' ? paint('success') : chip.state === 'current' ? paint(band.tone) : 'inactive'}
+                  >{`${chip.mark} `}</Text>
+                  <Text
+                    color={chip.state === 'current' ? paint(band.tone) : chip.state === 'done' ? 'text' : 'inactive'}
+                    bold={chip.state === 'current'}
+                  >
+                    {chip.text}
+                  </Text>
                 </Text>
               ))}
             </Box>
           </Box>
-        )}
-        <Box flexDirection="row" columnGap={3} marginTop={1}>
+        </Box>
+        <Box flexDirection="row" columnGap={3} marginTop={1} paddingLeft={indent}>
           {TABS.map(item => (
             <Button
               key={`tab-${item.id}`}
@@ -3278,7 +3418,7 @@ export const register: Register = (on, options) => {
           {tab === 'history' && (
             <Button
               key="detail"
-              hotkey="d"
+              hotkey="c"
               plain
               dimColor
               label={detailLabel(lang, withDetail)}
@@ -3286,11 +3426,18 @@ export const register: Register = (on, options) => {
             />
           )}
         </Box>
-        <Box flexDirection="column" marginTop={1}>
-          {tabRows(view, tab, withDetail, lang).map(row => (
-            <Text color={paint(row.tone)}>{row.text || ' '}</Text>
-          ))}
-        </Box>
+        <Box paddingLeft={indent}>{rule(indent)}</Box>
+        {tabRowsShown === null ? (
+          (tab === 'summary' ? pane.summary : pane.detail).map((block, index) =>
+            paneBlock(els, columns, index === 0 ? { ...block, gap: false } : block),
+          )
+        ) : (
+          <Box flexDirection="column" paddingLeft={indent}>
+            {tabRowsShown.map(row => (
+              <Text color={paneColor(row.tone)}>{row.text || ' '}</Text>
+            ))}
+          </Box>
+        )}
       </Box>
     )
   })

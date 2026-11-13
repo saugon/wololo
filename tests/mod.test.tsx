@@ -233,20 +233,25 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   expect((await probe.find({ type: 'Text', text: /%$/ }))?.text).toBe('6%')
   expect((await probe.find({ type: 'Text', text: /checkpoints$/ }))?.text).toBe('⏸ checkpoints')
   expect((await probe.find({ type: 'Text', text: /^━+$/ }))?.text.length).toBeGreaterThan(0)
-  expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
+  const runFiles = { type: 'Text', text: new RegExp(`^ +${DATA}/runs/`) } as const
+  expect(await probe.find(runFiles)).toBeUndefined()
   await probe.press({ key: 'toggle' })
-  expect((await probe.find({ type: 'Text', text: /^Archivos del run/ }))?.text).toContain(`${DATA}/runs/`)
+  expect((await probe.find({ type: 'Text', text: /^etapas$/ }))?.text).toBe('etapas')
+  expect(await probe.find(runFiles)).toBeUndefined()
+  await probe.press({ key: 'tab-detail' })
+  expect((await probe.find({ type: 'Text', text: /^archivos$/ }))?.text).toBe('archivos')
+  expect((await probe.find(runFiles))?.text).toContain(`${DATA}/runs/`)
   await probe.press({ key: 'tab-items' })
   expect((await probe.find({ type: 'Text', text: /todavía no tiene ítems/ }))?.text).toBe('El plan todavía no tiene ítems.')
   await probe.press({ key: 'tab-history' })
   expect((await probe.find({ type: 'Text', text: /Run iniciado/ }))?.text).toContain('▶ Run iniciado: Partial payments')
-  expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
+  expect(await probe.find(runFiles)).toBeUndefined()
   await probe.press({ key: 'detail' })
   expect((await probe.find({ type: 'Text', text: /Etapa 1\/8 Contexto/ }))?.text).toContain('→ Etapa 1/8 Contexto')
-  await probe.press({ key: 'tab-summary' })
-  expect((await probe.find({ type: 'Text', text: /^Archivos del run/ }))?.text).toContain(`${DATA}/runs/`)
+  await probe.press({ key: 'tab-detail' })
+  expect((await probe.find(runFiles))?.text).toContain(`${DATA}/runs/`)
   await probe.press({ key: 'toggle' })
-  expect(await probe.find({ type: 'Text', text: /^Archivos del run/ })).toBeUndefined()
+  expect(await probe.find(runFiles)).toBeUndefined()
   expect((await probe.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
   await probe.unmount()
 
@@ -368,9 +373,30 @@ test('a run whose snapshot predates the items list is rebuilt from its events on
   await ui.press({ key: 'toggle' })
   await ui.press({ key: 'tab-items' })
   expect((await ui.find({ type: 'Text', text: /^✓ 1\./ }))?.text).toBe('✓ 1. Back: migración  084cc5051')
-  expect((await ui.find({ type: 'Text', text: /^▶ 2\./ }))?.text).toBe('▶ 2. Back: API')
-  expect((await ui.find({ type: 'Text', text: /^· 3\./ }))?.text).toBe('· 3. Front: tipos')
+  expect((await ui.find({ type: 'Text', text: /^● 2\./ }))?.text).toBe('● 2. Back: API')
+  expect((await ui.find({ type: 'Text', text: /^○ 3\./ }))?.text).toBe('○ 3. Front: tipos')
   await ui.unmount()
+
+  // The pane: each label in a gutter beside its lines when wide, above them when narrow, and the Detail tab with the run files.
+  for (const bodyColumns of [120, 60]) {
+    const pane = await $.ui.mount({
+      plugin: 'wololo',
+      surface: 'terminal',
+      component: 'Pane',
+      requestId: 'wololo',
+      props: { title: 'wololo', isFocused: true, bodyColumns, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
+    })
+    await pane.press({ key: 'tab-summary' })
+    for (const label of ['estado', 'etapa', 'etapas'])
+      expect((await pane.find({ type: 'Text', text: new RegExp(`^${label}$`) }))?.text).toBe(label)
+    expect((await pane.find({ type: 'Text', text: /^Salones$/ }))?.text).toBe('Salones')
+    expect(await pane.find({ type: 'Text', text: /^ahora$/ })).toBeUndefined()
+    expect((await pane.find({ type: 'Text', text: /^\S+ Contexto$/ }))?.text).toBe('‖ Contexto')
+    await pane.press({ key: 'tab-detail' })
+    expect((await pane.find({ type: 'Text', text: /^archivos$/ }))?.text).toBe('archivos')
+    expect((await pane.find({ type: 'Text', text: new RegExp(`^${DATA}/runs/repo-txt-abc123`) }))?.text).toContain(`${DATA}/runs/`)
+    await pane.unmount()
+  }
 })
 
 test('/wololo-status draws every active run as a card', async ($, on) => {
@@ -424,8 +450,8 @@ test('/wololo help lists every command and key as a card', async ($, on) => {
     props: { command: 'wololo', args: 'help', text: `wololo: ${help.text ?? ''}`, isErrored: false },
   })
   expect((await ui.find({ type: 'Text', text: /^Seguir un run$/ }))?.text).toBe('Seguir un run')
-  expect((await ui.find({ type: 'Text', text: /^r · i · h$/ }))?.text).toBe('r · i · h')
-  expect((await ui.find({ type: 'Text', text: /^pestañas/ }))?.text).toBe('pestañas: Resumen, Ítems, Historial')
+  expect((await ui.find({ type: 'Text', text: /^r · d · i · h$/ }))?.text).toBe('r · d · i · h')
+  expect((await ui.find({ type: 'Text', text: /^pestañas/ }))?.text).toBe('pestañas: Resumen, Detalle, Ítems, Historial')
   await ui.unmount()
   const direct = await $.command.run({ command: 'wololo-help', args: '' } as never)
   expect(direct.text).toBe(help.text)
@@ -840,7 +866,7 @@ test('the card of a run that finished is drawn again when the mod loads, not kep
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   const texts = ((view as { details?: Array<{ text: string }> } | null)?.details ?? []).map(row => row.text)
   expect(texts).not.toContain('old table')
-  expect(texts.some(text => /^ +activo +total$/.test(text))).toBe(true)
+  expect(texts.some(text => /^ +activo +esperando +total +costo$/.test(text))).toBe(true)
   // The run stays closed: nothing is written to it.
   expect(eventLines(host, id).map(line => line.type)).toEqual(['run.started', 'stage.entered', 'time', 'run.finished'])
 })

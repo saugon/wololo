@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusLine } from '../hooks/model'
+import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusDetail, statusLine } from '../hooks/model'
 
 const IDLE: Live = { isTurnRunning: false, question: null, permission: null }
 
@@ -44,6 +44,19 @@ test('a turn that ended with a live agent is waiting on agents, not stalled', as
 test('a CI watch task reads as waiting_ci', async () => {
   const run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 120, run: 'r1', type: 'task.started', data: { id: 't1', label: 'gh pr checks --watch', kind: 'ci' } })
   expect(deriveStatus(run, IDLE)).toBe('waiting_ci')
+})
+
+test('waiting on CI names the CI watch first, and drops what the orchestrator noted before the wait began', async () => {
+  const ev = (seq: number, ts: number, type: RunEvent['type'], data: Record<string, unknown>): RunEvent => ({ v: 1, seq, ts, run: 'r1', type, data })
+  const list = [
+    ev(3, 100, 'task.started', { id: 't0', label: 'Run the backend on port 4060', kind: 'server' }),
+    ev(4, 110, 'doing', { text: 'Rebasing the PR on main' }),
+    ev(5, 200, 'task.started', { id: 't1', label: 'Watch the CI checks', kind: 'ci' }),
+  ]
+  const run = list.reduce(apply, rebuild('r1', started))
+  expect(statusDetail(run, 'waiting_ci', 260)).toBe('Watch the CI checks (1m) (+1)')
+  const noted = apply(run, ev(6, 210, 'doing', { text: 'Waiting for CI on the rebased PR' }))
+  expect(statusDetail(noted, 'waiting_ci', 260)).toBe('Waiting for CI on the rebased PR · Watch the CI checks (1m) (+1)')
 })
 
 test('blocked beats running, a question beats blocked', async () => {

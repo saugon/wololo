@@ -169,6 +169,9 @@ export type TaskEntry = {
   status: string | null
   // The subagent that started it, when one did: its notification goes to that agent, never to the orchestrator, so it closes with it.
   agent?: string | null
+  // The port a server listens on, when its command named one, and a short name for it; the pane falls back to the label for both.
+  port?: number | null
+  name?: string | null
 }
 
 export type Tokens = { input: number; output: number; cache_read: number; cache_write: number }
@@ -570,6 +573,8 @@ export function apply(run: Run, ev: RunEvent): Run {
         finished_at: null,
         status: null,
         agent: typeof d.agent === 'string' ? d.agent : null,
+        ...(typeof d.port === 'number' ? { port: d.port } : {}),
+        ...(typeof d.name === 'string' && d.name ? { name: d.name } : {}),
       })
       r.tasks = r.tasks.slice(-40)
       break
@@ -945,8 +950,10 @@ function agentsSummary(run: Run, nowSeconds: number): string[] {
   })
 }
 
-function tasksSummary(run: Run, nowSeconds: number): string[] {
-  const tasks = liveTasks(run)
+// The first live task names the rest; given a kind (what the run waits on), a task of that kind goes first.
+function tasksSummary(run: Run, nowSeconds: number, firstKind?: TaskEntry['kind']): string[] {
+  const live = liveTasks(run)
+  const tasks = firstKind ? [...live.filter(t => t.kind === firstKind), ...live.filter(t => t.kind !== firstKind)] : live
   const first = tasks[0]
   if (!first) return []
   const more = tasks.length > 1 ? ` (+${tasks.length - 1})` : ''
@@ -1054,7 +1061,14 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number, withA
     case 'orphaned':
       return '/wololo resume'
     case 'waiting_ci':
-    case 'waiting_tests':
+    case 'waiting_tests': {
+      // The wait names what it waits on first, and a note the orchestrator wrote before that wait began is about earlier work.
+      const kind = status === 'waiting_ci' ? 'ci' : 'tests'
+      const began = Math.min(...liveTasks(run).filter(t => t.kind === kind).map(t => t.started_at))
+      const doing = run.doing && run.doing.since >= began ? run.doing.text : null
+      const waits = [...(withAgents ? agentsSummary(run, nowSeconds) : []), ...tasksSummary(run, nowSeconds, kind)].join(', ')
+      return [doing, waits].filter(Boolean).join(' · ')
+    }
     case 'waiting_agents':
     case 'running':
       return [run.doing?.text, working].filter(Boolean).join(' · ')

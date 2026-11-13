@@ -1,4 +1,4 @@
-import type { Band, Progress, Row, Segment, Tone, ViewState } from '../types'
+import type { Band, Block, Line, PaneView, Progress, Row, Segment, Span, Tone, ViewState } from '../types'
 import { type Entry, formatEntry, timeline } from './history'
 import {
   type AgentEntry,
@@ -6,6 +6,7 @@ import {
   type Run,
   type RunEvent,
   type Status,
+  type TaskEntry,
   STAGES,
   TIME_KINDS,
   type TimeKind,
@@ -151,27 +152,41 @@ function home(path: string, homeDir: string | undefined): string {
   return homeDir && path.startsWith(`${homeDir}/`) ? `~${path.slice(homeDir.length)}` : path
 }
 
-function worktreeSection(run: Run, info: WorktreeInfo | undefined, homeDir: string | undefined): Row[] {
+const span = (text: string, tone?: Span['tone'], bold?: boolean): Span => ({ text, ...(tone ? { tone } : {}), ...(bold ? { bold } : {}) })
+
+// The git, ports and path rows: the branch against its base, HEAD and what is left uncommitted, the run's slot, and the directory.
+function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string | undefined): Block[] {
   const es = run.lang === 'es'
   const dir = run.project.worktree ?? run.project.path
   if (!dir) return []
-  const rows: Row[] = [{ text: run.project.worktree ? 'Worktree' : es ? 'Directorio' : 'Directory', tone: 'subtle' }]
-  rows.push({ text: `  ${home(dir, homeDir)}`, tone: 'text' })
-  const branch: string[] = []
-  if (run.project.branch) branch.push(`${es ? 'rama' : 'branch'} ${run.project.branch}`)
-  if (run.project.base) branch.push(`base ${run.project.base}`)
-  if (info?.ahead !== null && info?.ahead !== undefined) branch.push(es ? `${info.ahead} adelante` : `${info.ahead} ahead`)
-  if (info?.behind) branch.push(es ? `${info.behind} atrás` : `${info.behind} behind`)
-  if (branch.length > 0) rows.push({ text: `  ${branch.join(' · ')}`, tone: 'text' })
-  if (info?.head) {
-    const dirty = info.dirty ? ` · ${info.dirty} ${es ? (info.dirty === 1 ? 'archivo sin commitear' : 'archivos sin commitear') : info.dirty === 1 ? 'uncommitted file' : 'uncommitted files'}` : ''
-    rows.push({ text: `  HEAD ${info.head}${info.subject ? ` ${info.subject}` : ''}${dirty}`, tone: info.dirty ? 'warning' : 'text' })
+  const blocks: Block[] = []
+  const git: Line[] = []
+  if (run.project.branch) {
+    const line: Line = [span(run.project.branch, 'text')]
+    if (run.project.base) line.push(span(' ← ', 'subtle'), span(run.project.base, 'text'))
+    const moved: Line = []
+    if (info?.ahead !== null && info?.ahead !== undefined) moved.push(span(`↑${info.ahead}`, 'success'))
+    if (info?.behind) moved.push(span(`${moved.length > 0 ? ' ' : ''}↓${info.behind}`, 'warning'))
+    if (moved.length > 0) line.push(span('  '), ...moved)
+    git.push(line)
   }
+  if (info?.head) git.push([span(info.head, 'suggestion'), span(info.subject ? ` ${info.subject}` : '', 'text')])
+  if (info?.dirty) {
+    const files = es ? (info.dirty === 1 ? 'archivo sin commitear' : 'archivos sin commitear') : info.dirty === 1 ? 'uncommitted file' : 'uncommitted files'
+    git.push([span(`${info.dirty} ${files}`, 'warning')])
+  }
+  if (git.length > 0) blocks.push({ label: 'git', lines: git, gap: true })
   if (info && info.ports.length > 0) {
-    const state = (listening: boolean | null) => (listening === null ? '' : listening ? (es ? ' escuchando' : ' listening') : es ? ' libre' : ' free')
-    rows.push({ text: `  ${es ? 'Puertos' : 'Ports'} (slot ${run.slot}): ${info.ports.map(p => `${p.name} ${p.port}${state(p.listening)}`).join(' · ')}`, tone: 'text' })
+    const line: Line = [span(`slot ${run.slot}`, 'text')]
+    for (const port of info.ports) {
+      line.push(span(' · ', 'subtle'), span(`${port.name} ${port.port}`, 'text'))
+      if (port.listening !== null)
+        line.push(span(port.listening ? (es ? ' escuchando' : ' listening') : es ? ' libre' : ' free', port.listening ? 'claude' : 'success'))
+    }
+    blocks.push({ label: es ? 'puertos' : 'ports', lines: [line] })
   }
-  return rows
+  blocks.push({ label: es ? 'ruta' : 'path', lines: [[span(home(dir, homeDir), 'text')]], gap: blocks.length === 0 })
+  return blocks
 }
 
 function timeSection(run: Run, now: number): Row[] {
@@ -286,6 +301,224 @@ function agentRows(run: Run, now: number, tone: Tone): Row[] {
   return rows
 }
 
+const LIVE: ReadonlySet<Status> = new Set<Status>(['running', 'waiting_agents', 'waiting_tests', 'waiting_ci', 'pausing'])
+
+// When the state the badge names began: the question, the block, the pause, the oldest agent or suite still running, or the end.
+function statusSince(run: Run, status: Status): number | null {
+  const oldest = (times: number[]) => (times.length > 0 ? Math.min(...times) : null)
+  switch (status) {
+    case 'waiting_user':
+    case 'waiting_permission':
+      return run.waiting?.since ?? null
+    case 'blocked':
+      return run.blocked?.since ?? null
+    case 'paused':
+      return run.paused?.since ?? null
+    case 'waiting_agents':
+      return oldest([...liveAgents(run), ...liveTasks(run)].map(entry => entry.started_at))
+    case 'waiting_tests':
+    case 'waiting_ci': {
+      const kind = status === 'waiting_ci' ? 'ci' : 'tests'
+      return oldest(liveTasks(run).filter(task => task.kind === kind).map(task => task.started_at))
+    }
+    case 'running':
+    case 'pausing':
+      return run.doing?.since ?? run.stage?.since ?? null
+    case 'done':
+    case 'failed':
+    case 'cancelled':
+      return run.finished_at
+    default:
+      return null
+  }
+}
+
+// A background shell as the pane lists it: its port, from the event or the label, and its label without the verb and the port.
+export function taskParts(task: TaskEntry): { port: number | null; name: string } {
+  const label = task.label.trim()
+  const found = /\b(?:port|puerto)\s+:?(\d{2,5})\b/i.exec(label) ?? /\b(?:on|en)\s+:?(\d{4,5})\b/i.exec(label) ?? /:(\d{4,5})\b/.exec(label)
+  const port = task.port ?? (found?.[1] ? Number(found[1]) : null)
+  const name =
+    task.name ??
+    label
+      .replace(/^(?:run|start|serve|launch|boot|levantar|correr|arrancar)\s+(?:the\s+|el\s+|la\s+|los\s+)?/i, '')
+      .replace(/\s+(?:on|at|en)\s+(?:port\s+|puerto\s+)?:?\d{2,5}\b/i, '')
+      .replace(/\s*\((?:port|puerto)?\s*:?\d{2,5}\)/i, '')
+      .trim()
+  return { port, name: name || label }
+}
+
+const PROCESS_NAME_MAX = 32
+
+// Background shells, one row per label: the same server started again reads as one row with each run's age and how many there are.
+function processBlock(run: Run, now: number): Block | null {
+  const groups = new Map<string, { port: number | null; name: string; kind: TaskEntry['kind']; ages: number[] }>()
+  for (const task of liveTasks(run)) {
+    const { port, name } = taskParts(task)
+    const key = `${port ?? ''}|${name}`
+    const group = groups.get(key) ?? { port, name, kind: task.kind, ages: [] }
+    group.ages.push(now - task.started_at)
+    groups.set(key, group)
+  }
+  if (groups.size === 0) return null
+  const list = [...groups.values()].map(group => ({ ...group, ages: [...group.ages].sort((a, b) => b - a) }))
+  const portWidth = Math.max(0, ...list.map(group => (group.port === null ? 0 : `:${group.port}`.length)))
+  // A long label is cut so the ages stay near the names instead of past the pane's edge.
+  const clipName = (name: string) => (name.length > PROCESS_NAME_MAX ? `${name.slice(0, PROCESS_NAME_MAX - 1)}…` : name)
+  const nameWidth = Math.max(...list.map(group => clipName(group.name).length))
+  const lines = list.map(group => {
+    const line: Line = [span('↻ ', group.kind === 'server' || group.kind === 'other' ? 'success' : 'claude')]
+    if (portWidth > 0) line.push(span(`${group.port === null ? '' : `:${group.port}`}`.padEnd(portWidth + 2), 'text'))
+    line.push(span(clipName(group.name).padEnd(nameWidth + 3), 'text'))
+    const shown = group.ages.slice(0, 3).map(age => duration(age))
+    line.push(span(`${shown.join(' · ')}${group.ages.length > 3 ? ' · …' : ''}`, 'subtle'))
+    if (group.ages.length > 1) line.push(span(`  ${group.ages.length}×`, 'warning'))
+    return line
+  })
+  return { label: run.lang === 'es' ? 'procesos' : 'processes', lines, gap: true, table: true }
+}
+
+// What is going on now: what waits for the person or blocks, the item being built, each live agent with what it was asked to do.
+function nowBlock(run: Run, now: number): Block | null {
+  const es = run.lang === 'es'
+  const lines: Line[] = []
+  if (run.waiting) {
+    const label = run.waiting.on === 'permission' ? (es ? '! Pide permiso' : '! Needs permission') : es ? '? Te espera' : '? Waiting for you'
+    lines.push([span(`${label}: ${run.waiting.question}`, 'warning')])
+  }
+  if (run.blocked) lines.push([span(`✕ ${run.blocked.reason}`, 'error')])
+  if (run.items.current && run.stage?.id === 'implement') {
+    lines.push([span(`${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, 'text', true)])
+  }
+  const agents = liveAgents(run)
+  for (const agent of agents) {
+    const mark = roleMark(agent.role)
+    const line: Line = [span(`${mark.icon} ${roleName(run.lang, agent.role, 1)}`, mark.color)]
+    const model = shortModel(agent.model)
+    if (model) line.push(span(` · ${model}`, 'subtle'))
+    line.push(span(` · ${duration(now - agent.started_at)}`, 'subtle'))
+    lines.push(line)
+    if (agent.description) lines.push([span(agent.description, 'text')])
+  }
+  // A note written before the run started waiting on CI or a suite is about earlier work.
+  const waits = liveTasks(run).filter(task => task.kind === 'ci' || task.kind === 'tests')
+  const isStale = run.doing && waits.length > 0 && run.doing.since < Math.min(...waits.map(task => task.started_at))
+  if (agents.length === 0 && run.doing?.text && !run.outcome && !isStale) lines.push([span(run.doing.text, 'text')])
+  return lines.length > 0 ? { label: es ? 'ahora' : 'now', lines, gap: true } : null
+}
+
+// One row per stage with its active time, its wall time and its cost, and the total of each under them. How a gate was answered
+// is in the history, not here.
+function stagesBlock(run: Run, now: number, tone: Tone): Block {
+  const lang = run.lang
+  const es = lang === 'es'
+  const done = new Set(run.stages.filter(entry => entry.finished_at !== null).map(entry => entry.id))
+  const hasUsd = Object.values(run.usage ?? {}).some(used => (used?.usd ?? 0) > 0)
+  const money = (usd: number, tokens: number) => (hasUsd ? usdText(usd) : `${tokensText(tokens)} tok`)
+  const time = (seconds: number) => (seconds >= 1 ? durationUp(seconds) : '')
+  const totals = { active: 0, waited: 0, wall: 0, usd: 0, tokens: 0 }
+  const rows = STAGES.map((stage, index) => {
+    const isCurrent = run.stage?.index === index && !run.outcome
+    const isAhead = !run.outcome && run.stage !== null && index > run.stage.index
+    const wall = stageSeconds(run, stage.id, now)
+    const parts = run.time?.[stage.id]
+    // Waited is what the stage stood waiting for the person or paused; active is the rest of its wall time.
+    const waited = parts ? Math.min(wall, (parts.you ?? 0) + (parts.paused ?? 0)) : 0
+    const active = wall - waited
+    const used = run.usage?.[stage.id]
+    totals.active += active
+    totals.waited += waited
+    totals.wall += wall
+    totals.usd += used?.usd ?? 0
+    totals.tokens += used ? tokenTotal(used) : 0
+    const state = isCurrent ? 'current' : done.has(stage.id) ? (isAhead ? 'redo' : 'done') : 'pending'
+    return {
+      state,
+      label: stage.label[lang],
+      cells: [wall > 0 ? durationUp(active) : '', time(waited), wall > 0 ? durationUp(wall) : '', used ? money(used.usd, tokenTotal(used)) : ''],
+    }
+  })
+  const heads = es ? ['activo', 'esperando', 'total', 'costo'] : ['active', 'waiting', 'total', 'cost']
+  const total = [durationUp(totals.active), time(totals.waited), durationUp(totals.wall), money(totals.usd, totals.tokens)]
+  const nameWidth = Math.max(...rows.map(row => row.label.length))
+  const widths = heads.map((head, i) => Math.max(head.length, (total[i] ?? '').length, ...rows.map(row => (row.cells[i] ?? '').length)))
+  const cells = (values: readonly string[], from = 0, to = values.length) =>
+    values
+      .slice(from, to)
+      .map((value, i) => value.padStart(widths[from + i] ?? 0))
+      .join('  ')
+  const marks = { current: ['●', tone], done: ['✓', 'success'], redo: ['↺', 'subtle'], pending: ['○', 'subtle'] } as const
+  const lines: Line[] = rows.map(row => {
+    const [mark, markTone] = marks[row.state as keyof typeof marks]
+    const rowTone = row.state === 'current' ? tone : row.state === 'done' ? 'text' : 'subtle'
+    const isCurrent = row.state === 'current'
+    return [span(`${mark} `, markTone), span(row.label.padEnd(nameWidth), rowTone, isCurrent), span(`  ${cells(row.cells)}`, rowTone, isCurrent)]
+  })
+  const numbers = widths.reduce((sum, width) => sum + width, 0) + 2 * (widths.length - 1)
+  lines.push([span(`${''.padEnd(2 + nameWidth)}  ${'─'.repeat(numbers)}`, 'subtle')])
+  lines.push([
+    span(`${'total'.padStart(2 + nameWidth)}  `, 'subtle'),
+    span(`${cells(total, 0, 3)}  `, 'text'),
+    span(cells(total, 3), 'text', true),
+  ])
+  const head: Line = [span(`${''.padEnd(2 + nameWidth)}  ${cells(heads)}`, 'subtle')]
+  return { label: es ? 'etapas' : 'stages', head: [head], lines, gap: true, table: true }
+}
+
+const strip = (rows: readonly Row[]): Line[] => rows.map(row => [span(row.text.replace(/^ {2}/, ''), row.tone)])
+
+// The Detail tab: time and usage split their parts, the agents of the item or stage, the run's counts, its PR, files and events.
+function detailBlocks(run: Run, now: number, runDir: string | undefined, events: readonly Row[]): Block[] {
+  const es = run.lang === 'es'
+  const blocks: Block[] = []
+  const time = timeSection(run, now).slice(1)
+  if (time.length > 0) blocks.push({ label: es ? 'tiempo' : 'time', head: strip(time.slice(0, 1)), lines: strip(time.slice(1)), gap: true, table: true })
+  const usage = usageSection(run).slice(1)
+  if (usage.length > 0) blocks.push({ label: es ? 'consumo' : 'usage', lines: strip(usage), gap: true, table: true })
+  const agents = agentRows(run, now, 'claude')
+  if (agents.length > 0) blocks.push({ label: es ? 'agentes' : 'agents', lines: strip(agents), gap: true, table: true })
+  const c = run.counts
+  blocks.push({
+    label: 'run',
+    gap: true,
+    lines: [
+      [span(`${run.mode} · ${es ? 'riesgo' : 'risk'} ${run.risk}`, 'text')],
+      [
+        span(
+          es
+            ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`
+            : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}${c.unsigned ? ` · Unsigned ${c.unsigned}` : ''}`,
+          'subtle',
+        ),
+      ],
+    ],
+  })
+  if (run.pr) {
+    const ci = run.pr.ci
+    const line: Line = [span(run.pr.url, 'suggestion'), span(` · ${run.pr.state}`, 'text')]
+    if (ci) line.push(span(` · CI ${ci}`, ci === 'passing' ? 'success' : ci === 'failing' ? 'error' : 'claude'))
+    blocks.push({ label: 'pr', lines: [line] })
+  }
+  if (runDir) blocks.push({ label: es ? 'archivos' : 'files', lines: [[span(runDir, 'text')]] })
+  if (events.length > 0) blocks.push({ label: es ? 'eventos' : 'events', lines: events.slice(0, 8).map(row => [span(row.text, row.tone)]), gap: true, table: true })
+  return blocks
+}
+
+// The pane's blocks as plain rows, for the card above the prompt: each label above its lines, the lines indented under it.
+export function flatten(blocks: readonly Block[]): Row[] {
+  const rows: Row[] = []
+  for (const block of blocks) {
+    if (block.gap && rows.length > 0) rows.push({ text: '', tone: 'subtle' })
+    rows.push({ text: block.label, tone: 'subtle' })
+    for (const line of [...(block.head ?? []), ...block.lines]) {
+      const main = line.reduce<Span | undefined>((best, part) => (part.text.trim().length > (best?.text.trim().length ?? -1) ? part : best), undefined)
+      const tone = (['text', 'subtle', 'claude', 'warning', 'error', 'success'] as const).find(name => name === main?.tone) ?? 'text'
+      rows.push({ text: `  ${line.map(part => part.text).join('')}`.trimEnd(), tone })
+    }
+  }
+  return rows
+}
+
 export function buildView(
   run: Run,
   status: Status,
@@ -298,7 +531,7 @@ export function buildView(
 ): ViewState {
   const tone = toneOf(status)
   const lang = run.lang
-  const done = new Set(run.stages.filter(entry => entry.finished_at !== null).map(entry => entry.id))
+  const es = lang === 'es'
   const agents = SHOWS_AGENTS.has(status) ? agentChips(run, now) : []
   const band: Band = {
     title: `wololo · ${run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title}`,
@@ -314,71 +547,8 @@ export function buildView(
     agents,
     tone,
     progress: progressOf(run),
+    pr: run.pr ? { label: run.pr.number ? `#${run.pr.number}` : 'PR', url: run.pr.url } : null,
   }
-
-  const es = lang === 'es'
-  const summary: Row[] = []
-  const gap = () => summary.push({ text: '', tone: 'subtle' })
-
-  const nowRows: Row[] = []
-  if (run.items.current && run.stage?.id === 'implement') {
-    nowRows.push({ text: `  ${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, tone: 'text' })
-  }
-  nowRows.push(...agentRows(run, now, 'claude'))
-  summary.push(...nowRows)
-  for (const task of liveTasks(run)) summary.push({ text: `  ⟳ ${task.label} (${duration(now - task.started_at)})`, tone: 'claude' })
-  if (run.waiting) {
-    const label = run.waiting.on === 'permission' ? `! ${es ? 'PIDE PERMISO' : 'NEEDS PERMISSION'}` : `? ${t(lang, 'waitsYou')}`
-    summary.push({ text: `  ${label}: ${run.waiting.question}`, tone: 'warning' })
-  }
-  if (run.blocked) summary.push({ text: `  ✕ ${run.blocked.reason}`, tone: 'error' })
-  if (summary.length > 0) {
-    summary.unshift({ text: es ? 'Ahora' : 'Now', tone: 'subtle' })
-    gap()
-  }
-  const worktreeRows = worktreeSection(run, worktree, homeDir)
-  if (worktreeRows.length > 0) {
-    summary.push(...worktreeRows)
-    gap()
-  }
-
-  summary.push({ text: es ? 'Etapas' : 'Stages', tone: 'subtle' })
-  const outcomes: Record<string, string> = es ? { approved: 'aprobado', changes: 'con ajustes', rejected: 'rechazado' } : {}
-  STAGES.forEach((stage, index) => {
-    const isCurrent = run.stage?.index === index && !run.outcome
-    const isAhead = !run.outcome && run.stage !== null && index > run.stage.index
-    const mark = isCurrent ? '▶' : done.has(stage.id) ? (isAhead ? '↺' : '✓') : '·'
-    const seconds = stageSeconds(run, stage.id, now)
-    const gate = run.gates[stage.id]
-    let text = `${mark} ${stage.label[lang]}`
-    if (stage.isGate && gate?.resolved_at) {
-      const outcome = outcomes[gate.outcome ?? ''] ?? gate.outcome ?? ''
-      const who = gate.by === 'auto' ? (es ? 'automático' : 'automatic') : es ? 'vos' : 'you'
-      text += `: ${outcome} (${who})${seconds > 0 ? `, ${es ? 'esperó' : 'waited'} ${duration(seconds)}` : ''}`
-    } else if (seconds > 0) {
-      text += `  ${duration(seconds)}`
-    }
-    const used = run.usage?.[stage.id]
-    if (used) text += ` · ${used.usd > 0 ? usdText(used.usd) : `${tokensText(tokenTotal(used))} tok`}`
-    summary.push({ text, tone: isCurrent ? tone : done.has(stage.id) && !isAhead ? 'text' : 'subtle' })
-  })
-  gap()
-  for (const section of [timeSection(run, now), usageSection(run)]) {
-    if (section.length === 0) continue
-    summary.push(...section)
-    gap()
-  }
-
-  const c = run.counts
-  summary.push({ text: `${run.mode} · ${es ? 'riesgo' : 'risk'} ${run.risk}`, tone: 'subtle' })
-  summary.push({
-    text: es
-      ? `Supuestos ${c.assumptions} · Decisiones ${c.decisions} · Debate ${c.debate_turns} · Reversiones ${c.reversals}${c.unsigned ? ` · Sin firmar ${c.unsigned}` : ''}`
-      : `Assumptions ${c.assumptions} · Decisions ${c.decisions} · Debate ${c.debate_turns} · Reversals ${c.reversals}${c.unsigned ? ` · Unsigned ${c.unsigned}` : ''}`,
-    tone: 'subtle',
-  })
-  if (run.pr) summary.push({ text: `PR ${run.pr.url} · ${run.pr.state}${run.pr.ci ? ` · CI ${run.pr.ci}` : ''}`, tone: 'text' })
-  if (runDir) summary.push({ text: `${es ? 'Archivos del run' : 'Run files'}: ${runDir}`, tone: 'subtle' })
 
   const entries = history ?? timeline(recent, lang)
   const toRow = (entry: Entry): Row => ({
@@ -387,28 +557,41 @@ export function buildView(
   })
   const majorRows = entries.filter(entry => entry.isMajor).map(toRow).reverse()
   const allRows = entries.map(toRow).reverse()
-  if (majorRows.length > 0) {
-    gap()
-    summary.push({ text: es ? 'Últimos eventos (h: historial completo)' : 'Latest events (h: full history)', tone: 'subtle' })
-    summary.push(...majorRows.slice(0, 5))
+
+  const summary = [nowBlock(run, now), processBlock(run, now), stagesBlock(run, now, tone), ...placeBlocks(run, worktree, homeDir)].filter(
+    (block): block is Block => block !== null,
+  )
+  const detail = detailBlocks(run, now, runDir, majorRows)
+
+  const since = statusSince(run, status)
+  const ago = since === null ? '' : `${isTerminal(status) ? (es ? 'hace' : '') : es ? 'desde hace' : 'for'} ${duration(now - since)}${isTerminal(status) && !es ? ' ago' : ''}`.trim()
+  const pane: PaneView = {
+    ref: run.source.kind === 'github_issue' ? shortRef(run) : '',
+    title: run.title,
+    status: { badge: band.badge, tone, since: ago },
+    stage: {
+      icon: LIVE.has(status) ? '✱' : (band.badge.split(' ')[0] ?? '·'),
+      label: run.stage ? (STAGES[run.stage.index]?.label[lang] ?? run.stage.id) : t(lang, 'noStage'),
+      position: run.stage ? `${run.stage.index + 1}/${STAGES.length}` : '',
+    },
+    summary,
+    detail,
   }
 
   const itemRows: Row[] = (run.items.list ?? []).map(item => {
-    const mark = { done: '✓', active: '▶', failing: '✕', pending: '·' }[item.state]
+    const mark = { done: '✓', active: '●', failing: '✕', pending: '○' }[item.state]
     const sha = item.sha ? `  ${item.sha.slice(0, 9)}` : ''
     const itemTone: Tone = item.state === 'done' ? 'text' : item.state === 'active' ? tone : item.state === 'failing' ? 'warning' : 'subtle'
     return { text: `${mark} ${item.n}. ${item.title}${sha}`, tone: itemTone }
   })
-
-  const details = summary
-  const pane = summary
 
   return {
     runId: run.id,
     header: header(run, status, now),
     statusLine: statusLine(run, status, now),
     band,
-    details,
+    details: flatten(summary),
+    more: flatten(detail),
     history: majorRows,
     items: itemRows,
     historyAll: allRows,
