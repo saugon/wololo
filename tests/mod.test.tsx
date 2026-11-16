@@ -1,5 +1,7 @@
 import { type TestBody, expect, mock, test } from 'claude-code/testing'
 
+import type { Run } from '../hooks/model'
+
 const HOME = '/home/t'
 const REPO = '/repo'
 const DATA = `${HOME}/.claude/wololo`
@@ -345,6 +347,40 @@ test('with spec.to_github off, issue writes stay in files unless the person aske
   const pr = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_body', number: 40, body_file: '/tmp/pr-body.md' } as never)).result)
   expect(pr.published).toBe(true)
   expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/body.md', 'pr edit 40 --body-file /tmp/pr-body.md'])
+})
+
+test("the run's slot follows the instance the project gave its work tree, and the summary shows that instance's databases", async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(
+    `${DATA}/projects/acme__shop/config.json`,
+    JSON.stringify({
+      commands: { start: [{ name: 'backend', cmd: 'make backend.run', port: '4000+10*{slot}' }] },
+      instance: { read: 'cat .vertex-inst', databases: ['shop_dev_{slot}', 'shop_test_{slot}'] },
+    }),
+  )
+  host.answers.push({ match: /cat \.vertex-inst/, stdout: '3\n', exit: 0 })
+  host.ps.set(
+    'command=',
+    [
+      '/nix/store/x-postgresql-18.1/bin/postgres -D /home/t/pg -k /home/t/pg',
+      'postgres: checkpointer ',
+      'postgres: postgres shop_test_3 127.0.0.1(53111) idle',
+      'postgres: postgres shop_test_3 127.0.0.1(53112) idle',
+      'postgres: postgres shop_dev_5 [local] idle',
+    ].join('\n'),
+  )
+  host.files.set('/home/t/pg/postgresql.conf', 'max_connections = 100\nmax_connections = 300\n')
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
+  expect(started.slot).toBe(1)
+  await clock.advance(15_000)
+  const run = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  expect(run.slot).toBe(3)
+  const history = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'history', include_minor: true } as never)).result)
+  expect((history.lines as string[]).some(line => line.includes('Instancia del proyecto: 3 (slot 1)'))).toBe(true)
+  expect(host.commands).toContain('ps -A -o command=')
 })
 
 test('launch flags change the config for that run only, and an unknown one is refused', async ($, on) => {

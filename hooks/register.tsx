@@ -24,6 +24,7 @@ import {
   validate,
   withEnv,
   withOverrides,
+  databaseNames,
 } from './config'
 import {
   type AdapterJob,
@@ -50,6 +51,7 @@ import {
   stageIndex,
   timeKind,
 } from './model'
+import { connections, maxConnections } from './postgres'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, urlIn } from './github'
 import {
   type PolicyContext,
@@ -1159,6 +1161,8 @@ async function inspectWorktree($: Engine) {
   const dir = run.project.worktree ?? run.project.path
   if (!dir) return
   await syncBranch($)
+  const instance = await projectInstance($, dir)
+  if (instance !== null && instance !== run.slot) await emit($, 'slot.changed', { from: run.slot, to: instance })
   const base = run.project.base ?? config.pr.base
   const upstream = base.startsWith('origin/') ? base : `origin/${base}`
   const [head, counts, status] = await Promise.all([
@@ -1176,6 +1180,33 @@ async function inspectWorktree($: Engine) {
     behind: Number.isFinite(behind) ? (behind as number) : null,
     dirty: status === null ? null : status.split('\n').filter(Boolean).length,
     ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port) }))),
+    instance: instance !== null,
+    databases: await instanceDatabases($, databaseNames(config, run.slot)),
+  }
+}
+
+// The instance the project gave the work tree (config.instance.read), or null when it has none or says something else.
+async function projectInstance($: Engine, dir: string): Promise<number | null> {
+  if (!config.instance.read) return null
+  const ran = await $.process
+    .run(['sh', '-c', withEnv(config.instance.read, envPrefix(config.env))], { cwd: dir, timeoutMs: 10_000 })
+    .catch(() => undefined)
+  const text = ran && ran.exitCode === 0 ? ran.stdout.trim() : ''
+  return /^\d+$/.test(text) ? Number(text) : null
+}
+
+// The instance's databases with the connections open to each, and the local Postgres' total against its max_connections.
+async function instanceDatabases($: Engine, names: string[]): Promise<WorktreeInfo['databases']> {
+  if (names.length === 0) return null
+  const ran = await $.process.run(['ps', '-A', '-o', 'command='], { timeoutMs: 5_000 }).catch(() => undefined)
+  if (!ran || ran.exitCode !== 0) return null
+  const seen = connections(ran.stdout)
+  const dir = seen.dataDirs[0]
+  const confs = dir ? await Promise.all(['postgresql.conf', 'postgresql.auto.conf'].map(async name => (await readText($, `${dir}/${name}`)) ?? '')) : []
+  return {
+    list: names.map(name => ({ name, connections: seen.byDatabase[name] ?? 0 })),
+    total: seen.dataDirs.length > 0 || seen.total > 0 ? seen.total : null,
+    max: maxConnections(confs),
   }
 }
 

@@ -34,6 +34,7 @@ export default {
         "owner.changed",
         "branch.renamed",
         "base.changed",
+        "slot.changed",
         "risk.set",
         "stage.entered",
         "stage.completed",

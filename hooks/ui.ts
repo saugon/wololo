@@ -147,6 +147,10 @@ export type WorktreeInfo = {
   behind: number | null
   dirty: number | null
   ports: Array<{ name: string; port: number; listening: boolean | null }>
+  // Whether the slot is the instance the project gave the work tree (config.instance.read).
+  instance?: boolean
+  // The instance's databases with their open connections, and the local Postgres' total against its max_connections.
+  databases?: { list: Array<{ name: string; connections: number }>; total: number | null; max: number | null } | null
 }
 
 function home(path: string, homeDir: string | undefined): string {
@@ -190,14 +194,29 @@ function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string |
     git.push([es ? 'cambios' : 'changes', [span(`${info.dirty} ${files}`, 'warning')]])
   }
   if (git.length > 0) blocks.push({ label: 'git', lines: named(git), gap: true })
-  if (info && info.ports.length > 0) {
-    const ports: Array<[string, Span[]]> = [['slot', [span(String(run.slot), 'text')]]]
+  if (info && (info.ports.length > 0 || info.instance)) {
+    const ports: Array<[string, Span[]]> = [[info.instance ? (es ? 'instancia' : 'instance') : 'slot', [span(String(run.slot), 'text')]]]
     for (const port of info.ports) {
       const state =
         port.listening === null ? [] : port.listening ? [span(es ? '  en uso' : '  in use', 'claude')] : [span(es ? '  libre' : '  free', 'subtle')]
       ports.push([port.name, [span(String(port.port), 'text'), ...state]])
     }
     blocks.push({ label: es ? 'puertos' : 'ports', lines: named(ports) })
+  }
+  const databases = info?.databases
+  if (databases && databases.list.length > 0) {
+    const rows: Array<[string, Span[]]> = databases.list.map(db => [
+      db.name,
+      db.connections > 0
+        ? [span(es ? `${db.connections} ${db.connections === 1 ? 'conexión' : 'conexiones'}` : `${db.connections} connection${db.connections === 1 ? '' : 's'}`, 'claude')]
+        : [span(es ? 'sin conexiones' : 'no connections', 'subtle')],
+    ])
+    if (databases.total !== null) {
+      const full = databases.max !== null && databases.total >= databases.max * 0.9
+      const of = databases.max !== null ? (es ? ` de ${databases.max}` : ` of ${databases.max}`) : ''
+      rows.push(['postgres', [span(`${databases.total}${of} ${es ? 'conexiones en total' : 'connections in all'}`, full ? 'warning' : 'subtle')]])
+    }
+    blocks.push({ label: es ? 'bases' : 'databases', lines: named(rows) })
   }
   blocks.push({ label: es ? 'ruta' : 'path', lines: [[span(home(dir, homeDir), 'text')]], gap: blocks.length === 0 })
   return blocks

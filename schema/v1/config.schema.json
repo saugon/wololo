@@ -466,6 +466,23 @@
         }
       }
     },
+    "instance": {
+      "type": "object",
+      "description": "The instance the project gives each worktree, when it keeps its own registry.",
+      "properties": {
+        "read": {
+          "type": "string",
+          "description": "Prints the work tree's instance number; the run's slot follows it."
+        },
+        "databases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The instance's databases ({slot}), shown with their open connections."
+        }
+      }
+    },
     "keep_awake": {
       "type": "boolean",
       "description": "While a run is active, keep the machine from sleeping (caffeinate, macOS)."

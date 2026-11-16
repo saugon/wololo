@@ -57,6 +57,7 @@ export const EVENT_TYPES = [
   'owner.changed',
   'branch.renamed',
   'base.changed',
+  'slot.changed',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -474,6 +475,9 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'base.changed':
       if (typeof d.to === 'string' && d.to) r.project.base = d.to
+      break
+    case 'slot.changed':
+      if (typeof d.to === 'number' && Number.isInteger(d.to) && d.to >= 0) r.slot = d.to
       break
     case 'risk.set':
       r.risk = (d.risk as Risk) ?? r.risk

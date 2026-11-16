@@ -343,6 +343,38 @@ test('the summary names the worktree, its branch against the base, its HEAD and 
   expect(summary.slice(-3).map(entry => entry.label)).toEqual(['git', 'puertos', 'ruta'])
 })
 
+test("with the project's instance, the summary names it and shows its databases with their connections", async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 3, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/wt', branch: 'wololo/x', base: 'main' } }],
+  ])
+  const info = {
+    head: null,
+    subject: null,
+    ahead: null,
+    behind: null,
+    dirty: null,
+    ports: [{ name: 'backend', port: 4030, listening: true }],
+    instance: true,
+    databases: {
+      list: [
+        { name: 'shop_dev_3', connections: 18 },
+        { name: 'shop_test_3', connections: 1 },
+        { name: 'shop_e2e_3', connections: 0 },
+      ],
+      total: 290,
+      max: 300,
+    },
+  }
+  const summary = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').pane.summary
+  expect(block(summary, 'puertos')).toEqual(['instancia  3', 'backend    4030  en uso'])
+  expect(block(summary, 'bases')).toEqual([
+    'shop_dev_3   18 conexiones',
+    'shop_test_3  1 conexión',
+    'shop_e2e_3   sin conexiones',
+    'postgres     290 de 300 conexiones en total',
+  ])
+})
+
 test('going back to an earlier stage leaves the later ones to do again, on the bar and in the summary', async () => {
   const list = events([
     ['run.started', { title: 'Salones', mode: 'checkpoints' }],

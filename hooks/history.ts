@@ -32,6 +32,8 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('⎇', `${es ? 'Rama renombrada' : 'Branch renamed'}: ${str(d.from)} → ${str(d.to)}`)
     case 'base.changed':
       return one('⎇', `${es ? 'Base cambiada' : 'Base changed'}: ${str(d.from)} → ${str(d.to)}${d.reason ? ` (${str(d.reason)})` : ''}`)
+    case 'slot.changed':
+      return one('⇄', `${es ? 'Instancia del proyecto' : "Project's instance"}: ${str(d.to)} (slot ${str(d.from)})`, false)
     case 'risk.set':
       return one('·', `${es ? 'Riesgo' : 'Risk'} ${str(d.risk)}${d.reason ? `: ${str(d.reason)}` : ''}`, false)
     case 'stage.entered':

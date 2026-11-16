@@ -104,6 +104,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ],
   ['owner.changed', { session_id: 's2', cwd: '/repo', worktree: '/repo/.wt', branch: 'wololo/42' }],
   ['branch.renamed', { from: 'wololo/42', to: 'feat/42-pagos' }],
+  ['slot.changed', { from: 4, to: 3 }],
   ['base.changed', { from: 'feat/41-envios', to: 'main', reason: 'feat/41-envios merged' }],
   ['risk.set', { risk: 'high' }],
   ['stage.entered', { stage: 'context' }],
