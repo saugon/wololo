@@ -67,7 +67,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(headerItem)
         menu.addItem(.separator())
 
-        let widget = item("Mostrar widget", #selector(toggleWidget), key: "w", modifiers: [.command, .shift])
+        let widget = item("Mostrar widget", #selector(toggleWidget), key: "l", modifiers: [.command, .shift])
         menu.addItem(widget)
         widgetItem = widget
         menu.addItem(item("Abrir ventana", #selector(openWindow), key: "o"))

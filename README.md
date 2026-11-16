@@ -150,7 +150,7 @@ Every run is a directory any app can read. Several terminals and projects write 
 **Wololo Desk** (`app/`) shows the runs of every terminal and project in one place:
 
 - **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
-- **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first.
+- **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first. ⌘⇧L shows or hides it from any app.
 - **Window**: a sidebar by project and a board of cards by status or by stage, with search.
 - **Detail**: a run's stages, what it is doing or waiting on, items, agents, PR and CI, timeline, documents, screenshots and cost. **Ir a la terminal** (also on each widget row) brings the iTerm2 or Ghostty tab of its session to the front, or opens one in its directory and copies `/wololo resume <run>`.
 

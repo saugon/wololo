@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Observation
 import WololoKit
 
@@ -103,6 +104,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let options: LaunchOptions
     private let state: AppState
     private var statusItem: StatusItemController?
+    /// ⌘⇧L shows or hides the widget from any app.
+    private var widgetHotKey: GlobalHotKey?
     private var mainWindow: MainWindowController?
     private var widgetPanel: WidgetPanelController?
     private var settingsWindow: SettingsWindowController?
@@ -135,6 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWindow: { [weak self] in self?.openWindow() },
             openRun: { [weak self] id in self?.openRun(id) }
         )
+
+        if !isSnapshot {
+            widgetHotKey = GlobalHotKey(keyCode: kVK_ANSI_L, modifiers: cmdKey | shiftKey) { [weak self] in self?.toggleWidget() }
+        }
 
         if let url = options.snapshotURL {
             open(options.open ?? .window)

@@ -107,7 +107,7 @@ struct WidgetView: View {
                     .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
             }
             .buttonStyle(WidgetIconButtonStyle())
-            .help("Ocultar el widget (⌘⇧W desde el menú)")
+            .help("Ocultar el widget (⌘⇧L)")
             .accessibilityLabel("Ocultar el widget")
         }
         .padding(.leading, 14)
