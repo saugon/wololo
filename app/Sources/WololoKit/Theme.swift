@@ -636,36 +636,41 @@ public struct ThemeSpec: Equatable, Sendable {
 extension ThemeSpec {
     /// The look of Wololo Desk before themes, value for value.
     public static let actual: ThemeSpec = {
-        let amber = RGBA(hex: 0xF5A524)
         let blue = RGBA(hex: 0x5B9DFF)
-        let green = RGBA(hex: 0x3FB950)
-        let red = RGBA(hex: 0xE5484D)
         let gray = RGBA(hex: 0xA1A7B3)
         let text = RGBA(hex: 0xE8EAED)
         let secondary = RGBA(hex: 0xC3C7CE)
         let muted = RGBA(hex: 0x9AA0AB)
         let heading = RGBA(hex: 0xD5D8DD)
         let dark = RGBA(hex: 0x0B0C0F)
-        let softRed = RGBA(hex: 0xFF8A8E)
         let neutralBadge = RGBA(hex: 0x333844)
 
-        let waiting = StatusStyle(color: amber, badge: amber, badgeText: dark, activity: RGBA(hex: 0xF7C46C))
-        let working = StatusStyle(color: blue, badge: RGBA(hex: 0x1F3A66), badgeText: RGBA(hex: 0xDCE8FF), activity: secondary)
+        // The run states take the plugin's tones, as Claude Code's dark-daltonized theme draws them, so a run has the
+        // same color in the terminal and here: claude while it works, warning while it waits on the person (or lost its
+        // session), error when it is blocked or failed, success when done, and gray while paused or cancelled.
+        let claude = RGBA(hex: 0xFF9933)
+        let warning = RGBA(hex: 0xFFCC00)
+        let error = RGBA(hex: 0xFF6666)
+        let success = RGBA(hex: 0x3399FF)
+
+        let waiting = StatusStyle(color: warning, badge: warning, badgeText: dark, activity: RGBA(hex: 0xFFE07A))
+        let working = StatusStyle(color: claude, badge: claude, badgeText: dark, activity: secondary)
         let paused = StatusStyle(color: gray, badge: neutralBadge, badgeText: text, activity: muted)
+        let failing = StatusStyle(color: error, badge: error, badgeText: dark, activity: RGBA(hex: 0xFF9999))
         let status = StatusStyles(
             waiting: waiting,
             permission: waiting,
-            blocked: StatusStyle(color: red, badge: RGBA(hex: 0xC9373D), badgeText: .white, activity: softRed),
+            blocked: failing,
             stalled: waiting,
             running: working,
-            agents: StatusStyle(color: blue, badge: RGBA(hex: 0x3A2F66), badgeText: RGBA(hex: 0xE6DEFF), activity: secondary),
+            agents: working,
             tests: working,
             ci: working,
-            pausing: StatusStyle(color: blue, badge: neutralBadge, badgeText: text, activity: secondary),
+            pausing: working,
             paused: paused,
-            orphaned: StatusStyle(color: gray, badge: RGBA(hex: 0x5A3A1A), badgeText: RGBA(hex: 0xFFE2C2), activity: RGBA(hex: 0xE9B98A)),
-            done: StatusStyle(color: green, badge: RGBA(hex: 0x1E4D2B), badgeText: RGBA(hex: 0xD7F5DD), activity: muted),
-            failed: StatusStyle(color: red, badge: RGBA(hex: 0x8E2A2E), badgeText: .white, activity: softRed),
+            orphaned: waiting,
+            done: StatusStyle(color: success, badge: success, badgeText: dark, activity: muted),
+            failed: failing,
             cancelled: paused
         )
 
@@ -700,13 +705,13 @@ extension ThemeSpec {
                 widgetHover: RGBA(hex: 0x1C1F26),
                 status: status,
                 columns: PerColumn(
-                    waiting: ColumnColor(icon: amber, title: heading),
-                    working: ColumnColor(icon: blue, title: heading),
+                    waiting: ColumnColor(icon: warning, title: heading),
+                    working: ColumnColor(icon: claude, title: heading),
                     onHold: ColumnColor(icon: gray, title: heading),
-                    finished: ColumnColor(icon: green, title: heading)
+                    finished: ColumnColor(icon: success, title: heading)
                 ),
                 bar: Bar(fill: .status, track: RGBA(hex: 0x2A2F3A)),
-                ci: CIColors(pending: amber, passing: green, failing: softRed, none: muted)
+                ci: CIColors(pending: warning, passing: success, failing: error, none: muted)
             ),
             fonts: Fonts(
                 display: FontSpec(family: nil, file: nil, weight: 600, tracking: 0),

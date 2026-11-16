@@ -28,29 +28,29 @@
     "widgetBorder": "#2f343e",
     "widgetHover": "#1c1f26",
     "status": {
-      "waiting": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
-      "permission": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
-      "blocked": {"color": "#e5484d", "badge": "#c9373d", "badgeText": "#ffffff", "activity": "#ff8a8e"},
-      "stalled": {"color": "#f5a524", "badge": "#f5a524", "badgeText": "#0b0c0f", "activity": "#f7c46c"},
-      "running": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
-      "agents": {"color": "#5b9dff", "badge": "#3a2f66", "badgeText": "#e6deff", "activity": "#c3c7ce"},
-      "tests": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
-      "ci": {"color": "#5b9dff", "badge": "#1f3a66", "badgeText": "#dce8ff", "activity": "#c3c7ce"},
-      "pausing": {"color": "#5b9dff", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#c3c7ce"},
+      "waiting": {"color": "#ffcc00", "badge": "#ffcc00", "badgeText": "#0b0c0f", "activity": "#ffe07a"},
+      "permission": {"color": "#ffcc00", "badge": "#ffcc00", "badgeText": "#0b0c0f", "activity": "#ffe07a"},
+      "blocked": {"color": "#ff6666", "badge": "#ff6666", "badgeText": "#0b0c0f", "activity": "#ff9999"},
+      "stalled": {"color": "#ffcc00", "badge": "#ffcc00", "badgeText": "#0b0c0f", "activity": "#ffe07a"},
+      "running": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
+      "agents": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
+      "tests": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
+      "ci": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
+      "pausing": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
       "paused": {"color": "#a1a7b3", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#9aa0ab"},
-      "orphaned": {"color": "#a1a7b3", "badge": "#5a3a1a", "badgeText": "#ffe2c2", "activity": "#e9b98a"},
-      "done": {"color": "#3fb950", "badge": "#1e4d2b", "badgeText": "#d7f5dd", "activity": "#9aa0ab"},
-      "failed": {"color": "#e5484d", "badge": "#8e2a2e", "badgeText": "#ffffff", "activity": "#ff8a8e"},
+      "orphaned": {"color": "#ffcc00", "badge": "#ffcc00", "badgeText": "#0b0c0f", "activity": "#ffe07a"},
+      "done": {"color": "#3399ff", "badge": "#3399ff", "badgeText": "#0b0c0f", "activity": "#9aa0ab"},
+      "failed": {"color": "#ff6666", "badge": "#ff6666", "badgeText": "#0b0c0f", "activity": "#ff9999"},
       "cancelled": {"color": "#a1a7b3", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#9aa0ab"}
     },
     "columns": {
-      "waiting": {"icon": "#f5a524", "title": "#d5d8dd"},
-      "working": {"icon": "#5b9dff", "title": "#d5d8dd"},
+      "waiting": {"icon": "#ffcc00", "title": "#d5d8dd"},
+      "working": {"icon": "#ff9933", "title": "#d5d8dd"},
       "onHold": {"icon": "#a1a7b3", "title": "#d5d8dd"},
-      "finished": {"icon": "#3fb950", "title": "#d5d8dd"}
+      "finished": {"icon": "#3399ff", "title": "#d5d8dd"}
     },
     "bar": {"fill": "status", "track": "#2a2f3a"},
-    "ci": {"pending": "#f5a524", "passing": "#3fb950", "failing": "#ff8a8e", "none": "#9aa0ab"}
+    "ci": {"pending": "#ffcc00", "passing": "#3399ff", "failing": "#ff6666", "none": "#9aa0ab"}
   },
   "fonts": {
     "display": {"family": "", "weight": 600, "tracking": 0},

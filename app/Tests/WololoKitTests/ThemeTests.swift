@@ -49,25 +49,32 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(actual.texts.empty, "Nada acá")
     }
 
-    func testStatusStylesMatchTodaysTable() {
+    func testStatusStylesTakeThePluginsTones() {
         let actual = ThemeSpec.actual
-        XCTAssertEqual(actual.style(.waitingPermission), actual.style(.waitingUser))
-        XCTAssertEqual(actual.style(.stalled).badge, RGBA(hex: 0xF5A524))
-        XCTAssertEqual(actual.style(.blocked), ThemeSpec.StatusStyle(
-            color: RGBA(hex: 0xE5484D), badge: RGBA(hex: 0xC9373D), badgeText: .white, activity: RGBA(hex: 0xFF8A8E)))
-        XCTAssertEqual(actual.style(.waitingAgents).badge, RGBA(hex: 0x3A2F66))
+        let claude = RGBA(hex: 0xFF9933), warning = RGBA(hex: 0xFFCC00), error = RGBA(hex: 0xFF6666), success = RGBA(hex: 0x3399FF)
+        let gray = RGBA(hex: 0xA1A7B3)
+        // As the plugin's toneOf: claude while working, warning while waiting on the person or orphaned, error when
+        // blocked or failed, success when done, gray (subtle) while paused or cancelled.
+        let tones: [(RunStatus, RGBA)] = [
+            (.running, claude), (.waitingAgents, claude), (.waitingTests, claude), (.waitingCI, claude), (.pausing, claude),
+            (.waitingUser, warning), (.waitingPermission, warning), (.stalled, warning), (.orphaned, warning),
+            (.blocked, error), (.failed, error), (.done, success), (.paused, gray), (.cancelled, gray),
+        ]
+        for (status, tone) in tones {
+            XCTAssertEqual(actual.style(status).color, tone, "\(status)")
+        }
+        XCTAssertEqual(actual.style(.waitingAgents), ThemeSpec.StatusStyle(
+            color: claude, badge: claude, badgeText: RGBA(hex: 0x0B0C0F), activity: RGBA(hex: 0xC3C7CE)))
         XCTAssertEqual(actual.style(.unknown("new")), actual.style(.pausing))
-        XCTAssertEqual(actual.style(.cancelled).color, RGBA(hex: 0xA1A7B3))
-        XCTAssertEqual(actual.style(.orphaned).activity, RGBA(hex: 0xE9B98A))
     }
 
     func testBarFillFollowsTheProgressRole() {
         let actual = ThemeSpec.actual
-        XCTAssertEqual(actual.barFill(.waiting), RGBA(hex: 0xF5A524))
-        XCTAssertEqual(actual.barFill(.working), RGBA(hex: 0x5B9DFF))
+        XCTAssertEqual(actual.barFill(.waiting), RGBA(hex: 0xFFCC00))
+        XCTAssertEqual(actual.barFill(.working), RGBA(hex: 0xFF9933))
         XCTAssertEqual(actual.barFill(.onHold), RGBA(hex: 0xA1A7B3))
-        XCTAssertEqual(actual.barFill(.finished), RGBA(hex: 0x3FB950))
-        XCTAssertEqual(actual.barFill(.failed), RGBA(hex: 0xE5484D))
+        XCTAssertEqual(actual.barFill(.finished), RGBA(hex: 0x3399FF))
+        XCTAssertEqual(actual.barFill(.failed), RGBA(hex: 0xFF6666))
 
         var gold = actual
         gold.colors.bar.fill = .color(RGBA(hex: 0xD8BD7C))
