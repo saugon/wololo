@@ -157,8 +157,8 @@ Every run is a directory any app can read. Several terminals and projects write 
 It only reads the store, except **Descartar** in a run's detail: for a run no session holds anymore (paused or orphaned, no heartbeat for 90 s), it records `run.finished {outcome: cancelled}` and its snapshot, as the mod's cancel would, after a confirmation. The worktree, branch and files stay in place. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.
 
 ```sh
-app/scripts/build-app.sh             # app/dist/Wololo Desk.app, signed ad hoc
-app/scripts/build-app.sh --install   # and copies it to ~/Applications
+make app       # app/scripts/build-app.sh: app/dist/Wololo Desk.app, signed ad hoc
+make install   # app/scripts/build-app.sh --install: and copies it to ~/Applications
 ```
 
 `--install` replaces an existing `~/Applications/Wololo Desk.app` only if it is a Wololo Desk build. The first **Ir a la terminal** asks for the Automation permission for each terminal; if it was denied, allow it in System Settings → Privacy & Security → Automation. Requires macOS 14 and Swift 5.9 or later.
@@ -227,12 +227,15 @@ The fonts AoE uses ship inside the app, so they need not be installed: Cinzel, S
 ## Develop
 
 ```sh
-tsc -p .                 # type-check (types in .claude-plugin/types)
-claude plugin test .     # unit tests
-claude plugin validate .
-cd app && swift build && swift test   # Wololo Desk (see Desktop app)
-app/scripts/build-app.sh              # Wololo Desk.app in app/dist
+make typecheck   # tsc -p . (types in .claude-plugin/types)
+make test        # claude plugin test .: unit tests
+make validate    # claude plugin validate .
+make app-test    # cd app && swift test: Wololo Desk (see Desktop app)
+make app         # Wololo Desk.app in app/dist
+make check       # test, validate and app-test
 ```
+
+`make help` lists the targets.
 
 ## Adapters
 
