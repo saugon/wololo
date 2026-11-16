@@ -338,6 +338,11 @@ test('with spec.to_github off, issue writes stay in files unless the person aske
   )
   expect(asked.published).toBe(true)
   expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/body.md'])
+  // The PR is not the issue: its body is updated whatever spec.to_github says.
+  host.files.set('/tmp/pr-body.md', 'pr')
+  const pr = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_body', number: 40, body_file: '/tmp/pr-body.md' } as never)).result)
+  expect(pr.published).toBe(true)
+  expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/body.md', 'pr edit 40 --body-file /tmp/pr-body.md'])
 })
 
 test('launch flags change the config for that run only, and an unknown one is refused', async ($, on) => {

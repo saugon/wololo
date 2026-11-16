@@ -18,6 +18,9 @@ test('gh arguments per kind, and their required fields', async () => {
     'pr', 'create', '--title', 'feat: x', '--base', 'main', '--head', 'wololo/12-x', '--body-file', '/r/pr-body.md', '--draft',
   ])
   expect(ghArgs({ kind: 'issue_comment' }, '/r/c.md')).toBe('issue_comment needs number.')
+  expect(ghArgs({ kind: 'pr_body', number: 4813 }, '/r/pr-body.md')).toEqual(['pr', 'edit', '4813', '--body-file', '/r/pr-body.md'])
+  expect(ghArgs({ kind: 'pr_comment', number: 4813 }, '/r/c.md')).toEqual(['pr', 'comment', '4813', '--body-file', '/r/c.md'])
+  expect(ghArgs({ kind: 'pr_body' }, '/r/pr-body.md')).toBe('pr_body needs number.')
 })
 
 test('the URL gh prints is found', async () => {

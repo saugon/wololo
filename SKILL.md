@@ -113,7 +113,7 @@ The run enforces the budgets itself: past `budgets.design_reversals` for an item
 - Never add attribution trailers or "generated with" lines.
 - A commit that fails only because it cannot be signed is made unsigned and recorded as `signing.deferred`; the commits are signed in one pass before the push (`stages/06-pr.md`). A missing signature never stops the run before then.
 - Push only as `git push -u origin <branch>`; the mod refuses anything else. When the run's branch is renamed (`git branch -m`), the mod records the new name (`branch.renamed`) and `<branch>` is the new one; a branch created beside it does not replace it. When the branch moves onto another base (the base merged and the branch is rebased onto main, say), record `base.changed {to, reason}` right after the rebase, so the card and the PR compare against it; a PR opened against another base records it by itself.
-- Write to GitHub (an issue body or comment, a new issue, a new PR) only through `mcp__wololo__publish`. It checks GitHub's length limit and switches to a summary when the text does not fit, so length never stops the run.
+- Write to GitHub (an issue body or comment, a new issue, a new PR, an open PR's body or a comment on it) only through `mcp__wololo__publish`. It checks GitHub's length limit and switches to a summary when the text does not fit, so length never stops the run.
 
 **Where the work happens.**
 - Every file path you or a subagent reads or writes is absolute, under the work tree.

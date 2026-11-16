@@ -1,6 +1,11 @@
 export const GITHUB_BODY_LIMIT = 65_000
 
-export type PublishKind = 'issue_body' | 'issue_comment' | 'issue_create' | 'pr_create'
+export type PublishKind = 'issue_body' | 'issue_comment' | 'issue_create' | 'pr_create' | 'pr_body' | 'pr_comment'
+
+// The writes spec.to_github governs: what the run puts on the issue.
+export function isIssueWrite(kind: PublishKind): boolean {
+  return kind === 'issue_body' || kind === 'issue_comment' || kind === 'issue_create'
+}
 
 export type PublishDecision =
   | { send: 'full'; length: number }
@@ -42,6 +47,10 @@ export function ghArgs(target: PublishTarget, file: string): string[] | string {
       const args = ['pr', 'create', '--title', target.title, '--base', target.base, '--head', target.head, '--body-file', file]
       return target.draft ? [...args, '--draft'] : args
     }
+    case 'pr_body':
+      return target.number ? ['pr', 'edit', String(target.number), '--body-file', file] : 'pr_body needs number.'
+    case 'pr_comment':
+      return target.number ? ['pr', 'comment', String(target.number), '--body-file', file] : 'pr_comment needs number.'
   }
 }
 

@@ -50,7 +50,7 @@ import {
   stageIndex,
   timeKind,
 } from './model'
-import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, urlIn } from './github'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, urlIn } from './github'
 import {
   type PolicyContext,
   commandRules,
@@ -1961,14 +1961,14 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'publish',
     description:
-      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue or a new pull request. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
+      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create'] },
+        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create', 'pr_body', 'pr_comment'] },
         body_file: { type: 'string' },
         summary_file: { type: 'string', description: 'A short version, for when body_file does not fit.' },
-        number: { type: 'number', description: 'Issue number, for issue_body and issue_comment.' },
+        number: { type: 'number', description: 'Issue number for issue_body and issue_comment; pull request number for pr_body and pr_comment.' },
         title: { type: 'string', description: 'For issue_create and pr_create.' },
         base: { type: 'string' },
         head: { type: 'string' },
@@ -1987,7 +1987,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
 async function publish($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run) return fail('No active run in this session.')
   const kind = String(input.kind) as PublishKind
-  if (kind !== 'pr_create' && !config.spec.to_github && input.person_asked !== true) {
+  if (isIssueWrite(kind) && !config.spec.to_github && input.person_asked !== true) {
     return ok({
       published: false,
       reason: 'spec.to_github is false: the text stays in its file only. If the person asked for this write, call again with person_asked: true.',
