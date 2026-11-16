@@ -1,13 +1,14 @@
 import SwiftUI
 import WololoKit
 
-/// A run on the board, as the reference draws it: the status icon and the title, the repo, the status and what the
-/// run is doing, the stage with the PR, agents and age, and the progress bar along the bottom edge.
+/// A run on the board, as the reference draws it: the status icon, the title and the terminal button, the repo, the
+/// status and what the run is doing, the stage with the PR, agents and age, and the progress bar along the bottom edge.
 struct RunCard: View {
     let run: Run
     let now: TimeInterval
     let isSelected: Bool
     let select: () -> Void
+    let goToTerminal: () -> Void
 
     @State private var isHovered = false
     @Environment(\.theme) private var theme
@@ -25,6 +26,7 @@ struct RunCard: View {
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                    terminalButton
                 }
                 Text(originLabel(run))
                     .font(theme.font(.mono, size: 12))
@@ -83,6 +85,24 @@ struct RunCard: View {
             cornerRadius: theme.r(10),
             action: select
         )
+        // The card reads as one button to VoiceOver, so the terminal is one of its actions.
+        .accessibilityAction(named: "Ir a la terminal", goToTerminal)
+    }
+
+    /// The widget's terminal button: a click on it goes to the terminal, not to the detail.
+    private var terminalButton: some View {
+        Button(action: goToTerminal) {
+            Image(systemName: "terminal")
+                .font(.system(size: 13, weight: .medium))
+                .frame(width: 26, height: 26)
+                .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))
+        }
+        .buttonStyle(WidgetIconButtonStyle(color: theme.muted))
+        .help(TerminalPlan(run, now: now).triesFocus
+            ? "Traer al frente la terminal de la sesión"
+            : "Abrir una terminal en la carpeta del run")
+        .padding(.top, -4)
+        .padding(.trailing, -4)
     }
 
     /// What VoiceOver reads after the title, since the card is a single button: status, stage, the items, agents and

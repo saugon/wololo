@@ -54,10 +54,10 @@ struct MainView: View {
                 board: board,
                 mode: state.boardMode,
                 now: model.now,
-                selectedRunID: state.selectedRunID
-            ) { id in
-                state.selectedRunID = id
-            }
+                selectedRunID: state.selectedRunID,
+                select: { id in state.selectedRunID = id },
+                goToTerminal: { run in TerminalAction.go(to: run, now: model.now, state: state, origin: .window) }
+            )
         }
     }
 

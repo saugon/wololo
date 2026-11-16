@@ -13,6 +13,7 @@ struct BoardView: View {
     let now: TimeInterval
     let selectedRunID: String?
     let select: (String) -> Void
+    let goToTerminal: (Run) -> Void
 
     @State private var isOnHoldOpen = false
     @State private var isArchiveOpen = false
@@ -87,7 +88,9 @@ struct BoardView: View {
                             )
                     }
                     ForEach(column.runs, id: \.id) { run in
-                        RunCard(run: run, now: now, isSelected: run.id == selectedRunID) { select(run.id) }
+                        RunCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
+                            goToTerminal(run)
+                        }
                             .frame(width: width - 2 * Self.cardMargin)
                     }
                 }
