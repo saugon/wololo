@@ -165,6 +165,17 @@ final class RunDecodingTests: XCTestCase {
         XCTAssertEqual(run.pr?.ci, "passing")
     }
 
+    /// `pr_review` is when the PR went into review; the older top-level `review` ("local" or "pr") is another thing.
+    func testDecodesThePRReview() throws {
+        let run = try decode(#"""
+        { "id": "r", "status": "in_review", "review": "pr", "pr_review": { "since": 1234.5 } }
+        """#)
+        XCTAssertEqual(run.status, .inReview)
+        XCTAssertEqual(run.prReview?.since, 1234.5)
+        XCTAssertNil(try decode(#"{ "id": "r", "pr_review": null }"#).prReview)
+        XCTAssertNil(try decode(#"{ "id": "r" }"#).prReview)
+    }
+
     func testUnknownFieldsAndStatusStillDecode() throws {
         let run = try decode(#"""
         {

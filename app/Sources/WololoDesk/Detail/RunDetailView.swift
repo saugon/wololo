@@ -62,6 +62,9 @@ struct RunDetailView: View {
                 goToTerminal: { TerminalAction.go(to: run, now: state.model.now, state: state) },
                 discard: RunDiscard.canDiscard(run, now: model.now)
                     ? { DiscardAction.confirm(run, runDir: runDir, model: model) }
+                    : nil,
+                markDone: RunDiscard.canMarkDone(run, now: model.now)
+                    ? { DiscardAction.confirmDone(run, runDir: runDir, model: model) }
                     : nil
             )
             CardRow(spacing: 16) {

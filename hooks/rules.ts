@@ -122,6 +122,9 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       }
       return null
     }
+    case 'review.waiting':
+      if (run.stage?.id !== 'pr') return 'review.waiting comes in the pr stage, once the PR is open and ready.'
+      return run.pr?.number ? null : 'review.waiting needs the PR: record pr.opened {url, number} first.'
     case 'risk.set':
       return ['low', 'high', 'unknown'].includes(String(data.risk)) ? null : 'data.risk must be low, high or unknown.'
     case 'plan.ready':

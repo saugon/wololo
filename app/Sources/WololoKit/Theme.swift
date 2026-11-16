@@ -56,6 +56,7 @@ public enum ThemeStatus: String, CaseIterable, Sendable {
     case ci
     case pausing
     case paused
+    case review
     case orphaned
     case done
     case failed
@@ -73,6 +74,7 @@ public enum ThemeStatus: String, CaseIterable, Sendable {
         case .waitingCI: self = .ci
         case .pausing, .unknown: self = .pausing
         case .paused: self = .paused
+        case .inReview: self = .review
         case .orphaned: self = .orphaned
         case .done: self = .done
         case .failed: self = .failed
@@ -81,22 +83,24 @@ public enum ThemeStatus: String, CaseIterable, Sendable {
     }
 }
 
-/// One value per status column, the four `StatusGroup`s.
+/// One value per `StatusGroup`: the four status columns, and the on-hold section under the board.
 public struct PerColumn<Value> {
     public var waiting: Value
     public var working: Value
+    public var review: Value
     public var onHold: Value
     public var finished: Value
 
-    public init(waiting: Value, working: Value, onHold: Value, finished: Value) {
+    public init(waiting: Value, working: Value, review: Value, onHold: Value, finished: Value) {
         self.waiting = waiting
         self.working = working
+        self.review = review
         self.onHold = onHold
         self.finished = finished
     }
 
     public init(all value: Value) {
-        self.init(waiting: value, working: value, onHold: value, finished: value)
+        self.init(waiting: value, working: value, review: value, onHold: value, finished: value)
     }
 
     public subscript(group: StatusGroup) -> Value {
@@ -104,6 +108,7 @@ public struct PerColumn<Value> {
             switch group {
             case .waiting: return waiting
             case .working: return working
+            case .review: return review
             case .onHold: return onHold
             case .finished: return finished
             }
@@ -112,6 +117,7 @@ public struct PerColumn<Value> {
             switch group {
             case .waiting: waiting = newValue
             case .working: working = newValue
+            case .review: review = newValue
             case .onHold: onHold = newValue
             case .finished: finished = newValue
             }
@@ -152,12 +158,16 @@ public struct ThemeFile: Codable, Equatable, Sendable {
     public struct Columns<Value: Codable & Equatable & Sendable>: Codable, Equatable, Sendable {
         public var waiting: Value?
         public var working: Value?
+        /// A theme that leaves it out, as the ones written before runs had a review, takes the base theme's.
+        public var review: Value?
         public var onHold: Value?
         public var finished: Value?
 
-        public init(waiting: Value? = nil, working: Value? = nil, onHold: Value? = nil, finished: Value? = nil) {
+        public init(waiting: Value? = nil, working: Value? = nil, review: Value? = nil, onHold: Value? = nil,
+                    finished: Value? = nil) {
             self.waiting = waiting
             self.working = working
+            self.review = review
             self.onHold = onHold
             self.finished = finished
         }
@@ -166,6 +176,7 @@ public struct ThemeFile: Codable, Equatable, Sendable {
             switch group {
             case .waiting: return waiting
             case .working: return working
+            case .review: return review
             case .onHold: return onHold
             case .finished: return finished
             }
@@ -414,6 +425,7 @@ public struct ThemeSpec: Equatable, Sendable {
         public var ci: StatusStyle
         public var pausing: StatusStyle
         public var paused: StatusStyle
+        public var review: StatusStyle
         public var orphaned: StatusStyle
         public var done: StatusStyle
         public var failed: StatusStyle
@@ -432,6 +444,7 @@ public struct ThemeSpec: Equatable, Sendable {
                 case .ci: return ci
                 case .pausing: return pausing
                 case .paused: return paused
+                case .review: return review
                 case .orphaned: return orphaned
                 case .done: return done
                 case .failed: return failed
@@ -450,6 +463,7 @@ public struct ThemeSpec: Equatable, Sendable {
                 case .ci: ci = newValue
                 case .pausing: pausing = newValue
                 case .paused: paused = newValue
+                case .review: review = newValue
                 case .orphaned: orphaned = newValue
                 case .done: done = newValue
                 case .failed: failed = newValue
@@ -614,6 +628,7 @@ public struct ThemeSpec: Equatable, Sendable {
         switch role {
         case .waiting: return colors.columns.waiting.icon
         case .working: return colors.columns.working.icon
+        case .review: return colors.columns.review.icon
         case .onHold: return colors.columns.onHold.icon
         case .finished: return colors.columns.finished.icon
         case .failed: return colors.status.failed.color
@@ -647,11 +662,13 @@ extension ThemeSpec {
 
         // The run states take the plugin's tones, as Claude Code's dark-daltonized theme draws them, so a run has the
         // same color in the terminal and here: claude while it works, warning while it waits on the person (or lost its
-        // session), error when it is blocked or failed, success when done, and gray while paused or cancelled.
+        // session), merged while its PR is in review, error when it is blocked or failed, success when done, and gray
+        // while paused or cancelled.
         let claude = RGBA(hex: 0xFF9933)
         let warning = RGBA(hex: 0xFFCC00)
         let error = RGBA(hex: 0xFF6666)
         let success = RGBA(hex: 0x3399FF)
+        let merged = RGBA(hex: 0xAF87FF)
 
         let waiting = StatusStyle(color: warning, badge: warning, badgeText: dark, activity: RGBA(hex: 0xFFE07A))
         let working = StatusStyle(color: claude, badge: claude, badgeText: dark, activity: secondary)
@@ -668,6 +685,7 @@ extension ThemeSpec {
             ci: working,
             pausing: working,
             paused: paused,
+            review: StatusStyle(color: merged, badge: merged, badgeText: dark, activity: secondary),
             orphaned: waiting,
             done: StatusStyle(color: success, badge: success, badgeText: dark, activity: muted),
             failed: failing,
@@ -707,6 +725,7 @@ extension ThemeSpec {
                 columns: PerColumn(
                     waiting: ColumnColor(icon: warning, title: heading),
                     working: ColumnColor(icon: claude, title: heading),
+                    review: ColumnColor(icon: merged, title: heading),
                     onHold: ColumnColor(icon: gray, title: heading),
                     finished: ColumnColor(icon: success, title: heading)
                 ),
@@ -731,6 +750,7 @@ extension ThemeSpec {
                 columns: PerColumn(
                     waiting: ColumnText(title: StatusGroup.waiting.label(.es)),
                     working: ColumnText(title: StatusGroup.working.label(.es)),
+                    review: ColumnText(title: StatusGroup.review.label(.es)),
                     onHold: ColumnText(title: StatusGroup.onHold.label(.es)),
                     finished: ColumnText(title: StatusGroup.finished.label(.es) + " · 24 h")
                 ),

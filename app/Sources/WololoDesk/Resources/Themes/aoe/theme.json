@@ -38,6 +38,7 @@
       "ci": {"color": "#a6ccf2", "badge": "#a6ccf2", "badgeText": "#17171a", "activity": "#e4e0d4"},
       "pausing": {"color": "#a6ccf2", "badge": "#d8d5cb", "badgeText": "#17171a", "activity": "#e4e0d4"},
       "paused": {"color": "#cfcbc0", "badge": "#d8d5cb", "badgeText": "#17171a", "activity": "#e4e0d4"},
+      "review": {"color": "#c8b4f0", "badge": "#c8b4f0", "badgeText": "#17171a", "activity": "#e4e0d4"},
       "orphaned": {"color": "#f5ae5c", "badge": "#f5ae5c", "badgeText": "#17171a", "activity": "#e4e0d4"},
       "done": {"color": "#a4dcae", "badge": "#a4dcae", "badgeText": "#17171a", "activity": "#e4e0d4"},
       "failed": {"color": "#f29a92", "badge": "#f29a92", "badgeText": "#17171a", "activity": "#e4e0d4", "hood": "#c0655f"},
@@ -46,6 +47,7 @@
     "columns": {
       "waiting": {"icon": "#f0a03c", "title": "#e5cc8c", "hood": "#e8963a"},
       "working": {"icon": "#a6ccf2", "title": "#e5cc8c", "hood": "#7fa9d6"},
+      "review": {"icon": "#c8b4f0", "title": "#e5cc8c", "hood": "#9a83c9"},
       "onHold": {"icon": "#cfcbc0", "title": "#e5cc8c", "hood": "#8d8c84"},
       "finished": {"icon": "#a4dcae", "title": "#e5cc8c", "hood": "#7cc08a"}
     },
@@ -70,6 +72,7 @@
     "columnIcons": {
       "waiting": "builtin:resisting",
       "working": "builtin:converting",
+      "review": "builtin:researching",
       "onHold": "builtin:idle",
       "finished": "builtin:unitReady"
     },
@@ -79,6 +82,7 @@
     "columns": {
       "waiting": {"title": "Resisting", "subtitle": "Te espera"},
       "working": {"title": "Converting", "subtitle": "Trabajando"},
+      "review": {"title": "Researching", "subtitle": "En revisión"},
       "onHold": {"title": "Idle", "subtitle": "En pausa / huérfano"},
       "finished": {"title": "Unit ready", "subtitle": "Terminado · 24 h"}
     },

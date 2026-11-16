@@ -1,8 +1,9 @@
 import SwiftUI
 import WololoKit
 
-/// The columns side by side, each at least 300 pt wide with a 1 pt divider between them, and the collapsible
-/// archive of runs finished before the last 24 h, and of the cancelled ones, underneath.
+/// The columns side by side, each at least 300 pt wide with a 1 pt divider between them, and underneath two
+/// collapsible lists: the paused and orphaned runs, and the archive of runs finished before the last 24 h and of the
+/// cancelled ones.
 struct BoardView: View {
     static let minColumnWidth: CGFloat = 300
     static let cardMargin: CGFloat = 20
@@ -13,6 +14,7 @@ struct BoardView: View {
     let selectedRunID: String?
     let select: (String) -> Void
 
+    @State private var isOnHoldOpen = false
     @State private var isArchiveOpen = false
     @Environment(\.theme) private var theme
 
@@ -35,7 +37,7 @@ struct BoardView: View {
                 .scrollIndicators(.automatic)
             }
             ThemeBand()
-            archive
+            sections
         }
     }
 
@@ -117,29 +119,36 @@ struct BoardView: View {
         return group
     }
 
-    // MARK: Archive
+    // MARK: On hold and archive
 
-    /// "Archivo · N": the label opens and closes the list of older runs.
-    private var archive: some View {
-        let label = "\(theme.spec.texts.archive) · \(board.archiveCount)"
+    /// Under the board, side by side: "En pausa / huérfano · N" (only while there is one) and "Archivo · N". Each label
+    /// opens and closes its list, the runs on hold above the older ones.
+    private var sections: some View {
+        let onHoldTitle = theme.spec.texts.columns.onHold.title
         return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                isArchiveOpen.toggle()
-            } label: {
-                Text(label)
-                    .font(theme.font(.display, size: 13))
-                    .tracking(theme.tracking(.display, size: 13))
-                    .foregroundStyle(theme.secondary)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+            HStack(spacing: 28) {
+                if !board.onHold.isEmpty {
+                    sectionToggle(
+                        "\(onHoldTitle) · \(board.onHoldCount)",
+                        isOpen: $isOnHoldOpen,
+                        help: "En pausa o sin sesión: retomalos desde su terminal con /wololo resume",
+                        accessibility: "\(onHoldTitle), \(board.onHoldCount) en pausa o sin sesión"
+                    )
+                }
+                sectionToggle(
+                    "\(theme.spec.texts.archive) · \(board.archiveCount)",
+                    isOpen: $isArchiveOpen,
+                    help: "Terminados hace más de 24 h, y cancelados",
+                    accessibility: "\(theme.spec.texts.archive), \(board.archiveCount) terminados hace más de 24 h o cancelados"
+                )
             }
-            .buttonStyle(.plain)
-            .help("Terminados hace más de 24 h, y cancelados")
-            .accessibilityLabel("\(theme.spec.texts.archive), \(board.archiveCount) terminados hace más de 24 h o cancelados")
-            .accessibilityValue(isArchiveOpen ? "abierto" : "cerrado")
 
+            if isOnHoldOpen, !board.onHold.isEmpty {
+                sectionList(board.onHold, empty: "") { holdTime($0, now: now) }
+                    .padding(.bottom, 14)
+            }
             if isArchiveOpen {
-                archiveList
+                sectionList(board.archive, empty: "Nada archivado todavía.") { $0.finishedAt ?? $0.updatedAt }
                     .padding(.bottom, 14)
             }
         }
@@ -147,19 +156,37 @@ struct BoardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func sectionToggle(_ label: String, isOpen: Binding<Bool>, help: String, accessibility: String) -> some View {
+        Button {
+            isOpen.wrappedValue.toggle()
+        } label: {
+            Text(label)
+                .font(theme.font(.display, size: 13))
+                .tracking(theme.tracking(.display, size: 13))
+                .foregroundStyle(theme.secondary)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(accessibility)
+        .accessibilityValue(isOpen.wrappedValue ? "abierto" : "cerrado")
+    }
+
+    /// The runs as rows, each with how long ago `time` was.
     @ViewBuilder
-    private var archiveList: some View {
-        if board.archive.isEmpty {
-            Text("Nada archivado todavía.")
+    private func sectionList(_ runs: [Run], empty: String, time: @escaping (Run) -> TimeInterval) -> some View {
+        if runs.isEmpty {
+            Text(empty)
                 .font(theme.font(.body, size: 12))
                 .foregroundStyle(theme.faint)
                 .padding(.vertical, 6)
         } else {
             ScrollView(.vertical) {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(board.archive.enumerated()), id: \.element.id) { index, run in
-                        ArchiveRow(run: run, now: now, isSelected: run.id == selectedRunID) { select(run.id) }
-                        if index < board.archive.count - 1 {
+                    ForEach(Array(runs.enumerated()), id: \.element.id) { index, run in
+                        ArchiveRow(run: run, now: now, time: time(run), isSelected: run.id == selectedRunID) { select(run.id) }
+                        if index < runs.count - 1 {
                             theme.cardDivider.frame(height: 1)
                         }
                     }
@@ -173,9 +200,11 @@ struct BoardView: View {
     }
 }
 
+/// A run under the board: its status dot, title, project and when it stopped or finished.
 private struct ArchiveRow: View {
     let run: Run
     let now: TimeInterval
+    let time: TimeInterval
     let isSelected: Bool
     let select: () -> Void
 
@@ -197,7 +226,7 @@ private struct ArchiveRow: View {
                 .font(theme.font(.mono, size: 11.5))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
-            Text(ago(run.finishedAt ?? run.updatedAt, now: now, lang: run.lang))
+            Text(ago(time, now: now, lang: run.lang))
                 .font(theme.font(.body, size: 12))
                 .foregroundStyle(theme.faint)
                 .frame(minWidth: 52, alignment: .trailing)
@@ -208,7 +237,7 @@ private struct ArchiveRow: View {
         .onHover { isHovered = $0 }
         .selectable(
             label: run.displayTitle,
-            value: [status.label(run.lang), run.project.display, ago(run.finishedAt ?? run.updatedAt, now: now, lang: run.lang)]
+            value: [status.label(run.lang), run.project.display, ago(time, now: now, lang: run.lang)]
                 .joined(separator: ", "),
             isSelected: isSelected,
             cornerRadius: 0,

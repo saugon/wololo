@@ -13,6 +13,8 @@ public enum RunStatus: Hashable, Sendable {
     case stalled
     case pausing
     case paused
+    /// The PR is ready and the run waits on its reviewers, until it merges or the person ends it.
+    case inReview
     case orphaned
     case done
     case failed
@@ -21,7 +23,7 @@ public enum RunStatus: Hashable, Sendable {
 
     public static let known: [RunStatus] = [
         .running, .waitingUser, .waitingPermission, .waitingAgents, .waitingCI, .waitingTests, .blocked,
-        .stalled, .pausing, .paused, .orphaned, .done, .failed, .cancelled,
+        .stalled, .pausing, .paused, .inReview, .orphaned, .done, .failed, .cancelled,
     ]
 
     public init(rawValue: String) {
@@ -40,6 +42,7 @@ public enum RunStatus: Hashable, Sendable {
         case .stalled: return "stalled"
         case .pausing: return "pausing"
         case .paused: return "paused"
+        case .inReview: return "in_review"
         case .orphaned: return "orphaned"
         case .done: return "done"
         case .failed: return "failed"
@@ -63,7 +66,9 @@ extension RunStatus: Decodable {
     }
 }
 
+/// A run in review waits on its reviewers, not on its session, so like a paused one it is never orphaned: closing the
+/// session it was opened from does not leave it lost.
 public func effectiveStatus(_ run: Run, now: TimeInterval) -> RunStatus {
-    if run.status.isTerminal || run.status == .paused { return run.status }
+    if run.status.isTerminal || run.status == .paused || run.status == .inReview { return run.status }
     return now - run.owner.heartbeatAt > orphanAfterSeconds ? .orphaned : run.status
 }

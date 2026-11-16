@@ -1,4 +1,4 @@
-export type Tone = 'text' | 'subtle' | 'claude' | 'warning' | 'error' | 'success'
+export type Tone = 'text' | 'subtle' | 'claude' | 'warning' | 'error' | 'success' | 'merged'
 
 export type Row = { text: string; tone: Tone }
 

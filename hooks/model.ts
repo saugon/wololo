@@ -44,6 +44,7 @@ export type Status =
   | 'stalled'
   | 'pausing'
   | 'paused'
+  | 'in_review'
   | 'orphaned'
   | 'done'
   | 'failed'
@@ -88,6 +89,9 @@ export const EVENT_TYPES = [
   'ci.updated',
   'pr.opened',
   'pr.ready',
+  'review.waiting',
+  'pr.merged',
+  'pr.closed',
   'signing.deferred',
   'signing.done',
   'github.published',
@@ -123,6 +127,7 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'ci.updated',
   'pr.opened',
   'pr.ready',
+  'review.waiting',
   'signing.deferred',
   'signing.done',
   'paused',
@@ -181,9 +186,9 @@ export type Tokens = { input: number; output: number; cache_read: number; cache_
 
 export type StageUsage = Tokens & { usd: number; roles: Record<string, { usd: number; tokens: number }> }
 
-export type TimeKind = 'work' | 'agents' | 'tests' | 'you' | 'paused'
+export type TimeKind = 'work' | 'agents' | 'tests' | 'you' | 'paused' | 'review'
 
-export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'you', 'paused']
+export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'you', 'paused', 'review']
 
 export type StageTime = Partial<Record<TimeKind, number>> & { roles: Record<string, number> }
 
@@ -204,6 +209,8 @@ export function timeKind(status: Status): TimeKind | null {
       return 'you'
     case 'paused':
       return 'paused'
+    case 'in_review':
+      return 'review'
     default:
       return null
   }
@@ -307,7 +314,7 @@ export type Run = {
   pr: {
     url: string
     number: number | null
-    state: 'draft' | 'ready'
+    state: 'draft' | 'ready' | 'merged' | 'closed'
     ci: 'pending' | 'passing' | 'failing' | null
   } | null
   screenshots: Array<{ file: string; caption: string }>
@@ -327,6 +334,8 @@ export type Run = {
   time?: Partial<Record<StageId, StageTime>>
   pause_requested_at?: number | null
   paused?: { note: string; since: number } | null
+  // Since when the PR waits on its reviewers: the run stays open until it merges or the person ends it.
+  pr_review?: { since: number } | null
 }
 
 export type Live = {
@@ -405,6 +414,7 @@ export function emptyRun(id: string, ts: number): Run {
     doing: null,
     pause_requested_at: null,
     paused: null,
+    pr_review: null,
   }
 }
 
@@ -705,6 +715,24 @@ export function apply(run: Run, ev: RunEvent): Run {
     case 'pr.ready':
       if (r.pr) r.pr.state = 'ready'
       break
+    case 'review.waiting':
+      r.doing = null
+      r.pr_review = { since: ev.ts }
+      break
+    case 'pr.merged':
+      if (r.pr) r.pr.state = 'merged'
+      break
+    case 'pr.closed': {
+      if (r.pr) r.pr.state = 'closed'
+      const es = r.lang === 'es'
+      const pr = r.pr?.number ? `#${r.pr.number}` : ''
+      r.waiting = {
+        on: 'user',
+        question: es ? `El PR ${pr} se cerró sin mergear: ¿lo doy por cancelado?` : `PR ${pr} was closed without merging: cancel the run?`,
+        since: ev.ts,
+      }
+      break
+    }
     case 'screenshot.saved':
       r.screenshots.push({ file: str(d.file), caption: str(d.caption) })
       break
@@ -777,11 +805,14 @@ export function deriveStatus(run: Run, live: Live): Status {
   if (tasks.some(t => t.kind === 'ci')) return 'waiting_ci'
   if (tasks.some(t => t.kind === 'tests')) return 'waiting_tests'
   if (tasks.length > 0 || liveAgents(run).length > 0) return 'waiting_agents'
+  // Nothing of the run's own is going on while its PR waits on reviewers: in review, not stalled.
+  if (run.pr_review) return 'in_review'
   return 'stalled'
 }
 
+// A run in review waits on its reviewers, not on its session: closing the session does not orphan it.
 export function effectiveStatus(run: Run, nowSeconds: number): Status {
-  if (isTerminal(run.status) || run.status === 'paused') return run.status
+  if (isTerminal(run.status) || run.status === 'paused' || run.status === 'in_review') return run.status
   return nowSeconds - run.owner.heartbeat_at > ORPHAN_AFTER_SECONDS ? 'orphaned' : run.status
 }
 
@@ -1003,6 +1034,7 @@ const BADGES: Record<Lang, Record<Status, string>> = {
     stalled: 'DETENIDO',
     pausing: 'PAUSANDO',
     paused: 'PAUSADO',
+    in_review: 'EN REVISIÓN',
     orphaned: 'SESIÓN CERRADA',
     done: 'TERMINADO',
     failed: 'FALLÓ',
@@ -1019,6 +1051,7 @@ const BADGES: Record<Lang, Record<Status, string>> = {
     stalled: 'STOPPED',
     pausing: 'PAUSING',
     paused: 'PAUSED',
+    in_review: 'IN REVIEW',
     orphaned: 'SESSION CLOSED',
     done: 'DONE',
     failed: 'FAILED',
@@ -1036,6 +1069,7 @@ const ICONS: Record<Status, string> = {
   stalled: '‖',
   pausing: '⏸',
   paused: '⏸',
+  in_review: '◎',
   orphaned: '○',
   blocked: '✕',
   failed: '✕',
@@ -1069,6 +1103,13 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number, withA
     }
     case 'orphaned':
       return '/wololo resume'
+    case 'in_review': {
+      const pr = run.pr?.number ? `PR #${run.pr.number}` : 'PR'
+      const since = run.pr_review ? ` · ${ago(run.pr_review.since)}` : ''
+      return es
+        ? `${pr} esperando review; termina al mergearse o con /wololo done${since}`
+        : `${pr} waiting on review; ends when it merges or with /wololo done${since}`
+    }
     case 'waiting_ci':
     case 'waiting_tests': {
       // The wait names what it waits on first, and a note the orchestrator wrote before that wait began is about earlier work.

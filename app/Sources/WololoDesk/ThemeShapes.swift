@@ -68,6 +68,7 @@ struct BuiltinIcon: Shape {
     enum Name: String {
         case resisting
         case converting
+        case researching
         case idle
         case unitReady
         case castle
@@ -106,6 +107,12 @@ struct BuiltinIcon: Shape {
             path.addSVGArc(to: CGPoint(x: 17, y: 17), radius: 8, sweep: false)
             path.addLine(to: CGPoint(x: 19, y: 15))
             line((19, 19), (19, 15), (15, 15))
+        case .researching:
+            // An hourglass: the run waits on others' time, the reviewers'.
+            line((5, 2), (17, 2))
+            line((5, 20), (17, 20))
+            line((6, 2), (6, 5), (11, 11), (16, 5), (16, 2))
+            line((6, 20), (6, 17), (11, 11), (16, 17), (16, 20))
         case .idle:
             path.addEllipse(in: ring)
             line((8.5, 7.5), (8.5, 14.5))

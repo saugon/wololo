@@ -131,6 +131,12 @@ public func eventLine(_ event: RunEvent, lang: Lang) -> String {
         return "PR #\(number) \(es ? "abierto" : "opened")" + draft
     case "pr.ready":
         return es ? "PR listo para revisión" : "PR ready for review"
+    case "review.waiting":
+        return es ? "PR listo, en revisión" : "PR ready, in review"
+    case "pr.merged":
+        return es ? "PR mergeado" : "PR merged"
+    case "pr.closed":
+        return es ? "PR cerrado sin mergear" : "PR closed without merging"
     case "signing.deferred":
         return es
             ? "Ítem \(s("n")) commiteado sin firma (se firma antes del push)" + suffix(" · ", shortSHA(s("sha")))

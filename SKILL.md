@@ -1,7 +1,7 @@
 ---
 name: wololo
-description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config and cancel.
-argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] [--review-pr | --review-local] [--awake] [--no-adapters] [--in-place] [--base=<branch>] [--no-pr] [--ready] [more flags: /wololo help] | help | status | history | pause | resume [run] | panel | init | config | cancel
+description: Takes an issue (a GitHub issue, free text or a local .md plan) from definition to a pull request, in stages the person can follow at a glance - context, definition with debate, plan, implementation item by item, screenshots, PR with CI. Use when the person types /wololo or asks to run wololo on an issue. Also handles /wololo status, resume, panel, init, config, done and cancel.
+argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints | --guided] [--review-pr | --review-local] [--awake] [--no-adapters] [--in-place] [--base=<branch>] [--no-pr] [--ready] [more flags: /wololo help] | help | status | history | pause | resume [run] | panel | init | config | done | cancel
 ---
 
 # wololo
@@ -29,6 +29,7 @@ Take the text after `/wololo`:
 | `panel` | `panel` (open). `panel off` closes it. |
 | `init` | Follow `stages/init.md`. |
 | `config` | The mod answers it before you see it, as `/wololo-config`: a dialog with every section. If it reaches you anyway, `get` scope `config`, show the effective config and the two config paths, offer edits with AskUserQuestion, and write the project config only after the person confirms. |
+| `done` | For a run whose PR is in review (or done without one): confirm with AskUserQuestion, then `event` `run.finished {outcome: "done", summary}`. A run still before its PR answers with where it is instead. |
 | `cancel` | Confirm with AskUserQuestion, then `event` `run.finished {outcome: "cancelled", summary}`, stop any server the run started, and leave the worktree and branch in place. |
 | anything else | Start a run (below). |
 

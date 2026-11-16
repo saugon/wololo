@@ -39,12 +39,16 @@ final class SampleDataTests: XCTestCase {
 
         let statuses = Set(runs.map { effectiveStatus($0, now: now) })
         for status: RunStatus in [.waitingUser, .waitingPermission, .blocked, .waitingAgents, .running, .waitingTests,
-                                  .waitingCI, .orphaned, .paused, .done, .failed] {
+                                  .waitingCI, .inReview, .orphaned, .paused, .done, .failed] {
             XCTAssertTrue(statuses.contains(status), status.rawValue)
         }
 
         let board = Board(runs: runs, now: now, mode: .byStatus)
         XCTAssertEqual(board.archiveCount, 1, "the run done 3 days ago")
+        XCTAssertGreaterThanOrEqual(board.onHoldCount, 2, "a paused run and an orphaned one")
+        let inReview = try XCTUnwrap(runs.first { $0.status == .inReview })
+        XCTAssertNotNil(inReview.prReview)
+        XCTAssertTrue(RunDiscard.canMarkDone(inReview, now: now), "its session closed, and it is still in review")
         XCTAssertEqual(filterRuns(runs, query: "4312").map(\.source.ref), ["4312"])
         XCTAssertGreaterThanOrEqual(filterRuns(runs, query: "", project: "saugon__wololo").count, 1)
 

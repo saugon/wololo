@@ -232,6 +232,11 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(prChip(noCI), MetaChip(text: "PR", title: "PR listo"))
         XCTAssertNil(ciRole(noCI))
         XCTAssertNil(prChip(try makeRun("r")))
+
+        let merged = try makeRun("r", ["pr": ["url": "", "number": 5, "state": "merged", "ci": "passing"]])
+        XCTAssertEqual(prChip(merged), MetaChip(text: "#5", title: "PR #5 mergeado, CI en verde"))
+        let closed = try makeRun("r", ["pr": ["url": "", "number": 5, "state": "closed"]])
+        XCTAssertEqual(prChip(closed)?.title, "PR #5 cerrado")
     }
 
     func testSourceLabel() throws {

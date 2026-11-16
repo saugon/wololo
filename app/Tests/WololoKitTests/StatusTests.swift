@@ -10,7 +10,7 @@ final class StatusTests: XCTestCase {
     func testDecodesEveryKnownStatus() {
         let raw = [
             "running", "waiting_user", "waiting_permission", "waiting_agents", "waiting_ci", "waiting_tests",
-            "blocked", "stalled", "pausing", "paused", "orphaned", "done", "failed", "cancelled",
+            "blocked", "stalled", "pausing", "paused", "in_review", "orphaned", "done", "failed", "cancelled",
         ]
         XCTAssertEqual(RunStatus.known.map(\.rawValue), raw)
         for value in raw {
@@ -36,6 +36,15 @@ final class StatusTests: XCTestCase {
         XCTAssertEqual(effectiveStatus(try run("failed", heartbeatAt: 0), now: now), .failed)
         XCTAssertEqual(effectiveStatus(try run("cancelled", heartbeatAt: 0), now: now), .cancelled)
         XCTAssertEqual(effectiveStatus(try run("pausing", heartbeatAt: 0), now: now), .orphaned)
+    }
+
+    /// A run in review waits on its reviewers, not on its session: closing the session does not orphan it.
+    func testInReviewIsNeverOrphaned() throws {
+        let now: TimeInterval = 10_000
+        XCTAssertEqual(effectiveStatus(try run("in_review", heartbeatAt: 0), now: now), .inReview)
+        XCTAssertEqual(effectiveStatus(try run("in_review", heartbeatAt: now - 5), now: now), .inReview)
+        XCTAssertFalse(RunStatus.inReview.isTerminal)
+        XCTAssertFalse(RunStatus.inReview.isWaitingOnPerson)
     }
 
     func testTerminalStatuses() {

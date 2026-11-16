@@ -185,3 +185,23 @@ test('a changed base becomes the run base, and is in what happened since the per
   expect(run.project.base).toBe('main')
   expect(sinceLastSeen(run, [changed], 125)).toEqual(['Base: feat/4542-andreani → main'])
 })
+
+test('a run whose PR is ready waits in review, works on the review, and is never orphaned', async () => {
+  const list = events(
+    ...started.map(ev => [ev.type, ev.data, ev.ts] as [RunEvent['type'], Record<string, unknown>, number]),
+    ['stage.entered', { stage: 'pr' }, 120],
+    ['pr.opened', { url: 'https://github.com/acme/shop/pull/7', number: 7, draft: false }, 130],
+    ['review.waiting', {}, 140],
+  )
+  const run = rebuild('r1', list)
+  expect(run.pr_review).toEqual({ since: 140 })
+  expect(deriveStatus(run, IDLE)).toBe('in_review')
+  expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('running')
+  const reviewing = { ...run, status: deriveStatus(run, IDLE) }
+  expect(effectiveStatus(reviewing, 140 + 3600)).toBe('in_review')
+  expect(statusDetail(reviewing, 'in_review', 200)).toBe('PR #7 esperando review; termina al mergearse o con /wololo done · hace 1m')
+  const closed = apply(run, { v: 1, seq: 9, ts: 300, run: 'r1', type: 'pr.closed', data: {} })
+  expect(closed.pr?.state).toBe('closed')
+  expect(deriveStatus(closed, IDLE)).toBe('waiting_user')
+  expect(closed.waiting?.question).toBe('El PR #7 se cerró sin mergear: ¿lo doy por cancelado?')
+})

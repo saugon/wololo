@@ -118,6 +118,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['time', { stage: 'context', kind: 'tests', seconds: 3 }],
   ['time', { stage: 'context', kind: 'you', seconds: 4 }],
   ['time', { stage: 'context', kind: 'paused', seconds: 5 }],
+  ['time', { stage: 'context', kind: 'review', seconds: 6 }],
   ['usage', { stage: 'context', role: 'main', input: 10, output: 20, cache_read: 30, cache_write: 40, usd: 0.5 }],
   ['assumption', { text: 'only tables' }],
   ['decision', { text: 'use the small plan', by: 'claude' }],
@@ -155,6 +156,9 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['pr.opened', { url: 'https://github.com/acme/shop/pull/7', number: 7, draft: true }],
   ['ci.updated', { state: 'failing' }],
   ['pr.ready', {}],
+  ['review.waiting', {}],
+  ['pr.closed', {}],
+  ['pr.merged', {}],
   ['github.published', { kind: 'pr_create', url: 'https://github.com/acme/shop/pull/7' }],
   ['screenshot.saved', { file: '01-cart.png', caption: 'the cart' }],
   ['stage.entered', { stage: 'gate_b' }],
@@ -210,6 +214,7 @@ const RUN_FIELDS = {
   time: true,
   pause_requested_at: true,
   paused: true,
+  pr_review: true,
 } satisfies Record<keyof Run, true>
 
 const STATUSES = {
@@ -223,6 +228,7 @@ const STATUSES = {
   stalled: true,
   pausing: true,
   paused: true,
+  in_review: true,
   orphaned: true,
   done: true,
   failed: true,

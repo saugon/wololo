@@ -38,6 +38,7 @@
       "ci": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
       "pausing": {"color": "#ff9933", "badge": "#ff9933", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
       "paused": {"color": "#a1a7b3", "badge": "#333844", "badgeText": "#e8eaed", "activity": "#9aa0ab"},
+      "review": {"color": "#af87ff", "badge": "#af87ff", "badgeText": "#0b0c0f", "activity": "#c3c7ce"},
       "orphaned": {"color": "#ffcc00", "badge": "#ffcc00", "badgeText": "#0b0c0f", "activity": "#ffe07a"},
       "done": {"color": "#3399ff", "badge": "#3399ff", "badgeText": "#0b0c0f", "activity": "#9aa0ab"},
       "failed": {"color": "#ff6666", "badge": "#ff6666", "badgeText": "#0b0c0f", "activity": "#ff9999"},
@@ -46,6 +47,7 @@
     "columns": {
       "waiting": {"icon": "#ffcc00", "title": "#d5d8dd"},
       "working": {"icon": "#ff9933", "title": "#d5d8dd"},
+      "review": {"icon": "#af87ff", "title": "#d5d8dd"},
       "onHold": {"icon": "#a1a7b3", "title": "#d5d8dd"},
       "finished": {"icon": "#3399ff", "title": "#d5d8dd"}
     },
@@ -62,13 +64,14 @@
     "bar": "continuous",
     "bullet": "dot",
     "statusIcon": "dot",
-    "columnIcons": {"waiting": "dot", "working": "dot", "onHold": "dot", "finished": "dot"},
+    "columnIcons": {"waiting": "dot", "working": "dot", "review": "dot", "onHold": "dot", "finished": "dot"},
     "projectIcon": "symbol:folder"
   },
   "texts": {
     "columns": {
       "waiting": {"title": "Te espera", "subtitle": ""},
       "working": {"title": "Trabajando", "subtitle": ""},
+      "review": {"title": "En revisión", "subtitle": ""},
       "onHold": {"title": "En pausa / huérfano", "subtitle": ""},
       "finished": {"title": "Terminado · 24 h", "subtitle": ""}
     },

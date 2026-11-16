@@ -2,7 +2,7 @@ export default {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "wololo/v1/run.schema.json",
   "title": "wololo run snapshot (runs/<id>/run.json)",
-  "description": "A cache of the run, rebuilt from events.jsonl when missing. Times are seconds since the Unix epoch. A reader derives `orphaned` itself: status not done/failed/cancelled and owner.heartbeat_at older than 90 seconds.",
+  "description": "A cache of the run, rebuilt from events.jsonl when missing. Times are seconds since the Unix epoch. A reader derives `orphaned` itself: status not done/failed/cancelled/paused/in_review and owner.heartbeat_at older than 90 seconds.",
   "type": "object",
   "required": [
     "schema_version",
@@ -170,6 +170,7 @@ export default {
         "stalled",
         "pausing",
         "paused",
+        "in_review",
         "done",
         "failed",
         "cancelled"
@@ -502,6 +503,9 @@ export default {
           "paused": {
             "type": "number"
           },
+          "review": {
+            "type": "number"
+          },
           "roles": {
             "type": "object",
             "additionalProperties": {
@@ -621,7 +625,9 @@ export default {
         "state": {
           "enum": [
             "draft",
-            "ready"
+            "ready",
+            "merged",
+            "closed"
           ]
         },
         "ci": {
@@ -759,6 +765,18 @@ export default {
         "note": {
           "type": "string"
         },
+        "since": {
+          "type": "number"
+        }
+      }
+    },
+    "pr_review": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Since when the PR waits on its reviewers: the run stays open, in review, until the PR merges or the person ends it.",
+      "properties": {
         "since": {
           "type": "number"
         }

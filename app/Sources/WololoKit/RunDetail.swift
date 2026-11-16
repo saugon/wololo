@@ -171,7 +171,7 @@ public func prLine(_ run: Run) -> PRLine? {
     guard let pr = run.pr else { return nil }
     let es = run.lang == .es
     let number = pr.number ?? Int((pr.url as NSString).lastPathComponent)
-    let state = pr.state == "draft" ? "draft" : (es ? "listo para revisar" : "ready for review")
+    let state = prStateLabel(pr.state, lang: run.lang)
     let role = ciRole(run)
     let ci: String?
     switch role {

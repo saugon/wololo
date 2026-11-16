@@ -123,7 +123,8 @@ private struct TimelineRow: View {
     private var color: Color {
         if entry.isMinor { return theme.muted }
         switch entry.type {
-        case "gate.resolved", "question.answered", "unblocked", "resumed": return theme.dot(.done)
+        case "gate.resolved", "question.answered", "unblocked", "resumed", "pr.merged": return theme.dot(.done)
+        case "review.waiting": return theme.dot(.inReview)
         case "gate.requested", "question.asked", "decision", "stalled": return theme.style(.waitingUser).activity
         case "blocked", "run.failed": return theme.style(.blocked).activity
         case "run.started", "run.finished", "pr.opened": return theme.text

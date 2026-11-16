@@ -16,6 +16,7 @@ public struct Run: Equatable, Sendable {
     public var blocked: Blocked?
     public var doing: Doing?
     public var paused: Paused?
+    public var prReview: PRReview?
     public var agents: [Agent]
     public var tasks: [TaskEntry]
     public var items: Items
@@ -43,6 +44,8 @@ extension Run: Decodable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case finishedAt = "finished_at"
+        // Not `review`: that top-level key already says where the change is approved ("local" or "pr").
+        case prReview = "pr_review"
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,6 +68,7 @@ extension Run: Decodable {
         blocked = c.optional(.blocked)
         doing = c.optional(.doing)
         paused = c.optional(.paused)
+        prReview = c.optional(.prReview)
         agents = c.list(.agents)
         tasks = c.list(.tasks)
         items = c.value(.items, or: Items())
@@ -202,6 +206,16 @@ extension Run {
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: AnyKey.self)
             note = c.value("note", or: "")
+            since = c.value("since", or: 0)
+        }
+    }
+
+    /// When the run's PR went into review: set while the run waits on its reviewers.
+    public struct PRReview: Equatable, Sendable, Decodable {
+        public var since: TimeInterval
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
             since = c.value("since", or: 0)
         }
     }

@@ -10,6 +10,13 @@ final class EventLabelsTests: XCTestCase {
         [eventLine(event(type, data), lang: .es), eventLine(event(type, data), lang: .en)]
     }
 
+    func testReviewEvents() {
+        XCTAssertEqual(lines("review.waiting", [:]), ["PR listo, en revisión", "PR ready, in review"])
+        XCTAssertEqual(lines("pr.merged", [:]), ["PR mergeado", "PR merged"])
+        XCTAssertEqual(lines("pr.closed", [:]), ["PR cerrado sin mergear", "PR closed without merging"])
+        XCTAssertFalse(isMinorEvent("review.waiting"))
+    }
+
     func testMainEventsInBothLanguages() {
         XCTAssertEqual(lines("run.started", ["mode": .string("checkpoints")]),
                        ["Arrancó el run · modo checkpoints", "Run started · checkpoints mode"])

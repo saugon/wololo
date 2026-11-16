@@ -65,6 +65,8 @@ extension RunStatus {
         case (.pausing, .en): return "Pausing"
         case (.paused, .es): return "En pausa"
         case (.paused, .en): return "Paused"
+        case (.inReview, .es): return "En revisión"
+        case (.inReview, .en): return "In review"
         case (.orphaned, .es): return "Huérfano"
         case (.orphaned, .en): return "Orphaned"
         case (.done, .es): return "Listo"

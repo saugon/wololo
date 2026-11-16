@@ -3,6 +3,7 @@ import Foundation
 public enum ProgressRole: String, Sendable {
     case waiting
     case working
+    case review
     case onHold
     case finished
     case failed
@@ -38,6 +39,7 @@ public struct RunProgress: Equatable, Sendable {
         switch StatusGroup(status) {
         case .waiting: role = .waiting
         case .working: role = .working
+        case .review: role = .review
         case .onHold: role = .onHold
         case .finished: role = status == .failed ? .failed : .finished
         }

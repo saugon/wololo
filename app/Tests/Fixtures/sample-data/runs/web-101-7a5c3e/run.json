@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "id": "web-101-7a5c3e",
+  "title": "Exportar el tablero a CSV",
+  "source": {
+    "kind": "github_issue",
+    "ref": "101",
+    "url": "https://github.com/acme/web/issues/101"
+  },
+  "project": {
+    "key": "acme__web",
+    "path": "/Users/demo/code/acme/web",
+    "worktree": "/Users/demo/code/acme/web/.claude/worktrees/web-web-101-7a5c3e",
+    "branch": "wololo/101-exportar-csv",
+    "base": "main"
+  },
+  "mode": "full",
+  "risk": "low",
+  "lang": "es",
+  "slot": 1,
+  "stage": {
+    "id": "pr",
+    "index": 7,
+    "total": 8,
+    "since": "@now-5800"
+  },
+  "stages": [
+    {
+      "id": "context",
+      "started_at": "@now-8300",
+      "finished_at": "@now-8005"
+    },
+    {
+      "id": "definition",
+      "started_at": "@now-8000",
+      "finished_at": "@now-7605"
+    },
+    {
+      "id": "gate_a",
+      "started_at": "@now-7600",
+      "finished_at": "@now-7305"
+    },
+    {
+      "id": "plan",
+      "started_at": "@now-7300",
+      "finished_at": "@now-6905"
+    },
+    {
+      "id": "implement",
+      "started_at": "@now-6900",
+      "finished_at": "@now-6405"
+    },
+    {
+      "id": "evidence",
+      "started_at": "@now-6400",
+      "finished_at": "@now-6205"
+    },
+    {
+      "id": "gate_b",
+      "started_at": "@now-6200",
+      "finished_at": "@now-5805"
+    },
+    {
+      "id": "pr",
+      "started_at": "@now-5800",
+      "finished_at": null
+    }
+  ],
+  "gates": {
+    "gate_a": {
+      "requested_at": "@now-7600",
+      "resolved_at": "@now-7310",
+      "outcome": "approved",
+      "by": "user"
+    },
+    "gate_b": {
+      "requested_at": "@now-6200",
+      "resolved_at": "@now-5810",
+      "outcome": "approved",
+      "by": "user"
+    }
+  },
+  "status": "in_review",
+  "waiting": null,
+  "blocked": null,
+  "agents": [],
+  "tasks": [],
+  "items": {
+    "done": 2,
+    "total": 2,
+    "current": null,
+    "list": [
+      {
+        "n": 1,
+        "title": "Ítem 1",
+        "state": "done",
+        "sha": "8b85f785eb5e07eba8331a05cbd1d47d869adad8"
+      },
+      {
+        "n": 2,
+        "title": "Ítem 2",
+        "state": "done",
+        "sha": "65433e6064d572f47f8ed415eff7cdaf91719d5e"
+      }
+    ]
+  },
+  "counts": {
+    "assumptions": 2,
+    "decisions": 3,
+    "corrections": 0,
+    "debate_turns": 2,
+    "attempts": 1,
+    "reversals": 0,
+    "nudges": 0,
+    "unsigned": 0
+  },
+  "pr": {
+    "url": "https://github.com/acme/web/pull/124",
+    "number": 124,
+    "state": "ready",
+    "ci": "passing"
+  },
+  "screenshots": [],
+  "owner": {
+    "session_id": "7f1e2a90-3c4d-4b5e-8f60-71a2b3c4d5e6",
+    "cwd": "/Users/demo/code/acme/web",
+    "heartbeat_at": "@now-5300"
+  },
+  "last_seq": 35,
+  "created_at": "@now-8306",
+  "updated_at": "@now-5400",
+  "finished_at": null,
+  "outcome": null,
+  "summary": null,
+  "doing": null,
+  "pause_requested_at": null,
+  "paused": null,
+  "review": "pr",
+  "time": {
+    "context": {
+      "roles": {
+        "explorer": 180.0
+      },
+      "work": 120.0,
+      "agents": 150.0
+    },
+    "definition": {
+      "roles": {},
+      "work": 160.0,
+      "agents": 200.0
+    },
+    "gate_a": {
+      "roles": {},
+      "work": 30.0,
+      "you": 255.0
+    },
+    "plan": {
+      "roles": {},
+      "work": 160.0,
+      "agents": 200.0
+    },
+    "implement": {
+      "roles": {
+        "implementer": 250.0,
+        "verifier": 50.0
+      },
+      "work": 200.0,
+      "agents": 250.0
+    },
+    "evidence": {
+      "roles": {},
+      "work": 80.0,
+      "agents": 100.0
+    },
+    "gate_b": {
+      "roles": {},
+      "work": 40.0,
+      "you": 340.0
+    },
+    "pr": {
+      "roles": {},
+      "work": 160.0,
+      "agents": 200.0
+    }
+  },
+  "usage": {
+    "context": {
+      "input": 40,
+      "output": 4200,
+      "cache_read": 290000,
+      "cache_write": 12000,
+      "usd": 0.3667,
+      "roles": {
+        "main": {
+          "usd": 0.3667,
+          "tokens": 306200
+        }
+      }
+    },
+    "definition": {
+      "input": 47,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "gate_a": {
+      "input": 54,
+      "output": 4200,
+      "cache_read": 290000,
+      "cache_write": 12000,
+      "usd": 0.3667,
+      "roles": {
+        "main": {
+          "usd": 0.3667,
+          "tokens": 306200
+        }
+      }
+    },
+    "plan": {
+      "input": 61,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "implement": {
+      "input": 68,
+      "output": 5000,
+      "cache_read": 350000,
+      "cache_write": 14000,
+      "usd": 0.4778,
+      "roles": {
+        "main": {
+          "usd": 0.4778,
+          "tokens": 369000
+        }
+      }
+    },
+    "evidence": {
+      "input": 75,
+      "output": 3800,
+      "cache_read": 260000,
+      "cache_write": 11000,
+      "usd": 0.3111,
+      "roles": {
+        "main": {
+          "usd": 0.3111,
+          "tokens": 274800
+        }
+      }
+    },
+    "gate_b": {
+      "input": 82,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    },
+    "pr": {
+      "input": 89,
+      "output": 4600,
+      "cache_read": 320000,
+      "cache_write": 13000,
+      "usd": 0.4222,
+      "roles": {
+        "main": {
+          "usd": 0.4222,
+          "tokens": 337600
+        }
+      }
+    }
+  },
+  "pr_review": {
+    "since": "@now-5400"
+  }
+}

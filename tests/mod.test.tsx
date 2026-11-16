@@ -117,6 +117,8 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     }
     if (cmd === 'gh') {
       gh.push(args.join(' '))
+      const found = answers.find(answer => answer.match.test(`gh ${args.join(' ')}`))
+      if (found) return done(found.stdout, found.exit)
       return done('https://github.com/acme/shop/issues/12\n')
     }
     if (cmd === 'git') {
@@ -879,6 +881,72 @@ function seedRun(host: Host, id: string, options: { waiting: boolean }) {
   host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: options.waiting ? 'waiting_permission' : 'running', outcome: null, owner }))
   host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: id, heartbeat_at: owner.heartbeat_at }))
 }
+
+// A run whose PR is open and in review, as a session left it.
+function seedReview(host: Host, id: string) {
+  const dir = `${DATA}/runs/${id}`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: id, type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', {
+        title: 'Catálogo',
+        source: { kind: 'github_issue', ref: '4796', url: null },
+        mode: 'checkpoints',
+        session_id: 's1',
+        cwd: REPO,
+        project: { key: 'acme__shop', path: REPO, worktree: null, branch: 'feat/4796-catalogo', base: 'main' },
+      }),
+      ev(2, 'stage.entered', { stage: 'pr' }),
+      ev(3, 'pr.opened', { url: 'https://github.com/acme/shop/pull/4813', number: 4813, draft: false }),
+      ev(4, 'review.waiting', {}),
+    ].join('\n') + '\n',
+  )
+  const owner = { session_id: 's1', cwd: REPO, heartbeat_at: 1_799_999_000 }
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: 'in_review', outcome: null, owner }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: id, heartbeat_at: owner.heartbeat_at }))
+}
+
+test('a run in review ends as done when its PR merges', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  const id = 'repo-4796-rev001'
+  seedReview(host, id)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"OPEN"}', exit: 0 })
+  await clock.advance(330_000)
+  expect(eventLines(host, id).map(line => line.type)).not.toContain('pr.merged')
+  host.answers.unshift({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  await clock.advance(330_000)
+  const lines = eventLines(host, id)
+  expect(lines.map(line => line.type).slice(-2)).toEqual(['pr.merged', 'run.finished'])
+  expect(lines.at(-1)?.data).toEqual({ outcome: 'done', summary: 'PR #4813 mergeado.' })
+})
+
+test('a run in review whose PR is closed without merging asks the person', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  const submitted: string[] = []
+  on('tool.call', () => ({ result: {} }))
+  on('prompt.submit', (_, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
+  const id = 'repo-4796-rev002'
+  seedReview(host, id)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"CLOSED"}', exit: 0 })
+  await clock.advance(330_000)
+  expect(eventLines(host, id).map(line => line.type)).toContain('pr.closed')
+  expect(submitted).toHaveLength(1)
+  expect(submitted[0]).toContain('closed without merging')
+  const run = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  expect(run.status).toBe('waiting_user')
+  // Asked once: the next check sees it closed already.
+  await clock.advance(330_000)
+  expect(submitted).toHaveLength(1)
+})
 
 test('a session takes the run from the instance that owned it, and the permission it left waiting goes after the last seq on disk', async ($, on) => {
   const host = fakeHost(on)

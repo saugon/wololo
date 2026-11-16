@@ -2,9 +2,11 @@ import Foundation
 
 public let finishedWindowSeconds: TimeInterval = 24 * 3600
 
+/// The board's status groups. `onHold` is not a column: its runs wait under the board, next to the archive.
 public enum StatusGroup: String, CaseIterable, Sendable {
     case waiting
     case working
+    case review
     case onHold
     case finished
 
@@ -12,6 +14,7 @@ public enum StatusGroup: String, CaseIterable, Sendable {
         switch status {
         case .waitingUser, .waitingPermission, .blocked, .stalled: self = .waiting
         case .running, .waitingAgents, .waitingTests, .waitingCI, .pausing, .unknown: self = .working
+        case .inReview: self = .review
         case .paused, .orphaned: self = .onHold
         case .done, .failed, .cancelled: self = .finished
         }
@@ -27,6 +30,8 @@ public enum StatusGroup: String, CaseIterable, Sendable {
         case (.waiting, .en): return "Waiting for you"
         case (.working, .es): return "Trabajando"
         case (.working, .en): return "Working"
+        case (.review, .es): return "En revisión"
+        case (.review, .en): return "In review"
         case (.onHold, .es): return "En pausa / huérfano"
         case (.onHold, .en): return "Paused / orphaned"
         case (.finished, .es): return "Terminado"
@@ -61,10 +66,17 @@ public struct BoardColumn: Equatable, Sendable {
 }
 
 public struct Board: Equatable, Sendable {
+    /// The status groups that get a column in the by-status board, in order. Paused and orphaned runs need someone to
+    /// pick them up, not watching, so they wait in `onHold` under the board instead.
+    public static let statusColumns: [StatusGroup] = [.waiting, .working, .review, .finished]
+
     public let columns: [BoardColumn]
+    /// Paused and orphaned runs, the last to stop first. Kept in both modes.
+    public let onHold: [Run]
     /// Finished runs older than the finished window, and cancelled ones at once, newest first. Kept in both modes.
     public let archive: [Run]
 
+    public var onHoldCount: Int { onHold.count }
     public var archiveCount: Int { archive.count }
 
     public init(runs: [Run], now: TimeInterval, mode: BoardMode) {
@@ -75,15 +87,17 @@ public struct Board: Equatable, Sendable {
         }
         let recentIDs = Set(recent.map(\.id))
         archive = byFinish(finished.filter { !recentIDs.contains($0.id) })
+        onHold = ordered(runs.filter { StatusGroup($0, now: now) == .onHold }, in: .onHold, now: now)
 
         switch mode {
         case .byStatus:
-            columns = StatusGroup.allCases.map { group in
+            columns = Self.statusColumns.map { group in
                 let members = group == .finished ? recent : runs.filter { StatusGroup($0, now: now) == group }
                 return BoardColumn(id: group.rawValue, es: group.label(.es), en: group.label(.en), runs: ordered(members, in: group, now: now))
             }
         case .byStage:
-            let active = runs.filter { StatusGroup($0, now: now) != .finished }
+            // A run in review is active, and stays in its stage (the PR's). One on hold waits under the board.
+            let active = runs.filter { ![.finished, .onHold].contains(StatusGroup($0, now: now)) }
             columns = Stage.all.enumerated().map { index, stage in
                 let members = active.filter { stageIndex($0) == index }
                 return BoardColumn(id: stage.id, es: stage.label(.es), en: stage.label(.en), runs: byStart(members))
@@ -101,10 +115,14 @@ public func isWaitingOnPerson(_ run: Run, now: TimeInterval) -> Bool {
 }
 
 /// Active runs for the widget: the ones waiting on the person first, the longest waiting first, then the others in
-/// the order they started.
+/// the order they started, and last the ones in review, which need nothing from anyone right now.
 public func widgetRuns(_ runs: [Run], now: TimeInterval) -> [Run] {
     let active = runs.filter { isActive($0, now: now) }
-    return byWait(active.filter { isWaitingOnPerson($0, now: now) }) + byStart(active.filter { !isWaitingOnPerson($0, now: now) })
+    let waiting = active.filter { isWaitingOnPerson($0, now: now) }
+    let rest = active.filter { !isWaitingOnPerson($0, now: now) }
+    let inReview = rest.filter { StatusGroup($0, now: now) == .review }
+    let others = rest.filter { StatusGroup($0, now: now) != .review }
+    return byWait(waiting) + byStart(others) + byReview(inReview)
 }
 
 public func lastFinished(_ runs: [Run], now: TimeInterval) -> Run? {
@@ -185,6 +203,7 @@ func ordered(_ runs: [Run], in group: StatusGroup, now: TimeInterval) -> [Run] {
     switch group {
     case .waiting: return byWait(runs)
     case .working: return byStart(runs)
+    case .review: return byReview(runs)
     case .onHold: return sorted(runs, newestFirst: true) { holdTime($0, now: now) }
     case .finished: return byFinish(runs)
     }
@@ -200,6 +219,11 @@ func byStart(_ runs: [Run]) -> [Run] {
     sorted(runs, newestFirst: false) { $0.createdAt }
 }
 
+/// The longest in review first: a queue waiting on merges.
+func byReview(_ runs: [Run]) -> [Run] {
+    sorted(runs, newestFirst: false, by: reviewTime)
+}
+
 /// The last to finish first.
 func byFinish(_ runs: [Run]) -> [Run] {
     sorted(runs, newestFirst: true, by: finishedTime)
@@ -210,8 +234,13 @@ func waitTime(_ run: Run) -> TimeInterval {
     [run.waiting?.since, run.blocked?.since].compactMap { $0 }.first { $0 > 0 } ?? run.createdAt
 }
 
+/// When the run went into review, else when it started.
+func reviewTime(_ run: Run) -> TimeInterval {
+    run.prReview.map(\.since).flatMap { $0 > 0 ? $0 : nil } ?? run.createdAt
+}
+
 /// When the run stopped: its pause, or for an orphan its last heartbeat.
-func holdTime(_ run: Run, now: TimeInterval) -> TimeInterval {
+public func holdTime(_ run: Run, now: TimeInterval) -> TimeInterval {
     if effectiveStatus(run, now: now) == .orphaned { return run.owner.heartbeatAt }
     if let since = run.paused?.since, since > 0 { return since }
     return run.updatedAt

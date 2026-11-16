@@ -57,6 +57,8 @@ final class BuiltInThemesTests: XCTestCase {
         XCTAssertEqual(spec.hood(.waitingUser), RGBA(hex: 0xE8963A))
         XCTAssertEqual(spec.hood(.waitingAgents), RGBA(hex: 0x7FA9D6))
         XCTAssertEqual(spec.hood(.paused), RGBA(hex: 0x8D8C84))
+        XCTAssertEqual(spec.hood(.inReview), RGBA(hex: 0x9A83C9))
+        XCTAssertEqual(spec.style(.inReview).color, RGBA(hex: 0xC8B4F0))
         XCTAssertEqual(spec.hood(.done), RGBA(hex: 0x7CC08A))
         XCTAssertEqual(spec.hood(.failed), RGBA(hex: 0xC0655F))
         XCTAssertEqual(spec.fonts.display.family, "Cinzel")
@@ -74,11 +76,12 @@ final class BuiltInThemesTests: XCTestCase {
         XCTAssertEqual(spec.shapes.bullet, .gem)
         XCTAssertEqual(spec.shapes.statusIcon, .hood)
         XCTAssertEqual(spec.shapes.columnIcons, PerColumn(
-            waiting: .builtin("resisting"), working: .builtin("converting"),
+            waiting: .builtin("resisting"), working: .builtin("converting"), review: .builtin("researching"),
             onHold: .builtin("idle"), finished: .builtin("unitReady")
         ))
         XCTAssertEqual(spec.shapes.projectIcon, .builtin("castle"))
         XCTAssertEqual(spec.columnText("finished"), ThemeSpec.ColumnText(title: "Unit ready", subtitle: "Terminado · 24 h"))
+        XCTAssertEqual(spec.columnText("review"), ThemeSpec.ColumnText(title: "Researching", subtitle: "En revisión"))
         XCTAssertEqual(spec.texts.projectsSection, "Buildings")
         XCTAssertEqual(spec.texts.counterWaiting, "idle")
         for asset in [spec.images.background?.file, spec.images.divider?.file, spec.images.band?.file] {

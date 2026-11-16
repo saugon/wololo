@@ -4,6 +4,9 @@ import Foundation
 /// so it leaves the board without opening a terminal to resume it first. It writes what the mod's own cancel writes:
 /// a `run.finished {outcome: cancelled}` line at the end of `events.jsonl`, and the snapshot as that event leaves it.
 /// A run a live session holds is never touched: that session would write it back.
+///
+/// "Marcar terminado" is its sibling for a run in review whose session is gone: the PR merged, or the person is done
+/// with it, and no session is there to notice. It writes the same, with `outcome: done`.
 public enum RunDiscard {
     public enum Failure: Error, Equatable {
         case notDiscardable
@@ -11,31 +14,54 @@ public enum RunDiscard {
     }
 
     public static func canDiscard(_ run: Run, now: TimeInterval) -> Bool {
-        !run.status.isTerminal && run.outcome == nil && now - run.owner.heartbeatAt > orphanAfterSeconds
+        !run.status.isTerminal && run.outcome == nil && isUnheld(run, now: now)
+    }
+
+    /// Only a run in review: its work is done and waits on the PR. The heartbeat is compared directly, since a run in
+    /// review is never orphaned.
+    public static func canMarkDone(_ run: Run, now: TimeInterval) -> Bool {
+        run.status == .inReview && run.outcome == nil && isUnheld(run, now: now)
     }
 
     /// Cancels the run in `runDir`, read again from disk so a session that took it back in the meantime wins.
     public static func discard(runDir: URL, now: TimeInterval = Date().timeIntervalSince1970,
                                summary: String = "Descartado desde Wololo Desk.") throws {
+        try finish(runDir: runDir, outcome: "cancelled", summary: summary, now: now, allowed: canDiscard)
+    }
+
+    /// Finishes the run in review in `runDir` as done, read again from disk like `discard`.
+    public static func markDone(runDir: URL, now: TimeInterval = Date().timeIntervalSince1970,
+                                summary: String = "Marcado como terminado desde Wololo Desk.") throws {
+        try finish(runDir: runDir, outcome: "done", summary: summary, now: now, allowed: canMarkDone)
+    }
+
+    private static func isUnheld(_ run: Run, now: TimeInterval) -> Bool {
+        now - run.owner.heartbeatAt > orphanAfterSeconds
+    }
+
+    /// Appends `run.finished {outcome, summary}` and writes the snapshot that event leaves, if `allowed` still holds
+    /// for the run as it is on disk now.
+    private static func finish(runDir: URL, outcome: String, summary: String, now: TimeInterval,
+                               allowed: (Run, TimeInterval) -> Bool) throws {
         let snapshotURL = runDir.appendingPathComponent("run.json")
         let eventsURL = runDir.appendingPathComponent("events.jsonl")
         guard let data = try? Data(contentsOf: snapshotURL),
               var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { throw Failure.unreadable(snapshotURL.path) }
         let run = try Run.decode(from: data)
-        guard canDiscard(run, now: now) else { throw Failure.notDiscardable }
+        guard allowed(run, now) else { throw Failure.notDiscardable }
 
         let id = object["id"] as? String ?? run.id
         let ts = (now * 1000).rounded() / 1000
         let seq = max(lastSeq(eventsURL), object["last_seq"] as? Int ?? 0) + 1
         let event: [String: Any] = [
             "v": 1, "seq": seq, "ts": ts, "run": id, "type": "run.finished",
-            "data": ["outcome": "cancelled", "summary": summary],
+            "data": ["outcome": outcome, "summary": summary],
         ]
         try append(JSONSerialization.data(withJSONObject: event, options: [.sortedKeys]), to: eventsURL)
 
-        object["outcome"] = "cancelled"
-        object["status"] = "cancelled"
+        object["outcome"] = outcome
+        object["status"] = outcome
         object["summary"] = summary
         object["finished_at"] = ts
         object["doing"] = NSNull()

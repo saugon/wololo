@@ -11,6 +11,11 @@ public func activityLine(_ run: Run, now: TimeInterval, prefixed: Bool = true) -
     // The mod's run.finished leaves blocked, paused and the current item behind, so they would be stale here.
     if status.isTerminal { return run.summary ?? "" }
     let es = run.lang == .es
+    // In review the plan is done, so the last item would be stale; the run waits on its reviewers.
+    if status == .inReview {
+        if let text = run.doing?.text, !text.isEmpty { return text }
+        return es ? "Esperando revisión del PR" : "Waiting for the PR's review"
+    }
     // A bare dot in the widget does not tell a permission request, a block or a pause apart, so the line says it.
     let permission = run.waiting?.on == "permission" ? (es ? "Pide permiso" : "Needs permission") : nil
     let candidates: [(prefix: String?, text: String?)] = [
@@ -116,7 +121,7 @@ public func prChip(_ run: Run) -> MetaChip? {
     let text = number.map { "#\($0)" } ?? "PR"
     let es = run.lang == .es
     var title = prLabel(run) ?? "PR"
-    title += pr.state == "draft" ? " draft" : (es ? " listo" : " ready")
+    title += " " + prStateLabel(pr.state, lang: run.lang, short: true)
     switch ciRole(run) {
     case .pending: title += es ? ", CI pendiente" : ", CI pending"
     case .passing: title += es ? ", CI en verde" : ", CI passing"
@@ -130,6 +135,18 @@ public func prChip(_ run: Run) -> MetaChip? {
 public func prLabel(_ run: Run) -> String? {
     guard let pr = run.pr else { return nil }
     return prNumber(pr).map { "PR #\($0)" } ?? "PR"
+}
+
+/// The PR's state in words: `draft`, `merged` and `closed` as the mod sets them, and any other state (`ready`) as
+/// ready, as before the mod knew merges. `short` is the chip's "listo", where "PR #12 listo" already says what is.
+public func prStateLabel(_ state: String, lang: Lang, short: Bool = false) -> String {
+    let es = lang == .es
+    switch state {
+    case "draft": return "draft"
+    case "merged": return es ? "mergeado" : "merged"
+    case "closed": return es ? "cerrado" : "closed"
+    default: return short ? (es ? "listo" : "ready") : (es ? "listo para revisar" : "ready for review")
+    }
 }
 
 private func prNumber(_ pr: Run.PullRequest) -> Int? {

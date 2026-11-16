@@ -59,6 +59,7 @@ final class ThemeTests: XCTestCase {
             (.running, claude), (.waitingAgents, claude), (.waitingTests, claude), (.waitingCI, claude), (.pausing, claude),
             (.waitingUser, warning), (.waitingPermission, warning), (.stalled, warning), (.orphaned, warning),
             (.blocked, error), (.failed, error), (.done, success), (.paused, gray), (.cancelled, gray),
+            (.inReview, RGBA(hex: 0xAF87FF)),
         ]
         for (status, tone) in tones {
             XCTAssertEqual(actual.style(status).color, tone, "\(status)")
@@ -66,6 +67,19 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(actual.style(.waitingAgents), ThemeSpec.StatusStyle(
             color: claude, badge: claude, badgeText: RGBA(hex: 0x0B0C0F), activity: RGBA(hex: 0xC3C7CE)))
         XCTAssertEqual(actual.style(.unknown("new")), actual.style(.pausing))
+    }
+
+    /// In review takes Claude Code's merged tone, for the status and for its column.
+    func testReviewTakesTheMergedTone() {
+        let actual = ThemeSpec.actual
+        let merged = RGBA(hex: 0xAF87FF)
+        XCTAssertEqual(ThemeStatus(.inReview), .review)
+        XCTAssertEqual(actual.style(.inReview), ThemeSpec.StatusStyle(
+            color: merged, badge: merged, badgeText: RGBA(hex: 0x0B0C0F), activity: RGBA(hex: 0xC3C7CE)))
+        XCTAssertEqual(actual.colors.columns.review.icon, merged)
+        XCTAssertEqual(actual.hood(.inReview), merged)
+        XCTAssertEqual(actual.barFill(.review), merged)
+        XCTAssertEqual(actual.columnText("review"), ThemeSpec.ColumnText(title: "En revisión"))
     }
 
     func testBarFillFollowsTheProgressRole() {
@@ -418,5 +432,10 @@ final class ThemeTests: XCTestCase {
         XCTAssertEqual(spec.columnText("waiting"), ThemeSpec.ColumnText(title: "Resisting", subtitle: "Te espera"))
         XCTAssertEqual(spec.texts.projectsSection, "Buildings")
         XCTAssertEqual(spec.texts.counterWaiting, "idle")
+        // Written before runs had a review: what it leaves out of the review column comes from the base theme.
+        XCTAssertEqual(spec.colors.columns.review, ThemeSpec.actual.colors.columns.review)
+        XCTAssertEqual(spec.style(.inReview), ThemeSpec.actual.style(.inReview))
+        XCTAssertEqual(spec.shapes.columnIcons.review, .dot)
+        XCTAssertEqual(spec.columnText("review"), ThemeSpec.ColumnText(title: "En revisión"))
     }
 }

@@ -12,7 +12,7 @@ final class BoardTests: XCTestCase {
         let expected: [RunStatus: StatusGroup] = [
             .waitingUser: .waiting, .waitingPermission: .waiting, .blocked: .waiting, .stalled: .waiting,
             .running: .working, .waitingAgents: .working, .waitingTests: .working, .waitingCI: .working,
-            .pausing: .working, .paused: .onHold, .orphaned: .onHold, .done: .finished, .failed: .finished,
+            .pausing: .working, .inReview: .review, .paused: .onHold, .orphaned: .onHold, .done: .finished, .failed: .finished,
             .cancelled: .finished,
         ]
         for status in RunStatus.known {
@@ -28,9 +28,11 @@ final class BoardTests: XCTestCase {
 
     func testStatusColumnsAndLabels() {
         let board = Board(runs: [], now: now, mode: .byStatus)
-        XCTAssertEqual(board.columns.map(\.id), ["waiting", "working", "onHold", "finished"])
-        XCTAssertEqual(board.columns.map { $0.label(.es) }, ["Te espera", "Trabajando", "En pausa / huérfano", "Terminado"])
-        XCTAssertEqual(board.columns.map { $0.label(.en) }, ["Waiting for you", "Working", "Paused / orphaned", "Finished"])
+        XCTAssertEqual(board.columns.map(\.id), ["waiting", "working", "review", "finished"])
+        XCTAssertEqual(board.columns.map { $0.label(.es) }, ["Te espera", "Trabajando", "En revisión", "Terminado"])
+        XCTAssertEqual(board.columns.map { $0.label(.en) }, ["Waiting for you", "Working", "In review", "Finished"])
+        XCTAssertEqual(StatusGroup.onHold.label(.es), "En pausa / huérfano")
+        XCTAssertEqual(board.onHold, [])
     }
 
     func testWaitingUserGoesFirstInTheWidgetAndIsCounted() throws {
@@ -102,8 +104,13 @@ final class BoardTests: XCTestCase {
 
         XCTAssertEqual(effectiveStatus(orphan, now: now), .orphaned)
         XCTAssertEqual(effectiveStatus(paused, now: now), .paused)
-        XCTAssertEqual(column(board, "onHold"), ["orphan", "paused"])
-        XCTAssertEqual(column(board, "working"), [])
+        XCTAssertEqual(board.onHold.map(\.id), ["orphan", "paused"])
+        XCTAssertEqual(board.onHoldCount, 2)
+        XCTAssertFalse(board.columns.flatMap(\.runs).contains { ["orphan", "paused"].contains($0.id) })
+        // Under the board in both modes, never in a stage column.
+        let byStage = Board(runs: [orphan, paused], now: now, mode: .byStage)
+        XCTAssertEqual(byStage.onHold.map(\.id), ["orphan", "paused"])
+        XCTAssertTrue(byStage.columns.allSatisfy(\.runs.isEmpty))
         XCTAssertEqual(activityLine(orphan, now: now), "sin señal hace 2m")
         XCTAssertEqual(ago(orphan.updatedAt, now: now, lang: orphan.lang), "hace 2m")
     }
@@ -186,7 +193,47 @@ final class BoardTests: XCTestCase {
                         ["owner": ["session_id": "s", "cwd": "/tmp", "heartbeat_at": now - 1000]]),
             try makeRun("paused-late", status: "paused", updatedAt: now - 2000, ["paused": ["note": "", "since": now - 2000]]),
         ]
-        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "onHold"), ["orphan", "paused-late", "paused-early"])
+        XCTAssertEqual(Board(runs: runs, now: now, mode: .byStatus).onHold.map(\.id), ["orphan", "paused-late", "paused-early"])
+    }
+
+    /// The review column is a queue waiting on merges: the longest in review first, by when it went into review.
+    func testReviewColumnQueuesByWhenTheRunWentIntoReview() throws {
+        let runs = [
+            try makeRun("late", status: "in_review", updatedAt: now - 1, ["pr_review": ["since": now - 60], "created_at": now - 9000]),
+            try makeRun("early", status: "in_review", updatedAt: now - 2, ["pr_review": ["since": now - 3600], "created_at": now - 100]),
+            try makeRun("no-since", status: "in_review", updatedAt: now - 3, ["pr_review": ["since": 0], "created_at": now - 600]),
+            try makeRun("busy", status: "running"),
+        ]
+        let board = Board(runs: runs, now: now, mode: .byStatus)
+        XCTAssertEqual(column(board, "review"), ["early", "no-since", "late"])
+        XCTAssertEqual(column(board, "working"), ["busy"])
+        XCTAssertEqual(boardCounters(runs, now: now).working, 1, "a run in review is not working")
+        XCTAssertEqual(menuBarCount(runs, now: now), 0)
+    }
+
+    /// A run in review whose session closed stays in review: it waits on its reviewers, not on the session.
+    func testRunInReviewWithoutSessionStaysInReview() throws {
+        let run = try makeRun("pr", status: "in_review", ["owner": ["heartbeat_at": now - 86400]])
+        let board = Board(runs: [run], now: now, mode: .byStatus)
+        XCTAssertEqual(column(board, "review"), ["pr"])
+        XCTAssertEqual(board.onHold, [])
+        XCTAssertTrue(isActive(run, now: now))
+        XCTAssertEqual(RunProgress(run, now: now).role, .review)
+        XCTAssertEqual(activityLine(run, now: now), "Esperando revisión del PR")
+    }
+
+    func testRunInReviewStaysInItsStageColumn() throws {
+        let run = try makeRun("pr", status: "in_review", ["stage": ["id": "pr", "index": 7, "since": 0]])
+        XCTAssertEqual(column(Board(runs: [run], now: now, mode: .byStage), "pr"), ["pr"])
+    }
+
+    func testWidgetPutsRunsInReviewAfterTheWorkingOnes() throws {
+        let runs = [
+            try makeRun("review", status: "in_review", ["pr_review": ["since": now - 600], "created_at": now - 9000]),
+            try makeRun("busy", status: "running", ["created_at": now - 300]),
+            try makeRun("asks", status: "waiting_user", ["waiting": ["on": "user", "question": "?", "since": now - 60]]),
+        ]
+        XCTAssertEqual(widgetRuns(runs, now: now).map(\.id), ["asks", "busy", "review"])
     }
 
     func testFinishedRunsShowTheLastToFinishFirst() throws {

@@ -26,7 +26,7 @@ final class LabelsTests: XCTestCase {
         let labels = RunStatus.known.map { $0.label(.es) }
         XCTAssertEqual(labels, [
             "Trabajando", "Te espera", "Pide permiso", "Agentes trabajando", "Esperando CI", "Corriendo tests",
-            "Bloqueado", "Detenido", "Pausando", "En pausa", "Huérfano", "Listo", "Falló", "Cancelado",
+            "Bloqueado", "Detenido", "Pausando", "En pausa", "En revisión", "Huérfano", "Listo", "Falló", "Cancelado",
         ])
         XCTAssertEqual(RunStatus.unknown("something_new").label(.es), "desconocido")
     }
@@ -35,7 +35,7 @@ final class LabelsTests: XCTestCase {
         let labels = RunStatus.known.map { $0.label(.en) }
         XCTAssertEqual(labels, [
             "Working", "Waiting for you", "Needs permission", "Agents working", "Waiting for CI", "Running tests",
-            "Blocked", "Stopped", "Pausing", "Paused", "Orphaned", "Done", "Failed", "Cancelled",
+            "Blocked", "Stopped", "Pausing", "Paused", "In review", "Orphaned", "Done", "Failed", "Cancelled",
         ])
         XCTAssertEqual(RunStatus.unknown("something_new").label(.en), "unknown")
     }

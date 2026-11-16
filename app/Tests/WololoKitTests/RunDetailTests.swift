@@ -195,6 +195,11 @@ final class RunDetailTests: XCTestCase {
         XCTAssertNil(bare?.url)
         XCTAssertNil(bare?.ci)
 
+        let merged = try line(["url": "", "number": 7, "state": "merged"])
+        XCTAssertEqual(merged?.text, "PR #7 · mergeado")
+        let closed = try line(["url": "", "number": 7, "state": "closed"], lang: "en")
+        XCTAssertEqual(closed?.text, "PR #7 · closed")
+
         XCTAssertNil(prLine(try makeRun("r")))
     }
 }

@@ -2,7 +2,7 @@
 
 `resume` answers with the run's stage, worktree, branch and `since` lines.
 
-1. If the run was paused, its note says where it stopped and what comes next: start there.
+1. If the run was paused, its note says where it stopped and what comes next: start there. If it is in review (`status: in_review`), nothing waits on you: its PR is checked every few minutes, and the run ends when it merges. Say so and stop, unless the person asks for changes on the PR (see `stages/06-pr.md`, **In review**).
 2. Show the `since` lines under "Mientras no estabas" (or "Since you last looked"), and what the run is waiting on.
 3. The work tree is the run's worktree, or the repository root in `branch` mode. Work on it as SKILL.md's "Where the work happens" says.
 4. Read whichever of `run_dir/spec.md`, `plan.md` and `log.md` exist.

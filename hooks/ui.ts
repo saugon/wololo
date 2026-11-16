@@ -123,6 +123,7 @@ export function progressOf(run: Run): Progress {
 
 export function toneOf(status: Status): Tone {
   if (status === 'paused') return 'subtle'
+  if (status === 'in_review') return 'merged'
   if (status === 'done') return 'success'
   if (status === 'failed' || status === 'blocked') return 'error'
   if (isWaitingOnPerson(status) || status === 'orphaned') return 'warning'
@@ -135,8 +136,8 @@ function stageSeconds(run: Run, id: string, now: number): number {
 }
 
 const TIME_NAMES: Record<'es' | 'en', Record<TimeKind | 'unmeasured', string>> = {
-  es: { work: 'trabajando', agents: 'agentes', tests: 'tests y CI', you: 'te esperó', paused: 'pausado', unmeasured: 'sin medir' },
-  en: { work: 'working', agents: 'agents', tests: 'tests and CI', you: 'waited for you', paused: 'paused', unmeasured: 'unmeasured' },
+  es: { work: 'trabajando', agents: 'agentes', tests: 'tests y CI', you: 'te esperó', paused: 'pausado', review: 'en revisión', unmeasured: 'sin medir' },
+  en: { work: 'working', agents: 'agents', tests: 'tests and CI', you: 'waited for you', paused: 'paused', review: 'in review', unmeasured: 'unmeasured' },
 }
 
 export type WorktreeInfo = {
@@ -213,8 +214,10 @@ function timeSection(run: Run, now: number): Row[] {
   })
   if (stages.length === 0) return []
   const labelWidth = Math.max(5, ...stages.map(stage => stage.label.length))
-  // Active is the stage's time less what it waited for the person and stood paused; total is its wall time, the waits included.
-  const active = (time: Partial<Record<TimeKind, number>>, wall: number) => Math.max(0, wall - (time.you ?? 0) - (time.paused ?? 0))
+  // Active is the stage's time less what it waited for the person, stood paused or waited on the PR's reviewers; total is its
+  // wall time, the waits included.
+  const active = (time: Partial<Record<TimeKind, number>>, wall: number) =>
+    Math.max(0, wall - (time.you ?? 0) - (time.paused ?? 0) - (time.review ?? 0))
   const wallTotal = stages.reduce((sum, stage) => sum + stage.wall, 0)
   const activeTotal = stages.reduce((sum, stage) => sum + active(stage.time, stage.wall), 0)
   const heads = es ? { active: 'activo', wall: 'total' } : { active: 'active', wall: 'total' }
@@ -327,6 +330,8 @@ function statusSince(run: Run, status: Status): number | null {
       return run.blocked?.since ?? null
     case 'paused':
       return run.paused?.since ?? null
+    case 'in_review':
+      return run.pr_review?.since ?? null
     case 'waiting_agents':
       return oldest([...liveAgents(run), ...liveTasks(run)].map(entry => entry.started_at))
     case 'waiting_tests':
@@ -442,8 +447,8 @@ function stagesBlock(run: Run, now: number, tone: Tone): Block {
     const isAhead = !run.outcome && run.stage !== null && index > run.stage.index
     const wall = stageSeconds(run, stage.id, now)
     const parts = run.time?.[stage.id]
-    // Waited is what the stage stood waiting for the person or paused; active is the rest of its wall time.
-    const waited = parts ? Math.min(wall, (parts.you ?? 0) + (parts.paused ?? 0)) : 0
+    // Waited is what the stage stood waiting for the person, paused or on the PR's reviewers; active is the rest of its wall time.
+    const waited = parts ? Math.min(wall, (parts.you ?? 0) + (parts.paused ?? 0) + (parts.review ?? 0)) : 0
     const active = wall - waited
     const used = run.usage?.[stage.id]
     totals.active += active
@@ -532,7 +537,7 @@ export function flatten(blocks: readonly Block[]): Row[] {
     rows.push({ text: block.label, tone: 'subtle' })
     for (const line of [...(block.head ?? []), ...block.lines]) {
       const main = line.reduce<Span | undefined>((best, part) => (part.text.trim().length > (best?.text.trim().length ?? -1) ? part : best), undefined)
-      const tone = (['text', 'subtle', 'claude', 'warning', 'error', 'success'] as const).find(name => name === main?.tone) ?? 'text'
+      const tone = (['text', 'subtle', 'claude', 'warning', 'error', 'success', 'merged'] as const).find(name => name === main?.tone) ?? 'text'
       rows.push({ text: `  ${line.map(part => part.text).join('')}`.trimEnd(), tone })
     }
   }

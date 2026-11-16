@@ -125,6 +125,10 @@ const AWAKE_RENEW_TICKS = 240
 let awakeRenewAt = 0
 const HEARTBEAT_TICKS = 15
 const REDRAW_TICKS = 30
+// How often, in seconds, a run in review asks GitHub about its PR. A tick that finds the previous one still writing is skipped,
+// so this is measured on the clock, not in ticks.
+const PR_CHECK_SECONDS = 300
+let prCheckedAt = 0
 const MAX_NUDGES = 2
 const RECENT = 40
 const AGENT_GRACE_SECONDS = 20
@@ -1674,6 +1678,47 @@ async function finishedJob($: Engine, job: AdapterJob): Promise<Ran | null> {
 }
 
 // While a background step runs, its status command says on the card what the tool is doing, at most once a minute.
+// While the run is in review and idle, its PR decides how it ends: merged finishes it, closed asks the person whether to
+// cancel it, reopened takes it back to review. Only the session that holds the run asks; a closed session leaves it in
+// review until /wololo resume.
+async function checkPr($: Engine) {
+  if (!run || run.outcome || !run.pr_review || !run.pr?.number || run.status !== 'in_review') return
+  const now = await nowSeconds($)
+  if (prCheckedAt === 0) prCheckedAt = now
+  if (now - prCheckedAt < PR_CHECK_SECONDS) return
+  prCheckedAt = now
+  const n = run.pr.number
+  const ran = await $.process
+    .run(['gh', 'pr', 'view', String(n), '--json', 'state'], { cwd: workdir(), timeoutMs: 30_000 })
+    .catch(() => undefined)
+  if (!ran || ran.exitCode !== 0 || !run || run.outcome) return
+  let state = ''
+  try {
+    const parsed: unknown = JSON.parse(ran.stdout)
+    state = isObject(parsed) && typeof parsed.state === 'string' ? parsed.state : ''
+  } catch {
+    return
+  }
+  const es = run.lang === 'es'
+  if (state === 'MERGED') {
+    await emit($, 'pr.merged', {})
+    await emit($, 'run.finished', { outcome: 'done', summary: es ? `PR #${n} mergeado.` : `PR #${n} merged.` })
+    return
+  }
+  if (state === 'OPEN' && run.pr?.state === 'closed') {
+    await emit($, 'pr.ready', {})
+    return
+  }
+  if (state !== 'CLOSED' || run.pr?.state === 'closed') return
+  await emit($, 'pr.closed', {})
+  if (live.isTurnRunning || !(await isOwner($))) return
+  void $.prompt
+    .submit({
+      text: `wololo: PR #${n} of run ${run.id} was closed without merging. Ask the person with AskUserQuestion (header "PR cerrado") whether to cancel the run, and record run.finished {outcome: "cancelled", summary} with ${TOOL_PREFIX}event if they say so; otherwise the run stays in review.`,
+    })
+    .catch(() => undefined)
+}
+
 async function checkJob($: Engine) {
   const job = run?.adapter_job
   if (!run || run.outcome || !job) return
@@ -1888,7 +1933,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -2239,6 +2284,7 @@ function startTicking($: Engine) {
       ticks += 1
       if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
       if (ticks % HEARTBEAT_TICKS === 0) await checkJob($)
+      if (ticks % HEARTBEAT_TICKS === 0) await checkPr($)
       if (ticks % REDRAW_TICKS === 0 && run && !run.outcome) await refresh($)
       if (config.keep_awake && run && !run.outcome && ticks >= awakeRenewAt) {
         await keepAwake($)

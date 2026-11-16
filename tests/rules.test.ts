@@ -315,3 +315,14 @@ test('a changed base needs the branch it moves to', async () => {
   expect(checkEvent(runAt('checkpoints'), 'base.changed', { to: 'main' })).toBe(null)
   expect(checkEvent(runAt('checkpoints'), 'base.changed', {})).toMatch(/data.to/)
 })
+
+test('review.waiting needs the pr stage and an open PR', async () => {
+  expect(checkEvent(runAt('checkpoints'), 'review.waiting', {})).toMatch(/pr stage/)
+  expect(checkEvent(runAt('checkpoints', [['stage.entered', { stage: 'pr' }, 3]]), 'review.waiting', {})).toMatch(/pr.opened/)
+  const opened = runAt('checkpoints', [
+    ['stage.entered', { stage: 'pr' }, 3],
+    ['pr.opened', { url: 'https://github.com/acme/shop/pull/7', number: 7, draft: false }, 4],
+  ])
+  expect(checkEvent(opened, 'review.waiting', {})).toBe(null)
+  expect(checkEvent(opened, 'pr.merged', {})).toMatch(/Unknown event type/)
+})
