@@ -417,6 +417,24 @@ export function ports(
   })
 }
 
+// A branch from config.branch. A text source has no ref: the branch goes without it, not with a placeholder, and the separators
+// the empty ref leaves behind are dropped.
+export function branchName(template: string, vars: { repo: string; run: string; ref: string; slug: string }): string {
+  return expand(template, vars)
+    .replace(/\/-+/g, '/')
+    .replace(/-+\//g, '/')
+    .replace(/-{2,}/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^[-/]+|[-/]+$/g, '')
+}
+
+// The ref a source gives a branch: an issue's number, a plan file's name, nothing for free text.
+export function branchRef(source: { kind: string; ref: string }): string {
+  if (source.kind === 'github_issue') return source.ref.replace(/^#/, '')
+  if (source.kind === 'file') return slugify(source.ref.split('/').pop() ?? 'plan', 16)
+  return ''
+}
+
 // The databases of the instance in the slot, from config.instance.databases.
 export function databaseNames(config: Config, slot: number): string[] {
   return config.instance.databases.map(name => expand(name, { slot })).filter(Boolean)

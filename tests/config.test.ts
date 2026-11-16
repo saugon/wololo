@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { DEFAULT_CONFIG, envPrefix, expand, globToRegExp, parseFlags, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv, withOverrides } from '../hooks/config'
+import { DEFAULT_CONFIG, branchName, branchRef, envPrefix, expand, globToRegExp, parseFlags, planTouched, ports, projectKey, resolve, riskyFiles, slugify, validate, withEnv, withOverrides } from '../hooks/config'
 import { helpText } from '../hooks/help'
 
 test('project config overrides global, which overrides defaults; arrays replace', async () => {
@@ -122,4 +122,12 @@ test("the help says, next to each launch flag, what the project's config does wi
   expect(text).toContain('(sin flag: --base=develop)')
   expect(text).toContain('(sin flag: no hay adaptadores configurados)')
   expect(helpText('en', DEFAULT_CONFIG)).toContain('--checkpoints: stops to approve the spec and the PR (without a flag)')
+})
+
+test('a branch takes the issue number or the plan name, and a text source leaves no placeholder behind', async () => {
+  const vars = { repo: 'shop', run: 'shop-txt-abc123', slug: 'split-payments' }
+  expect(branchName('feat/{ref}-{slug}', { ...vars, ref: branchRef({ kind: 'github_issue', ref: '#4734' }) })).toBe('feat/4734-split-payments')
+  expect(branchName('feat/{ref}-{slug}', { ...vars, ref: branchRef({ kind: 'file', ref: 'docs/plans/pagos.md' }) })).toBe('feat/pagos-md-split-payments')
+  expect(branchName('feat/{ref}-{slug}', { ...vars, ref: branchRef({ kind: 'text', ref: 'x' }) })).toBe('feat/split-payments')
+  expect(branchName('wololo/{ref}/{slug}', { ...vars, ref: '' })).toBe('wololo/split-payments')
 })

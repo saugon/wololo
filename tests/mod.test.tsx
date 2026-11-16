@@ -383,6 +383,24 @@ test("the run's slot follows the instance the project gave its work tree, and th
   expect(host.commands).toContain('ps -A -o command=')
 })
 
+test('the branch gets its name from the spec, by the config template, until it is on origin', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Pagos parciales' } as never)).result)
+  expect(started.branch).toBe('wololo/12-pagos-parciales')
+  host.git.set('branch -m wololo/12-pagos-parciales wololo/12-split-payments', '')
+  const named = parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'branch.named', data: { slug: 'Split payments' } } as never)).result)
+  expect(named.branch).toBe('wololo/12-split-payments')
+  const run = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  expect(run.project.branch).toBe('wololo/12-split-payments')
+  expect(host.commands).toContain('git branch -m wololo/12-pagos-parciales wololo/12-split-payments')
+
+  host.git.set('ls-remote --exit-code --heads origin wololo/12-split-payments', 'abc\trefs/heads/wololo/12-split-payments')
+  const refused = String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'branch.named', data: { slug: 'partial payments' } } as never)).result)
+  expect(refused).toContain('already on origin')
+})
+
 test('launch flags change the config for that run only, and an unknown one is refused', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))

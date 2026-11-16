@@ -25,6 +25,8 @@ import {
   withEnv,
   withOverrides,
   databaseNames,
+  branchName,
+  branchRef,
 } from './config'
 import {
   type AdapterJob,
@@ -1185,6 +1187,27 @@ async function inspectWorktree($: Engine) {
   }
 }
 
+// The branch's name once the spec says what the change is: config.branch with the slug given, in place of the one the title gave at
+// the start. Only before the branch leaves the machine: once pushed or with a PR, its name is what others already see.
+async function nameBranch($: Engine, data: Record<string, unknown>): Promise<string> {
+  if (!run || !paths) return fail('No active run in this session.')
+  if (run.outcome) return fail(`The run already finished (${run.outcome}).`)
+  const slug = slugify(typeof data.slug === 'string' ? data.slug : '', 40)
+  if (slug === 'run') return fail('branch.named needs data.slug: a few words, in the language of the repository\'s branches, on what the change does.')
+  const from = run.project.branch
+  const dir = run.project.worktree ?? run.project.path
+  if (!from || !dir) return fail('The run has no branch to name.')
+  const to = branchName(config.branch, { repo: run.project.path.split('/').pop() ?? 'repo', run: run.id, ref: branchRef(run.source), slug })
+  if (to === from) return ok({ ok: true, branch: from })
+  if (run.pr) return fail(`The PR is open on ${from}: the branch keeps its name.`)
+  if ((await git($, dir, ['ls-remote', '--exit-code', '--heads', 'origin', from])) !== null)
+    return fail(`${from} is already on origin: the branch keeps its name.`)
+  if ((await git($, dir, ['rev-parse', '--verify', '--quiet', `refs/heads/${to}`])) !== null) return fail(`A branch ${to} already exists.`)
+  if ((await git($, dir, ['branch', '-m', from, to])) === null) return fail(`git branch -m ${from} ${to} failed.`)
+  if (!(await emit($, 'branch.renamed', { from, to, reason: 'named' }))) return notOwner(run.id)
+  return ok({ ok: true, branch: to })
+}
+
 // The instance the project gave the work tree (config.instance.read), or null when it has none or says something else.
 async function projectInstance($: Engine, dir: string): Promise<number | null> {
   if (!config.instance.read) return null
@@ -1324,7 +1347,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
         : 'txt'
   const id = `${slugify(info.repoName, 24)}-${slugify(ref, 16)}-${hex(6)}`
   const vars = { repo: info.repoName, run: id, ref, slug: slugify(title, 30) }
-  const branch = expand(config.branch, vars)
+  const branch = branchName(config.branch, { ...vars, ref: branchRef(source) })
   const worktree = config.isolation === 'worktree' ? normalize(`${info.mainPath}/${expand(config.worktree_dir, vars)}`) : null
   if (worktree) await excludeInsideRepo($, info.mainPath, worktree)
   const mode = ['full', 'checkpoints', 'guided'].includes(String(input.mode)) ? String(input.mode) : (flags.mode ?? config.autonomy)
@@ -1474,6 +1497,7 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   // The tool's input arrives frozen; copy it so the snapshot and tree hashes can be added.
   const data: Record<string, unknown> = isObject(input.data) ? { ...input.data } : {}
   const worktree = run.project.worktree
+  if (type === 'branch.named') return nameBranch($, data)
   if (type === 'base.changed') {
     if (typeof data.to === 'string') data.to = data.to.trim().replace(/^origin\//, '')
     data.from = run.project.base ?? config.pr.base
@@ -1964,7 +1988,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, branch.named {slug} (renames the run's branch from config.branch with that slug, a few words on what the change does; at the start of the plan stage, before anything is pushed), base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {

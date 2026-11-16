@@ -80,7 +80,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `paths.context` | docs and folders the context stage reads first |
 | `debate.depth`, `debate.critic`, `debate.external_cmd` | how hard specs and plans are challenged, and by whom |
 | `review.reviewer` | `claude`, `external` or `both` |
-| `isolation`, `worktree_dir`, `branch` | a worktree per run, or a branch in place |
+| `isolation`, `worktree_dir`, `branch` | a worktree per run, or a branch in place. `branch` takes `{ref}` (the issue number or plan name; nothing for free text) and `{slug}`: the title's at the start, and at the plan stage a few words the run picks from the spec, while the branch is not on origin yet |
 | `tests.touched` | how to run some test files: `{match: <glob>, cmd: "... {files}"}`. During development, wololo runs the tests the run created or changed |
 | `tests.suite`, `tests.e2e`, `tests.suite_runs`, `tests.e2e_runs` | the full suites, run once at the end, `local` or left to `ci` |
 | `tests.follow`, `tests.rules_from` | `project` makes the project's own testing rules (in those files) win over wololo's |
