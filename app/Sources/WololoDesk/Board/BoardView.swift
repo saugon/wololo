@@ -2,7 +2,7 @@ import SwiftUI
 import WololoKit
 
 /// The columns side by side, each at least 300 pt wide with a 1 pt divider between them, and the collapsible
-/// archive of runs finished before the last 24 h underneath.
+/// archive of runs finished before the last 24 h, and of the cancelled ones, underneath.
 struct BoardView: View {
     static let minColumnWidth: CGFloat = 300
     static let cardMargin: CGFloat = 20
@@ -134,8 +134,8 @@ struct BoardView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help("Terminados hace más de 24 h")
-            .accessibilityLabel("\(theme.spec.texts.archive), \(board.archiveCount) terminados hace más de 24 h")
+            .help("Terminados hace más de 24 h, y cancelados")
+            .accessibilityLabel("\(theme.spec.texts.archive), \(board.archiveCount) terminados hace más de 24 h o cancelados")
             .accessibilityValue(isArchiveOpen ? "abierto" : "cerrado")
 
             if isArchiveOpen {

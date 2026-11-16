@@ -62,14 +62,17 @@ public struct BoardColumn: Equatable, Sendable {
 
 public struct Board: Equatable, Sendable {
     public let columns: [BoardColumn]
-    /// Finished runs older than the finished window, newest first. Kept in both modes.
+    /// Finished runs older than the finished window, and cancelled ones at once, newest first. Kept in both modes.
     public let archive: [Run]
 
     public var archiveCount: Int { archive.count }
 
     public init(runs: [Run], now: TimeInterval, mode: BoardMode) {
         let finished = runs.filter { StatusGroup($0, now: now) == .finished }
-        let recent = finished.filter { now - finishedTime($0) <= finishedWindowSeconds }
+        // A cancelled run, discarded from here or from its session, is not worth watching for a day: it goes straight to the archive.
+        let recent = finished.filter {
+            effectiveStatus($0, now: now) != .cancelled && now - finishedTime($0) <= finishedWindowSeconds
+        }
         let recentIDs = Set(recent.map(\.id))
         archive = byRecentUpdate(finished.filter { !recentIDs.contains($0.id) })
 

@@ -137,6 +137,18 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(board.archive.map(\.id), ["past-edge"])
     }
 
+    func testCancelledRunsGoStraightToTheArchive() throws {
+        let runs = [
+            try makeRun("discarded", status: "cancelled", updatedAt: now - 60, ["finished_at": now - 60]),
+            try makeRun("shipped", status: "done", updatedAt: now - 120, ["finished_at": now - 120]),
+            try makeRun("broke", status: "failed", updatedAt: now - 180, ["finished_at": now - 180]),
+        ]
+        let board = Board(runs: runs, now: now, mode: .byStatus)
+
+        XCTAssertEqual(column(board, "finished"), ["shipped", "broke"])
+        XCTAssertEqual(board.archive.map(\.id), ["discarded"])
+    }
+
     func testColumnsSortByMostRecentUpdate() throws {
         let runs = [
             try makeRun("b", updatedAt: now - 30),
