@@ -1,9 +1,9 @@
 import AppKit
 import WololoKit
 
-/// Brings to the front the terminal a session runs in, looked for by its directory, as Megadesk's `focusByCwd`: every
-/// running iTerm2 and Ghostty lists its sessions, `matchPane` picks one (the exact directory first, in either
-/// terminal), and that one is selected. Only terminals already running are asked, through AppleScript, which needs
+/// Brings to the front the terminal a session runs in: every running iTerm2 and Ghostty lists its sessions, and
+/// `matchPane` picks one, by the tty of the session's Claude Code process when it is found (`sessionTTY`), else by its
+/// directory as Megadesk's `focusByCwd` (the exact directory first, in either terminal), and that one is selected. Only terminals already running are asked, through AppleScript, which needs
 /// the Automation permission for each: macOS asks for it with `NSAppleEventsUsageDescription` (`Resources/Info.plist`),
 /// and denies the scripts without asking when that key, or under the hardened runtime the
 /// `com.apple.security.automation.apple-events` entitlement, is missing.
@@ -30,19 +30,20 @@ enum TerminalFocuser {
     }
 
     /// `.denied` only when no session was found and a terminal refused a script.
-    static func focus(cwd: String, projectPath: String) async -> FocusResult {
-        guard !cwd.isEmpty else { return .notFound }
+    static func focus(sessionID: String, cwd: String, projectPath: String) async -> FocusResult {
+        guard !cwd.isEmpty || !sessionID.isEmpty else { return .notFound }
         let (result, app) = await withCheckedContinuation { continuation in
             queue.async {
-                continuation.resume(returning: search(cwd: cwd, projectPath: projectPath))
+                let tty = sessionTTY(sessionID)
+                continuation.resume(returning: search(cwd: cwd, projectPath: projectPath, tty: tty))
             }
         }
-        if result == .found && app == .ghostty { await bringGhosttyForward() }
+        if result == .found && app == .ghostty { await releaseKeyWindow() }
         return result
     }
 
     /// The result, and the terminal brought to the front.
-    private static func search(cwd: String, projectPath: String) -> (FocusResult, TerminalApp?) {
+    private static func search(cwd: String, projectPath: String, tty: String) -> (FocusResult, TerminalApp?) {
         var listings: [TerminalListing] = []
         var denied: TerminalApp?
         for app in TerminalApp.allCases where isRunning(app) {
@@ -54,14 +55,40 @@ enum TerminalFocuser {
         }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let notFound = denied.map { FocusResult.denied($0.rawValue) } ?? .notFound
-        guard let match = matchPane(cwd: cwd, projectPath: projectPath, home: home, in: listings) else {
+        guard let match = matchPane(cwd: cwd, projectPath: projectPath, home: home, tty: tty, in: listings) else {
             return (notFound, nil)
         }
-        switch run(focusScript(match), in: match.app) {
+        // While a window comes to the front, Ghostty can list its windows half-updated and the script fails midway:
+        // one more try, a moment later, before taking the session as not found and opening a terminal beside it.
+        var outcome = run(focusScript(match), in: match.app)
+        if case .failed = outcome {
+            Thread.sleep(forTimeInterval: 0.3)
+            outcome = run(focusScript(match), in: match.app)
+        }
+        switch outcome {
         case .flag(true): return (.found, match.app)
         case .denied: return (.denied(match.app.rawValue), nil)
         case .value, .flag(false), .failed: return (notFound, nil)
         }
+    }
+
+    /// The tty of the Claude Code process running the session, or "" when it is not found: its pid from
+    /// `~/.claude/sessions`, then `ps`, which also says whether that pid is still a `claude` process.
+    private static func sessionTTY(_ sessionID: String) -> String {
+        let sessions = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/sessions")
+        guard let pid = sessionPID(sessionID, in: sessions) else { return "" }
+        let ps = Process()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-o", "tty=,comm=", "-p", String(pid)]
+        let out = Pipe()
+        ps.standardOutput = out
+        ps.standardError = FileHandle.nullDevice
+        guard (try? ps.run()) != nil else { return "" }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        ps.waitUntilExit()
+        let columns = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isWhitespace)
+        guard columns.count >= 2, (columns.last.map { ($0 as NSString).lastPathComponent } ?? "") == "claude" else { return "" }
+        return ttyPath(String(columns[0]))
     }
 
     private static func isRunning(_ app: TerminalApp) -> Bool {
@@ -70,8 +97,8 @@ enum TerminalFocuser {
 
     // MARK: Scripts
 
-    /// One `id <tab> job <tab> path` line per session: iTerm2's tty, foreground job and directory; Ghostty's terminal
-    /// id and working directory (it does not report the job).
+    /// One `id <tab> job <tab> path <tab> tty` line per session: iTerm2's tty, foreground job, directory and tty again;
+    /// Ghostty's terminal id, working directory and tty (it does not report the job).
     private static func listScript(_ app: TerminalApp) -> String {
         switch app {
         case .iTerm2:
@@ -90,7 +117,7 @@ enum TerminalFocuser {
                             try
                                 set jn to (variable s named "jobName")
                             end try
-                            set out to out & (tty of s) & d & jn & d & p & linefeed
+                            set out to out & (tty of s) & d & jn & d & p & d & (tty of s) & linefeed
                         end repeat
                     end repeat
                 end repeat
@@ -109,7 +136,11 @@ enum TerminalFocuser {
                             try
                                 set p to (working directory of term)
                             end try
-                            set out to out & ((id of term) as text) & d & d & p & linefeed
+                            set y to ""
+                            try
+                                set y to (tty of term)
+                            end try
+                            set out to out & ((id of term) as text) & d & d & p & d & y & linefeed
                         end repeat
                     end repeat
                 end repeat
@@ -142,15 +173,17 @@ enum TerminalFocuser {
             end tell
             """
         case .ghostty:
+            // `activate window` brings that window to the front: the app's own `activate` brings back the window that
+            // was last active instead, whichever holds the terminal.
             return """
             tell application "Ghostty"
                 repeat with w in windows
                     repeat with t in tabs of w
                         repeat with term in terminals of t
                             if ((id of term) as text) is \(id) then
+                                activate window w
                                 select tab t
                                 focus term
-                                activate
                                 return true
                             end if
                         end repeat
@@ -162,13 +195,11 @@ enum TerminalFocuser {
         }
     }
 
-    /// AppleScript's `activate` alone does not always move the keyboard focus when the click came from a
-    /// non-activating panel: give up the key window, then activate Ghostty from this app.
+    /// A click from a non-activating panel can leave it holding the keyboard: give up the key window. Ghostty is not
+    /// activated from here: activating the app brings back its last active window, not the one the script raised.
     @MainActor
-    private static func bringGhosttyForward() {
+    private static func releaseKeyWindow() {
         NSApp.keyWindow?.resignKey()
-        NSRunningApplication.runningApplications(withBundleIdentifier: ghosttyID).first?
-            .activate(from: .current)
     }
 
     // MARK: AppleScript

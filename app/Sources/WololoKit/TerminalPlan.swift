@@ -63,16 +63,18 @@ public enum TerminalApp: String, Equatable, Sendable, CaseIterable {
 }
 
 /// An open terminal session, as the terminal reports it: its id (iTerm2's tty, Ghostty's terminal id), the job in the
-/// foreground (iTerm2 only) and its directory.
+/// foreground (iTerm2 only), its directory and its tty device (`/dev/ttys001`).
 public struct TerminalPane: Equatable, Sendable {
     public var id: String
     public var job: String
     public var path: String
+    public var tty: String
 
-    public init(id: String, job: String, path: String) {
+    public init(id: String, job: String, path: String, tty: String = "") {
         self.id = id
         self.job = job
         self.path = path
+        self.tty = tty
     }
 }
 
@@ -94,12 +96,22 @@ public struct PaneMatch: Equatable, Sendable {
     public var isExact: Bool
 }
 
-/// The pane the session started in `cwd` most likely runs in, across every terminal's listing. `owner.cwd` is where
+/// The pane the session runs in, across every terminal's listing. When the session's tty is known, the pane on that tty
+/// is it, whatever directory the terminal reports: several sessions of one repository share their `cwd`, and a
+/// terminal's reported directory can lag behind. Otherwise, the pane it started in `cwd` most likely. `owner.cwd` is where
 /// the shell was when the session started, so a pane in that exact directory wins, in any terminal, the agent's
 /// `node` job first, then in listing order. Only when none is exact does a pane in a folder above `cwd` count, and only
 /// one inside the project (never home or `/`), the deepest first: a shell left at `~` must not stand for every run.
 /// Panes in folders below `cwd` (another worktree of the repo) never count. Paths are compared normalized.
-public func matchPane(cwd: String, projectPath: String, home: String, in listings: [TerminalListing]) -> PaneMatch? {
+public func matchPane(cwd: String, projectPath: String, home: String, tty: String = "", in listings: [TerminalListing]) -> PaneMatch? {
+    let device = ttyPath(tty)
+    if !device.isEmpty {
+        for listing in listings {
+            if let pane = listing.panes.first(where: { ttyPath($0.tty) == device }) {
+                return PaneMatch(app: listing.app, pane: pane, isExact: true)
+            }
+        }
+    }
     let target = normalizedPath(cwd)
     guard !target.isEmpty else { return nil }
     let candidates = listings.flatMap { listing in
@@ -138,7 +150,32 @@ public func normalizedPath(_ path: String) -> String {
     return resolved
 }
 
-/// Parses the tab-separated `id, job, path` lines the listing scripts return, skipping lines without an id.
+/// A tty as a device path: `ttys001` and `/dev/ttys001` both read `/dev/ttys001`; `??` (no terminal) and empty read "".
+public func ttyPath(_ tty: String) -> String {
+    let trimmed = tty.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty || trimmed.hasPrefix("?") { return "" }
+    return trimmed.hasPrefix("/") ? trimmed : "/dev/" + trimmed
+}
+
+/// The pid of the Claude Code process that runs `sessionID`, from the `<pid>.json` files Claude Code keeps in
+/// `~/.claude/sessions` (`{"pid": …, "sessionId": …}`), or nil when none names it. Whether that pid still runs is
+/// for the caller to check.
+public func sessionPID(_ sessionID: String, in directory: URL) -> Int32? {
+    guard !sessionID.isEmpty,
+          let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path)
+    else { return nil }
+    for name in names where name.hasSuffix(".json") {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent(name)),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["sessionId"] as? String == sessionID,
+              let pid = (object["pid"] as? NSNumber)?.int32Value, pid > 1
+        else { continue }
+        return pid
+    }
+    return nil
+}
+
+/// Parses the tab-separated `id, job, path[, tty]` lines the listing scripts return, skipping lines without an id.
 public func parsePanes(_ raw: String) -> [TerminalPane] {
     raw.split(whereSeparator: \.isNewline).compactMap { line in
         let columns = line.components(separatedBy: "\t")
@@ -146,7 +183,8 @@ public func parsePanes(_ raw: String) -> [TerminalPane] {
         return TerminalPane(
             id: columns[0],
             job: columns[1].trimmingCharacters(in: .whitespaces),
-            path: columns[2]
+            path: columns[2],
+            tty: columns.count >= 4 ? columns[3].trimmingCharacters(in: .whitespacesAndNewlines) : ""
         )
     }
 }

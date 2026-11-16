@@ -171,12 +171,51 @@ final class TerminalPlanTests: XCTestCase {
         XCTAssertEqual(normalizedPath("/nonexistent/a/../b/./c"), "/nonexistent/b/c")
     }
 
+    func testTheSessionsTtyWinsOverTheDirectory() {
+        // Two sessions of one repository: the directory alone would pick the first tab every time.
+        let first = TerminalPane(id: "G1", job: "", path: "/Users/x/repo", tty: "/dev/ttys000")
+        let second = TerminalPane(id: "G2", job: "", path: "/Users/x/repo", tty: "/dev/ttys001")
+        let elsewhere = TerminalPane(id: "G3", job: "", path: "/Users/x/other", tty: "/dev/ttys012")
+        let listing = ghostty(first, second, elsewhere)
+        let find = { (tty: String) in matchPane(cwd: "/Users/x/repo", projectPath: "/Users/x/repo", home: "/Users/x", tty: tty, in: [listing]) }
+        XCTAssertEqual(find("ttys001")?.pane.id, "G2")
+        // The terminal's directory can lag behind the session's: the tty still finds it.
+        XCTAssertEqual(find("/dev/ttys012"), PaneMatch(app: .ghostty, pane: elsewhere, isExact: true))
+        // No tty, or one no pane is on, falls back to the directory.
+        XCTAssertEqual(find("")?.pane.id, "G1")
+        XCTAssertEqual(find("ttys099")?.pane.id, "G1")
+    }
+
+    func testTtyPath() {
+        XCTAssertEqual(ttyPath("ttys001"), "/dev/ttys001")
+        XCTAssertEqual(ttyPath(" /dev/ttys001\n"), "/dev/ttys001")
+        XCTAssertEqual(ttyPath("??"), "")
+        XCTAssertEqual(ttyPath(""), "")
+    }
+
+    func testSessionPIDReadsClaudeCodesSessionFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try #"{"pid": 23075, "sessionId": "d2dc", "cwd": "/repo"}"#.write(to: dir.appendingPathComponent("23075.json"), atomically: true, encoding: .utf8)
+        try #"{"pid": 24468, "sessionId": "74d0"}"#.write(to: dir.appendingPathComponent("24468.json"), atomically: true, encoding: .utf8)
+        try "not json".write(to: dir.appendingPathComponent("1.json"), atomically: true, encoding: .utf8)
+        try #"{"pid": 5, "sessionId": "d2dc"}"#.write(to: dir.appendingPathComponent("5.key"), atomically: true, encoding: .utf8)
+
+        XCTAssertEqual(sessionPID("74d0", in: dir), 24468)
+        XCTAssertEqual(sessionPID("d2dc", in: dir), 23075)
+        XCTAssertNil(sessionPID("gone", in: dir))
+        XCTAssertNil(sessionPID("", in: dir))
+        XCTAssertNil(sessionPID("74d0", in: dir.appendingPathComponent("missing")))
+    }
+
     func testParsePanesReadsTabSeparatedLines() {
         let raw = "/dev/ttys001\tnode \t/repo\n\tzsh\t/skipped\n/dev/ttys002\tzsh\t\r\nbroken line\n"
         XCTAssertEqual(parsePanes(raw), [
             TerminalPane(id: "/dev/ttys001", job: "node", path: "/repo"),
             TerminalPane(id: "/dev/ttys002", job: "zsh", path: ""),
         ])
+        XCTAssertEqual(parsePanes("G1\t\t/repo\t/dev/ttys004\n"), [TerminalPane(id: "G1", job: "", path: "/repo", tty: "/dev/ttys004")])
     }
 
     func testAppleScriptStringEscapesWhatEndsOrBreaksALiteral() {

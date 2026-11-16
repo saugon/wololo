@@ -30,7 +30,7 @@ enum TerminalAction {
             if plan.triesFocus {
                 // An app can only hand the focus to another while it is active itself (the widget does not activate it).
                 NSApp.activate()
-                switch await TerminalFocuser.focus(cwd: run.owner.cwd, projectPath: run.project.path) {
+                switch await TerminalFocuser.focus(sessionID: run.owner.sessionID, cwd: run.owner.cwd, projectPath: run.project.path) {
                 case .found:
                     focused = true
                 case .notFound:
