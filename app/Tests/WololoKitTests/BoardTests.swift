@@ -119,7 +119,7 @@ final class BoardTests: XCTestCase {
         let board = Board(runs: runs, now: now, mode: .byStatus)
 
         XCTAssertEqual(column(board, "finished"), ["fresh"])
-        XCTAssertEqual(board.archive.map(\.id), ["touched-later", "no-finish-time", "old"])
+        XCTAssertEqual(board.archive.map(\.id), ["no-finish-time", "touched-later", "old"])
         XCTAssertEqual(board.archiveCount, 3)
         XCTAssertEqual(Board(runs: runs, now: now, mode: .byStage).archiveCount, 3)
     }
@@ -149,14 +149,52 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(board.archive.map(\.id), ["discarded"])
     }
 
-    func testColumnsSortByMostRecentUpdate() throws {
+    func testWorkingRunsKeepTheOrderTheyStartedInWhateverTheyDo() throws {
         let runs = [
-            try makeRun("b", updatedAt: now - 30),
-            try makeRun("a", updatedAt: now - 10),
-            try makeRun("c", updatedAt: now - 90),
-            try makeRun("tie-2", updatedAt: now - 30),
+            try makeRun("second", updatedAt: now - 1, ["created_at": now - 600]),
+            try makeRun("first", updatedAt: now - 90, ["created_at": now - 900]),
+            try makeRun("third", status: "waiting_agents", updatedAt: now - 30, ["created_at": now - 300]),
+            try makeRun("tie", updatedAt: now - 5, ["created_at": now - 600]),
         ]
-        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "working"), ["a", "b", "tie-2", "c"])
+        let order = ["first", "second", "tie", "third"]
+        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "working"), order)
+        // A new event in one of them changes nothing.
+        var busier = runs
+        busier[2].updatedAt = now
+        XCTAssertEqual(column(Board(runs: busier, now: now, mode: .byStatus), "working"), order)
+        XCTAssertEqual(widgetRuns(busier, now: now).map(\.id), order)
+    }
+
+    func testWaitingRunsQueueByHowLongTheyWait() throws {
+        let runs = [
+            try makeRun("asked-late", status: "waiting_user", updatedAt: now - 1,
+                        ["waiting": ["on": "user", "question": "?", "since": now - 60], "created_at": now - 9000]),
+            try makeRun("asked-early", status: "waiting_permission", updatedAt: now - 2,
+                        ["waiting": ["on": "permission", "question": "Bash", "since": now - 600], "created_at": now - 100]),
+            try makeRun("blocked", status: "blocked", updatedAt: now - 3,
+                        ["blocked": ["reason": "x", "since": now - 300], "created_at": now - 200]),
+        ]
+        let order = ["asked-early", "blocked", "asked-late"]
+        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "waiting"), order)
+        XCTAssertEqual(widgetRuns(runs, now: now).map(\.id), order)
+    }
+
+    func testRunsOnHoldShowTheLastToStopFirst() throws {
+        let runs = [
+            try makeRun("paused-early", status: "paused", updatedAt: now - 10, ["paused": ["note": "", "since": now - 3000]]),
+            try makeRun("orphan", status: "running", updatedAt: now - 5,
+                        ["owner": ["session_id": "s", "cwd": "/tmp", "heartbeat_at": now - 1000]]),
+            try makeRun("paused-late", status: "paused", updatedAt: now - 2000, ["paused": ["note": "", "since": now - 2000]]),
+        ]
+        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "onHold"), ["orphan", "paused-late", "paused-early"])
+    }
+
+    func testFinishedRunsShowTheLastToFinishFirst() throws {
+        let runs = [
+            try makeRun("earlier", status: "done", updatedAt: now - 1, ["finished_at": now - 3600]),
+            try makeRun("later", status: "failed", updatedAt: now - 500, ["finished_at": now - 600]),
+        ]
+        XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "finished"), ["later", "earlier"])
     }
 
     func testStageColumnsHoldOnlyActiveRuns() throws {

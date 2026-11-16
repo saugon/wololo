@@ -74,19 +74,19 @@ public struct Board: Equatable, Sendable {
             effectiveStatus($0, now: now) != .cancelled && now - finishedTime($0) <= finishedWindowSeconds
         }
         let recentIDs = Set(recent.map(\.id))
-        archive = byRecentUpdate(finished.filter { !recentIDs.contains($0.id) })
+        archive = byFinish(finished.filter { !recentIDs.contains($0.id) })
 
         switch mode {
         case .byStatus:
             columns = StatusGroup.allCases.map { group in
                 let members = group == .finished ? recent : runs.filter { StatusGroup($0, now: now) == group }
-                return BoardColumn(id: group.rawValue, es: group.label(.es), en: group.label(.en), runs: byRecentUpdate(members))
+                return BoardColumn(id: group.rawValue, es: group.label(.es), en: group.label(.en), runs: ordered(members, in: group, now: now))
             }
         case .byStage:
             let active = runs.filter { StatusGroup($0, now: now) != .finished }
             columns = Stage.all.enumerated().map { index, stage in
                 let members = active.filter { stageIndex($0) == index }
-                return BoardColumn(id: stage.id, es: stage.label(.es), en: stage.label(.en), runs: byRecentUpdate(members))
+                return BoardColumn(id: stage.id, es: stage.label(.es), en: stage.label(.en), runs: byStart(members))
             }
         }
     }
@@ -100,10 +100,11 @@ public func isWaitingOnPerson(_ run: Run, now: TimeInterval) -> Bool {
     effectiveStatus(run, now: now).isWaitingOnPerson
 }
 
-/// Active runs for the widget: the ones waiting on the person first, then the most recently updated.
+/// Active runs for the widget: the ones waiting on the person first, the longest waiting first, then the others in
+/// the order they started.
 public func widgetRuns(_ runs: [Run], now: TimeInterval) -> [Run] {
-    let active = byRecentUpdate(runs.filter { isActive($0, now: now) })
-    return active.filter { isWaitingOnPerson($0, now: now) } + active.filter { !isWaitingOnPerson($0, now: now) }
+    let active = runs.filter { isActive($0, now: now) }
+    return byWait(active.filter { isWaitingOnPerson($0, now: now) }) + byStart(active.filter { !isWaitingOnPerson($0, now: now) })
 }
 
 public func lastFinished(_ runs: [Run], now: TimeInterval) -> Run? {
@@ -178,6 +179,49 @@ func finishedTime(_ run: Run) -> TimeInterval {
     run.finishedAt ?? run.updatedAt
 }
 
-func byRecentUpdate(_ runs: [Run]) -> [Run] {
-    runs.sorted { $0.updatedAt != $1.updatedAt ? $0.updatedAt > $1.updatedAt : $0.id < $1.id }
+// Each column orders its cards by a time that does not change while a card stays in it, so a card moves only when it
+// changes column. updated_at, which every event of a run bumps, would reshuffle a column of busy runs every few seconds.
+func ordered(_ runs: [Run], in group: StatusGroup, now: TimeInterval) -> [Run] {
+    switch group {
+    case .waiting: return byWait(runs)
+    case .working: return byStart(runs)
+    case .onHold: return sorted(runs, newestFirst: true) { holdTime($0, now: now) }
+    case .finished: return byFinish(runs)
+    }
+}
+
+/// The longest waiting first: a queue for the person, where a new wait joins at the end.
+func byWait(_ runs: [Run]) -> [Run] {
+    sorted(runs, newestFirst: false, by: waitTime)
+}
+
+/// In the order they started: a new run joins at the end.
+func byStart(_ runs: [Run]) -> [Run] {
+    sorted(runs, newestFirst: false) { $0.createdAt }
+}
+
+/// The last to finish first.
+func byFinish(_ runs: [Run]) -> [Run] {
+    sorted(runs, newestFirst: true, by: finishedTime)
+}
+
+/// When the run started waiting on the person: its question or permission, else its block, else when it started.
+func waitTime(_ run: Run) -> TimeInterval {
+    [run.waiting?.since, run.blocked?.since].compactMap { $0 }.first { $0 > 0 } ?? run.createdAt
+}
+
+/// When the run stopped: its pause, or for an orphan its last heartbeat.
+func holdTime(_ run: Run, now: TimeInterval) -> TimeInterval {
+    if effectiveStatus(run, now: now) == .orphaned { return run.owner.heartbeatAt }
+    if let since = run.paused?.since, since > 0 { return since }
+    return run.updatedAt
+}
+
+/// Ties go by id, so two runs with the same time never swap.
+private func sorted(_ runs: [Run], newestFirst: Bool, by time: (Run) -> TimeInterval) -> [Run] {
+    runs.sorted { lhs, rhs in
+        let (a, b) = (time(lhs), time(rhs))
+        if a != b { return newestFirst ? a > b : a < b }
+        return lhs.id < rhs.id
+    }
 }
