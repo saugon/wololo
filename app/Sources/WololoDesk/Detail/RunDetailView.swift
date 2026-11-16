@@ -54,9 +54,16 @@ struct RunDetailView: View {
     private func content(_ run: Run, model: RunsModel, runDir: URL, viewportHeight: CGFloat) -> some View {
         let paneHeight = max(DetailTabs.minPaneHeight, viewportHeight - tabsTop - DetailTabs.barHeight - Self.bottomPadding)
         return VStack(alignment: .leading, spacing: 20) {
-            DetailHeader(run: run, now: model.now, runDir: runDir, back: back) {
-                TerminalAction.go(to: run, now: state.model.now, state: state)
-            }
+            DetailHeader(
+                run: run,
+                now: model.now,
+                runDir: runDir,
+                back: back,
+                goToTerminal: { TerminalAction.go(to: run, now: state.model.now, state: state) },
+                discard: RunDiscard.canDiscard(run, now: model.now)
+                    ? { DiscardAction.confirm(run, runDir: runDir, model: model) }
+                    : nil
+            )
             CardRow(spacing: 16) {
                 NowView(run: run, now: model.now)
                     .cardBasis(320)

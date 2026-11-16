@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import WololoKit
 
-/// The top of the detail: back, terminal and folder buttons; the title; repo, branch, source, mode, risk and age;
+/// The top of the detail: back, terminal, folder and (for a run no session holds) discard buttons; the title; repo, branch, source, mode, risk and age;
 /// and the large progress bar.
 struct DetailHeader: View {
     let run: Run
@@ -10,6 +10,8 @@ struct DetailHeader: View {
     let runDir: URL
     let back: () -> Void
     let goToTerminal: () -> Void
+    /// Set when no session holds the run anymore: it can be cancelled from here.
+    var discard: (() -> Void)? = nil
 
     @Environment(\.theme) private var theme
 
@@ -57,6 +59,13 @@ struct DetailHeader: View {
             }
             .buttonStyle(DetailButtonStyle())
             .help(runDir.path)
+            if let discard {
+                Button(action: discard) {
+                    Label("Descartar", systemImage: "trash")
+                }
+                .buttonStyle(DetailButtonStyle())
+                .help("Cancelar el run: ninguna sesión lo tiene")
+            }
         }
     }
 
