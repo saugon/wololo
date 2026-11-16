@@ -183,6 +183,24 @@ test('a long detail wraps on words and ends in an ellipsis past its line budget'
   expect(wrapLines('', 30, 3)).toEqual([])
 })
 
+test('the summary keeps what the orchestrator noted while agents work, and counts the ones that finished in the stage', async () => {
+  const list = events([
+    ['run.started', { title: 'Catálogo', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'plan' }],
+    ['doing', { text: 'Dos arquitectos arman el plan en paralelo' }],
+    ['agent.started', { id: 'a1', role: 'architect', model: 'claude-opus-5-5', description: 'Architect: minimal plan' }],
+    ['agent.started', { id: 'a2', role: 'architect', model: 'claude-opus-5-5', description: 'Architect: pragmatic plan' }],
+    ['agent.finished', { id: 'a1' }],
+  ])
+  const view = buildView(rebuild('r1', list), 'waiting_agents', list, 1_800_000_480)
+  expect(block(view.pane.summary, 'ahora')).toEqual([
+    'Dos arquitectos arman el plan en paralelo',
+    '◫ arquitecto · opus · 4m',
+    'Architect: pragmatic plan',
+    '+ 1 listo',
+  ])
+})
+
 test('the card names the live agents by role and model, and counts the ones that finished in the item', async () => {
   const list = events([
     ['run.started', { title: 'Salones', mode: 'checkpoints' }],
@@ -204,7 +222,14 @@ test('the card names the live agents by role and model, and counts the ones that
   expect(view.band.agents.map(chip => `${chip.icon} ${chip.text}`)).toEqual(['◉ revisor (opus) 3m', '⌕ 2 exploradores (haiku) 2m', '+ 1 listo', '✕ 1 falló'])
   expect(view.band.detail).toBe('b')
   expect(view.header).toContain('revisor (3m), 2 exploradores (2m)')
-  expect(block(view.pane.summary, 'ahora')).toEqual(['Ítem 2: b', '◉ revisor · opus · 3m', 'Review item 2', '⌕ explorador · haiku · 2m', '⌕ explorador · haiku · 1m'])
+  expect(block(view.pane.summary, 'ahora')).toEqual([
+    'Ítem 2: b',
+    '◉ revisor · opus · 3m',
+    'Review item 2',
+    '⌕ explorador · haiku · 2m',
+    '⌕ explorador · haiku · 1m',
+    '+ 1 listo · ✕ 1 falló',
+  ])
   expect(block(view.pane.detail, 'agentes')).toEqual([
     '◉ revisor       opus   3m  Review item 2',
     '⌕ explorador    haiku  2m',

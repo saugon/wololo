@@ -391,7 +391,8 @@ function processBlock(run: Run, now: number): Block | null {
   return { label: run.lang === 'es' ? 'procesos' : 'processes', lines, gap: true, table: true }
 }
 
-// What is going on now: what waits for the person or blocks, the item being built, each live agent with what it was asked to do.
+// What is going on now: what waits for the person or blocks, the item being built, what the orchestrator noted it is doing, each
+// live agent with what it was asked to do, and how many finished or failed in the current item or stage.
 function nowBlock(run: Run, now: number): Block | null {
   const es = run.lang === 'es'
   const lines: Line[] = []
@@ -403,6 +404,10 @@ function nowBlock(run: Run, now: number): Block | null {
   if (run.items.current && run.stage?.id === 'implement') {
     lines.push([span(`${es ? 'Ítem' : 'Item'} ${run.items.current.n}: ${run.items.current.title}`, 'text', true)])
   }
+  // A note written before the run started waiting on CI or a suite is about earlier work.
+  const waits = liveTasks(run).filter(task => task.kind === 'ci' || task.kind === 'tests')
+  const isStale = run.doing && waits.length > 0 && run.doing.since < Math.min(...waits.map(task => task.started_at))
+  if (run.doing?.text && !run.outcome && !isStale) lines.push([span(run.doing.text, 'text')])
   const agents = liveAgents(run)
   for (const agent of agents) {
     const mark = roleMark(agent.role)
@@ -413,10 +418,12 @@ function nowBlock(run: Run, now: number): Block | null {
     lines.push(line)
     if (agent.description) lines.push([span(agent.description, 'text')])
   }
-  // A note written before the run started waiting on CI or a suite is about earlier work.
-  const waits = liveTasks(run).filter(task => task.kind === 'ci' || task.kind === 'tests')
-  const isStale = run.doing && waits.length > 0 && run.doing.since < Math.min(...waits.map(task => task.started_at))
-  if (agents.length === 0 && run.doing?.text && !run.outcome && !isStale) lines.push([span(run.doing.text, 'text')])
+  const finished = finishedAgents(run)
+  const failed = finished.filter(agent => agent.status === 'failed' || agent.status === 'killed').length
+  const tally: Line = []
+  if (finished.length > failed) tally.push(span(`+ ${finished.length - failed} ${es ? (finished.length - failed === 1 ? 'listo' : 'listos') : 'done'}`, 'subtle'))
+  if (failed > 0) tally.push(span(`${tally.length > 0 ? ' · ' : ''}✕ ${failed} ${es ? (failed === 1 ? 'falló' : 'fallaron') : 'failed'}`, 'error'))
+  if (tally.length > 0 && !run.outcome) lines.push(tally)
   return lines.length > 0 ? { label: es ? 'ahora' : 'now', lines, gap: true } : null
 }
 
