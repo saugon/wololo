@@ -323,7 +323,7 @@ test('the run follows its base when the branch moves onto another one, by hand o
   expect((history.lines as string[]).filter(line => line.includes('Base'))).toHaveLength(2)
 })
 
-test('with spec.to_github off, issue writes stay in files', async ($, on) => {
+test('with spec.to_github off, issue writes stay in files unless the person asked for one', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))
   host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ spec: { to_github: false } }))
@@ -333,6 +333,11 @@ test('with spec.to_github off, issue writes stay in files', async ($, on) => {
   const answer = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'issue_body', number: 12, body_file: '/tmp/body.md' } as never)).result)
   expect(answer.published).toBe(false)
   expect(host.gh).toEqual([])
+  const asked = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'issue_body', number: 12, body_file: '/tmp/body.md', person_asked: true } as never)).result,
+  )
+  expect(asked.published).toBe(true)
+  expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/body.md'])
 })
 
 test('launch flags change the config for that run only, and an unknown one is refused', async ($, on) => {

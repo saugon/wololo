@@ -86,7 +86,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `tests.follow`, `tests.rules_from` | `project` makes the project's own testing rules (in those files) win over wololo's |
 | `tests.background` | long suites run in the background; the run shows "running tests" |
 | `commands.start`, `commands.app_url`, `commands.login` | how to run the app for screenshots; `{slot}` gives each parallel run its own ports |
-| `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only |
+| `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only. An issue write you ask for yourself during the run still goes out |
 | `pr.*` | open a PR, as a draft, wait for CI, and the base branch |
 | `review.approval` | where the change is approved: `local`, at Aprobar PR in the session, or `pr`, on the PR once CI is green (Aprobar PR passes by itself). `--review-pr` / `--review-local` override it for one run |
 | `languages.*` | chat, spec, issue and PR languages |

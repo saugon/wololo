@@ -92,7 +92,7 @@ const GH_WRITES: readonly RegExp[] = [
 const MCP_GITHUB_WRITE = /^mcp__github__(create|update|add|push|merge|fork|delete)/
 
 export function githubWriteDenial(tool: string, input: Record<string, unknown>): string | null {
-  const reason = 'wololo: during a run, GitHub writes go through its publish tool, which keeps the config and GitHub limits.'
+  const reason = 'wololo: during a run, GitHub writes go through its publish tool (mcp__wololo__publish), which keeps the config and GitHub limits; when the person asked for the write, pass person_asked: true.'
   if (MCP_GITHUB_WRITE.test(tool)) return reason
   if (tool === 'Bash' && typeof input.command === 'string' && segments(input.command).some(segment => GH_WRITES.some(write => write.test(segment))))
     return reason

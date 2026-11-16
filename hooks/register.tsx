@@ -1961,7 +1961,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'publish',
     description:
-      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue or a new pull request. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so.',
+      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue or a new pull request. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1973,6 +1973,11 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
         base: { type: 'string' },
         head: { type: 'string' },
         draft: { type: 'boolean' },
+        person_asked: {
+          type: 'boolean',
+          description:
+            'True only when the person, in their own message, asked for this exact write to GitHub. It sends an issue write even when spec.to_github is false: that setting is about what the run publishes on its own.',
+        },
       },
       required: ['kind', 'body_file'],
     },
@@ -1982,8 +1987,12 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
 async function publish($: Engine, input: Record<string, unknown>): Promise<string> {
   if (!run) return fail('No active run in this session.')
   const kind = String(input.kind) as PublishKind
-  if (kind !== 'pr_create' && !config.spec.to_github) {
-    return ok({ published: false, reason: 'spec.to_github is false: the text stays in its file only.', file: input.body_file })
+  if (kind !== 'pr_create' && !config.spec.to_github && input.person_asked !== true) {
+    return ok({
+      published: false,
+      reason: 'spec.to_github is false: the text stays in its file only. If the person asked for this write, call again with person_asked: true.',
+      file: input.body_file,
+    })
   }
   const bodyFile = String(input.body_file ?? '')
   const body = await readText($, bodyFile)
