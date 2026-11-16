@@ -3439,7 +3439,7 @@ export const register: Register = (on, options) => {
                 <Text color="inactive">{pane.ref}</Text>
               </Box>
             )}
-            <Text bold wrap="truncate-end">
+            <Text bold color="text" wrap="truncate-end">
               {pane.title}
             </Text>
           </Box>
