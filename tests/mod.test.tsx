@@ -1047,6 +1047,31 @@ test("an instance that lost the session writes nothing from an agent's turn or t
   expect(files()).toEqual(before)
 })
 
+test('an agent the session resumes after it finished is live again until its new turn ends', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.start', (_, e) => ({ turnId: e.turnId }))
+  const id = 'repo-txt-agent2'
+  const dir = `${DATA}/runs/${id}`
+  seedRun(host, id, { waiting: false })
+  const agent = { id: 'a1', role: 'implementer', description: 'Item 11', model: 'claude-opus-5-5', background: true }
+  host.files.set(`${dir}/events.jsonl`, `${host.files.get(`${dir}/events.jsonl`)}${JSON.stringify({ v: 1, seq: 4, ts: 1_800_000_004, run: id, type: 'agent.started', data: agent })}\n`)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const live = async () => ((parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run).agents.filter(a => a.finished_at === null).map(a => a.id))
+  const complete = () => $.turn.complete({ turnId: 't1', agentId: 'a1', reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+  await complete()
+  expect(await live()).toEqual([])
+  await $.turn.start({ turnId: 't2', agentId: 'a1', text: 'apply the review' } as never)
+  expect(await live()).toEqual(['a1'])
+  const resumed = eventLines(host, id).filter(line => line.type === 'agent.started').at(-1)
+  expect(resumed?.data).toMatchObject({ id: 'a1', role: 'implementer', resumed: true })
+  await complete()
+  expect(await live()).toEqual([])
+  // A turn of an agent that is still live opens nothing new.
+  expect(eventLines(host, id).filter(line => line.type === 'agent.started')).toHaveLength(2)
+})
+
 test('events recorded at once get seqs that never repeat and only go up', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))

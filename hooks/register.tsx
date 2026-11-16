@@ -2562,7 +2562,13 @@ export const register: Register = (on, options) => {
     await quietly(async () => {
       await followSession($)
       await noteNotifications($, e.text)
-      if (e.agentId !== undefined || !run) return
+      if (e.agentId !== undefined) {
+        // A finished agent of the run that starts a turn again was resumed with a message: it is live until that turn ends.
+        const agent = run && !run.outcome ? run.agents.find(a => a.id === e.agentId && a.finished_at !== null) : undefined
+        if (agent) await emit($, 'agent.started', { id: agent.id, role: agent.role, description: agent.description, model: agent.model, resumed: true })
+        return
+      }
+      if (!run) return
       live.isTurnRunning = true
       await refresh($)
     })

@@ -119,7 +119,7 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     case 'agent.started':
       return one(
         '⟳',
-        `${es ? 'Arrancó' : 'Started'} ${roleName(lang, str(d.role), 1)}${d.description ? `: ${str(d.description)}` : ''}`,
+        `${d.resumed === true ? (es ? 'Retomó' : 'Resumed') : es ? 'Arrancó' : 'Started'} ${roleName(lang, str(d.role), 1)}${d.description ? `: ${str(d.description)}` : ''}`,
         false,
       )
     case 'agent.finished':

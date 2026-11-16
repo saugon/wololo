@@ -554,7 +554,18 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'agent.started': {
       const id = str(d.id)
-      if (!id || r.agents.some(a => a.id === id)) break
+      if (!id) break
+      // An agent the session sent a message to after it finished works again, under the same id: it is live from here,
+      // and its time counts again from now.
+      const known = r.agents.find(a => a.id === id)
+      if (known) {
+        if (known.finished_at !== null && d.resumed === true) {
+          known.status = 'running'
+          known.started_at = ev.ts
+          known.finished_at = null
+        }
+        break
+      }
       r.agents.push({
         id,
         role: str(d.role, 'agent'),
