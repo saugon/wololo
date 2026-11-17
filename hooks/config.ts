@@ -63,6 +63,8 @@ export type Config = {
   branch: string
   tests: TestsConfig
   commands: {
+    // Run once per run, in the work tree, before its servers start the first time: dependencies, the instance's database.
+    prepare: string[]
     start: StartCommand[]
     app_url: string
     login: string | null
@@ -128,6 +130,7 @@ export const DEFAULT_CONFIG: Config = {
     background: true,
   },
   commands: {
+    prepare: [],
     start: [],
     app_url: '',
     login: null,

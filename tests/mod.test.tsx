@@ -376,8 +376,9 @@ test("the run's slot follows the instance the project gave its work tree, and th
   const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
   expect(started.slot).toBe(1)
   await clock.advance(15_000)
-  const run = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
-  expect(run.slot).toBe(3)
+  const state = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((state.run as Run).slot).toBe(3)
+  expect((state.ports as Array<{ name: string; port: number }>).map(p => [p.name, p.port])).toEqual([['backend', 4030]])
   const history = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'history', include_minor: true } as never)).result)
   expect((history.lines as string[]).some(line => line.includes('Instancia del proyecto: 3 (slot 1)'))).toBe(true)
   expect(host.commands).toContain('ps -A -o command=')

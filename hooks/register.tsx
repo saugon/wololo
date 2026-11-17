@@ -1580,7 +1580,14 @@ async function getState($: Engine, input: Record<string, unknown>): Promise<stri
     const events = await readEvents($, dir)
     return ok({ header: header(run, run.status, ts), since: priorUserAt, lines: sinceLastSeen(run, events, priorUserAt), run_dir: dir })
   }
-  return ok({ header: header(run, run.status, ts), run_dir: dir, skill_root: root, config, run })
+  return ok({
+    header: header(run, run.status, ts),
+    run_dir: dir,
+    skill_root: root,
+    ports: ports(config, run.slot).map(port => ({ ...port, cmd: withEnv(port.cmd, envPrefix(config.env)) })),
+    config,
+    run,
+  })
 }
 
 async function resumeRun($: Engine, input: Record<string, unknown>): Promise<string> {

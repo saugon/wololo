@@ -105,6 +105,13 @@
     "commands": {
       "type": "object",
       "properties": {
+        "prepare": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Run once per run before its servers start the first time: dependencies, the instance's database."
+        },
         "start": {
           "type": "array",
           "items": {

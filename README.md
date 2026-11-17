@@ -23,7 +23,7 @@ context → definition → approve spec → plan → implement → evidence → 
 | plan | Architects propose small, verifiable items; the plan is debated the same way. |
 | implement | Per item: implementer → the tests the run touched → reviewer → commit, with a log of every decision and correction. After the last item, the full suite (locally, or left to CI). |
 | evidence | Up to 5 screenshots of what changed. Starts the servers it needs on the run's own ports, and stops them afterwards. |
-| approve PR (`gate_b`) | You approve opening the PR. |
+| approve PR (`gate_b`) | You approve opening the PR. **Probar localmente** starts the app on the run's ports first, so you try the change before approving. |
 | pr | Pushes the run branch, opens a draft PR, watches CI, fixes failures within a budget, marks it ready when green. Then the run stays **in review**: changes the review asks for go through the implement loop, and the run ends when the PR merges (checked every 5 minutes while a session holds it), when the person ends it with `/wololo done`, or, if the PR is closed without merging, as the person decides. |
 
 **Autonomy** is per project, and per run with `--full`, `--checkpoints` or `--guided`:
@@ -85,7 +85,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `tests.suite`, `tests.e2e`, `tests.suite_runs`, `tests.e2e_runs` | the full suites, run once at the end, `local` or left to `ci` |
 | `tests.follow`, `tests.rules_from` | `project` makes the project's own testing rules (in those files) win over wololo's |
 | `tests.background` | long suites run in the background; the run shows "running tests" |
-| `commands.start`, `commands.app_url`, `commands.login` | how to run the app for screenshots; `{slot}` gives each parallel run its own ports |
+| `commands.prepare`, `commands.start`, `commands.app_url`, `commands.login` | how to run the app, for the screenshots and for **Probar localmente** at Aprobar PR: what to run once per run before the first start (dependencies, the instance's database), and the servers; `{slot}` gives each parallel run its own ports |
 | `instance.read`, `instance.databases` | when the project keeps its own registry of instances (one per worktree): the command that prints the work tree's instance number, which the run's slot then follows (so `{slot}` gives that instance's ports), and that instance's databases (`{slot}`), shown in the summary with the connections open to each and the local Postgres' total against its `max_connections` |
 | `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only. An issue write you ask for yourself during the run still goes out |
 | `pr.*` | open a PR, as a draft, wait for CI, and the base branch |

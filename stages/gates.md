@@ -38,11 +38,17 @@ At gate_a the issue is updated as in "After approval" below.
    - **Ajustar**: the person says what to change;
    - **Ver completo**: you print `spec.md` whole (at gate_b, the diff of each file), and ask again;
    - **Cancelar el run**.
+
+   At gate_b, when `config.commands.start` has commands, **Probar localmente** (or **Detener el stack**, while it is up) takes Ajustar's place: AskUserQuestion takes four options, and the person writes what to change in its free-text answer, which is Ajustar.
 4. **Apply the answer.**
    - **Aprobar**: `event gate.resolved {gate, outcome: "approved", by: "user"}`, then "After approval".
-   - **Ajustar**: apply the change and record each point as a `decision`, and `gate.resolved {gate, outcome: "changes", by: "user"}`. Ask again; the run stays in the gate until an approval. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`. At gate_b the equivalent is `implement`.
+   - **Ajustar** (or what the person wrote): apply the change and record each point as a `decision`, and `gate.resolved {gate, outcome: "changes", by: "user"}`. Ask again; the run stays in the gate until an approval. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`. At gate_b the equivalent is `implement`.
    - **Ver completo**: show it and ask again.
+   - **Probar localmente**: start the stack as `stages/servers.md` says (prepare once, then the servers, in the background). Then show, in the chat, where to try it: each server's URL (`config.commands.app_url` with its port), the login from `config.commands.login` with the project's demo credentials, and the acceptance scenarios to walk through. Ask again, with **Detener el stack** in place of Probar localmente; the stack stays up while the person tries it, and through **Ajustar** too, so the fix shows on the servers already running.
+   - **Detener el stack**: stop it as `stages/servers.md` says, and ask again.
    - **Cancelar**: `run.finished {outcome: "cancelled", summary}`.
+
+   Leaving gate_b, approved or cancelled, stop the stack first if it is up.
 
 When the run's change is approved on the PR (`review: pr`), Aprobar PR is not asked: record `gate.resolved {gate: "gate_b", outcome: "approved", by: "auto"}` and go on to the PR, which a person approves on GitHub once CI is green.
 
