@@ -54,6 +54,7 @@ import {
   timeKind,
   ASLEEP_AFTER_SECONDS,
   awakeUntil,
+  liveTasks,
 } from './model'
 import { connections, maxConnections } from './postgres'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, urlIn } from './github'
@@ -69,6 +70,10 @@ import {
   renamedBranch,
   hasPush,
   segments,
+  isServerCommand,
+  portOf,
+  listeners,
+  workingDirs,
 } from './policy'
 import {
   type Field,
@@ -1189,7 +1194,25 @@ async function inspectWorktree($: Engine) {
     ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port) }))),
     instance: instance !== null,
     databases: await instanceDatabases($, databaseNames(config, run.slot)),
+    others: (await worktreeListeners($, dir)).filter(seen => !started.some(p => p.port === seen.port)),
   }
+}
+
+// The ports served from inside the work tree: the servers the run left up, on whatever port they took, beside the configured ones.
+async function worktreeListeners($: Engine, dir: string): Promise<Array<{ name: string; port: number }>> {
+  const listed = await $.process.run(['lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fpcn'], { timeoutMs: 5_000 }).catch(() => undefined)
+  if (!listed || listed.exitCode !== 0) return []
+  const all = listeners(listed.stdout)
+  const pids = [...new Set(all.map(seen => seen.pid))]
+  if (pids.length === 0) return []
+  const cwd = await $.process.run(['lsof', '-a', '-p', pids.join(','), '-d', 'cwd', '-Fpn'], { timeoutMs: 5_000 }).catch(() => undefined)
+  const dirs = workingDirs(cwd?.stdout ?? '')
+  const tasks = run ? liveTasks(run) : []
+  return all
+    .filter(seen => isInside(dirs.get(seen.pid) ?? '', dir))
+    .sort((a, b) => a.port - b.port)
+    .filter((seen, i, list) => list.findIndex(other => other.port === seen.port) === i)
+    .map(seen => ({ name: tasks.find(task => task.port === seen.port)?.label ?? seen.command, port: seen.port }))
 }
 
 // The branch's name once the spec says what the change is: config.branch with the slug given, in place of the one the title gave at
@@ -2073,11 +2096,11 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'publish',
     description:
-      'The only way a run writes to GitHub. Sends body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
+      'The only way a run writes to GitHub. pr_ready marks the run\'s draft pull request ready for review (number, or the run\'s PR; no body_file) and records pr.ready. The other kinds send body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create', 'pr_body', 'pr_comment'] },
+        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create', 'pr_body', 'pr_comment', 'pr_ready'] },
         body_file: { type: 'string' },
         summary_file: { type: 'string', description: 'A short version, for when body_file does not fit.' },
         number: { type: 'number', description: 'Issue number for issue_body and issue_comment; pull request number for pr_body and pr_comment.' },
@@ -2091,7 +2114,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
             'True only when the person, in their own message, asked for this exact write to GitHub. It sends an issue write even when spec.to_github is false: that setting is about what the run publishes on its own.',
         },
       },
-      required: ['kind', 'body_file'],
+      required: ['kind'],
     },
   },
 ]
@@ -2106,6 +2129,7 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
       file: input.body_file,
     })
   }
+  if (kind === 'pr_ready') return markReady($, typeof input.number === 'number' ? input.number : (run.pr?.number ?? undefined))
   const bodyFile = String(input.body_file ?? '')
   const body = await readText($, bodyFile)
   if (body === undefined) return fail(`Cannot read body_file ${bodyFile}.`)
@@ -2137,6 +2161,18 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
   if (prBase && prBase !== runBase) await emit($, 'base.changed', { from: runBase, to: prBase, reason: 'pr_create' })
   await emit($, 'github.published', { kind, mode: decision.send, url, file, length: body.length })
   return ok({ published: true, mode: decision.send, url, full_text: bodyFile, length: body.length })
+}
+
+// A draft PR made ready by the mod itself, so it does not hang on a permission prompt for `gh pr ready` the way a shell command can.
+async function markReady($: Engine, number: number | undefined): Promise<string> {
+  const args = ghArgs({ kind: 'pr_ready', number }, '')
+  if (typeof args === 'string') return fail(args)
+  const ran = await $.process
+    .run(['gh', ...args], { cwd: workdir(), timeoutMs: 60_000 })
+    .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
+  if (ran.exitCode !== 0) return fail(`gh pr ready failed: ${ran.stderr.trim().slice(-1_000)}`)
+  if (run && !run.outcome && run.pr?.state !== 'ready') await emit($, 'pr.ready', {})
+  return ok({ published: true, kind: 'pr_ready', number })
 }
 
 async function changedFiles($: Engine, dir: string, base: string): Promise<string[]> {
@@ -2314,13 +2350,7 @@ async function closeTasks($: Engine) {
   }
 }
 
-// The port a background command serves on, when it says so: PORT=4060 (or BACKEND_PORT=4060), --port 4060 or -p 4060.
-export function portOf(command: string): number | null {
-  const found =
-    /\b[A-Z_]*PORT=(\d{2,5})\b/.exec(command) ?? /--port[= ](\d{2,5})\b/.exec(command) ?? /(?:^|\s)-p\s+(\d{2,5})\b/.exec(command)
-  return found?.[1] ? Number(found[1]) : null
-}
-
+// What a background command is: CI, tests, an external agent, a server, or other work.
 function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' | 'other' {
   if (/\bgh\s+(pr\s+checks|run\s+watch)\b/.test(command)) return 'ci'
   if (/\bcodex\b/.test(command)) return 'external'
@@ -2335,7 +2365,7 @@ function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' |
     return 'tests'
   }
   if (config.commands.start.some(s => s.cmd && command.includes(s.cmd.split(' ').slice(0, 2).join(' ')))) return 'server'
-  return 'other'
+  return isServerCommand(command) ? 'server' : 'other'
 }
 
 function startTicking($: Engine) {

@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { touchedPattern } from '../hooks/config'
-import { commandRules, githubWriteDenial, hasPush, isAllowedBash, isAllowedPath, isReadInside, pushDenial, renamedBranch } from '../hooks/policy'
+import { commandRules, githubWriteDenial, hasPush, isAllowedBash, isAllowedPath, isReadInside, isServerCommand, listeners, pushDenial, renamedBranch, workingDirs } from '../hooks/policy'
 
 const ctx = { branch: 'wololo/4312-pagos', workdir: '/w/vertex.wololo/r1', runDir: '/h/.claude/wololo/runs/r1', commands: ['make test', 'INST=1 make backend.run'], patterns: [touchedPattern('mix test {files}')] }
 
@@ -129,4 +129,40 @@ test('a project command with the run\'s env prefix is the same command', async (
   expect(isAllowedBash(`${prefix} mix test test/a_test.exs`, withPrefix)).toBe(true)
   expect(isAllowedBash(`${prefix} rm -rf .`, withPrefix)).toBe(false)
   expect(isAllowedBash('env -u PATH make test', withPrefix)).toBe(false)
+})
+
+test('a dev server started by hand is told from tests and other work', async () => {
+  const servers = [
+    'cd /w && make backend.run INST=6',
+    'make frontend.run.admin INST=6',
+    'make openpay.mock.run INST=6',
+    'tail -f /dev/null | make backend.run INST=6',
+    'nix develop --command bash -c "cd frontend && pnpm --filter storefront-example exec vite --port 3066 --strictPort"',
+    'pnpm --filter platform dev',
+    'npm run start',
+    'cd backend && iex -S mix phx.server',
+    'python3 -m http.server 8000',
+    'PORT=4060 node server.js',
+  ]
+  const others = [
+    'make e2e.run.file FILE="tests/a.spec.ts"',
+    'make test.backend.file FILE=apps/x',
+    'sleep 20; gh pr checks 4851 --watch --fail-fast',
+    'vite build',
+    'make typecheck.frontend',
+    'pnpm --filter platform test',
+  ]
+  for (const command of servers) expect([command, isServerCommand(command)]).toEqual([command, true])
+  for (const command of others) expect([command, isServerCommand(command)]).toEqual([command, false])
+})
+
+test('the ports listening are read with the process that holds them, and each process with its working directory', async () => {
+  const listed = listeners(['p24185', 'cnode', 'f31', 'n[::1]:3066', 'f32', 'n127.0.0.1:3066', 'p813', 'crapportd', 'f10', 'n*:53275', ''].join('\n'))
+  expect(listed).toEqual([
+    { pid: 24185, command: 'node', port: 3066 },
+    { pid: 813, command: 'rapportd', port: 53275 },
+  ])
+  const dirs = workingDirs(['p24185', 'fcwd', 'n/w/frontend/apps/storefront-example', 'p813', 'fcwd', 'n/'].join('\n'))
+  expect(dirs.get(24185)).toBe('/w/frontend/apps/storefront-example')
+  expect(dirs.get(813)).toBe('/')
 })

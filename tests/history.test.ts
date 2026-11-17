@@ -364,9 +364,15 @@ test("with the project's instance, the summary names it and shows its databases 
       total: 290,
       max: 300,
     },
+    others: [{ name: 'Start the storefront example on port 3066', port: 3066 }, { name: 'node', port: 3060 }],
   }
   const summary = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').pane.summary
-  expect(block(summary, 'puertos')).toEqual(['instancia  3', 'backend    4030  en uso'])
+  expect(block(summary, 'puertos')).toEqual([
+    'instancia                 3',
+    'backend                   4030  en uso',
+    'Start the storefront ex…  3066  en uso',
+    'node                      3060  en uso',
+  ])
   expect(block(summary, 'bases')).toEqual([
     'shop_dev_3   18 conexiones',
     'shop_test_3  1 conexión',

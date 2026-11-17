@@ -327,6 +327,19 @@ test('the run follows its base when the branch moves onto another one, by hand o
   expect((history.lines as string[]).filter(line => line.includes('Base'))).toHaveLength(2)
 })
 
+test('publish pr_ready marks the run\'s draft PR ready through the mod and records pr.ready', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Ready' } as never)).result)
+  parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'pr.opened', data: { url: 'https://github.com/acme/shop/pull/40', number: 40, draft: true } } as never)).result)
+  const sent = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_ready' } as never)).result)
+  expect(sent.published).toBe(true)
+  expect(host.gh).toContain('pr ready 40')
+  const state = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((state.run as Run).pr?.state).toBe('ready')
+})
+
 test('with spec.to_github off, issue writes stay in files unless the person asked for one', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))

@@ -818,16 +818,22 @@ export function liveTasks(run: Run): TaskEntry[] {
   return run.tasks.filter(t => t.finished_at === null)
 }
 
+// The live tasks that are work going on: a server stays up on its own, and is no work; while the PR waits on its reviewers, only CI
+// and tests are, since the rest is what was left running.
+export function busyTasks(run: Run): TaskEntry[] {
+  return liveTasks(run).filter(t => t.kind !== 'server' && (!run.pr_review || t.kind === 'ci' || t.kind === 'tests'))
+}
+
 export function deriveStatus(run: Run, live: Live): Status {
   if (run.outcome) return run.outcome
   if (live.question || run.waiting?.on === 'user') return 'waiting_user'
   if (run.blocked) return 'blocked'
   if (live.permission || run.waiting?.on === 'permission') return 'waiting_permission'
   if (run.paused) return 'paused'
-  const isBusy = live.isTurnRunning || liveTasks(run).length > 0 || liveAgents(run).length > 0
+  const isBusy = live.isTurnRunning || busyTasks(run).length > 0 || liveAgents(run).length > 0
   if (run.pause_requested_at) return isBusy ? 'pausing' : 'paused'
   if (live.isTurnRunning) return 'running'
-  const tasks = liveTasks(run)
+  const tasks = busyTasks(run)
   if (tasks.some(t => t.kind === 'ci')) return 'waiting_ci'
   if (tasks.some(t => t.kind === 'tests')) return 'waiting_tests'
   if (tasks.length > 0 || liveAgents(run).length > 0) return 'waiting_agents'
@@ -1018,7 +1024,8 @@ function agentsSummary(run: Run, nowSeconds: number): string[] {
 
 // The first live task names the rest; given a kind (what the run waits on), a task of that kind goes first.
 function tasksSummary(run: Run, nowSeconds: number, firstKind?: TaskEntry['kind']): string[] {
-  const live = liveTasks(run)
+  const busy = busyTasks(run)
+  const live = [...busy, ...liveTasks(run).filter(t => !busy.includes(t))]
   const tasks = firstKind ? [...live.filter(t => t.kind === firstKind), ...live.filter(t => t.kind !== firstKind)] : live
   const first = tasks[0]
   if (!first) return []

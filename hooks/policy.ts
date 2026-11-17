@@ -148,3 +148,58 @@ export function commandRules(templates: readonly string[], escape: (template: st
   }
   return { commands, patterns }
 }
+
+// A command that starts a server: it stays up on its own and is no work in progress. Not one of the project's start commands, which
+// are known by name, but a dev server started by hand: a `*.run` make target, phx.server, vite, a package script's dev or start, or
+// one given a port.
+const SERVER_COMMANDS: readonly RegExp[] = [
+  /\bmake\s+(?:-\S+\s+)*(?:[\w-]+\.)*run(?:\.[\w-]+)*\b/,
+  /\bphx\.server\b/,
+  /\bvite\b(?!\s+(?:build|preview\s+--build))/,
+  /\b(?:pnpm|npm|yarn|bun)\b[^;&|]*\s(?:run\s+)?(?:dev|start|serve)\b/,
+  /\bnext\s+(?:dev|start)\b/,
+  /\brails\s+s(?:erver)?\b/,
+  /\b(?:uvicorn|gunicorn|http\.server)\b/,
+  /\bdocker\s+compose\s+up\b/,
+]
+const TEST_WORDS = /(?:^|[\s.:/_-])(?:test|tests|e2e|spec|specs|lint|check|verify)(?:$|[\s.:/_-])/
+
+export function isServerCommand(command: string): boolean {
+  return segments(command).some(part => !TEST_WORDS.test(part) && (SERVER_COMMANDS.some(re => re.test(part)) || portOf(part) !== null))
+}
+
+// The port a background command serves on, when it says so: PORT=4060 (or BACKEND_PORT=4060), --port 4060 or -p 4060.
+export function portOf(command: string): number | null {
+  const found =
+    /\b[A-Z_]*PORT=(\d{2,5})\b/.exec(command) ?? /--port[= ](\d{2,5})\b/.exec(command) ?? /(?:^|\s)-p\s+(\d{2,5})\b/.exec(command)
+  return found?.[1] ? Number(found[1]) : null
+}
+
+// The TCP ports listening, from `lsof -nP -iTCP -sTCP:LISTEN -Fpcn`: each with the process that holds it.
+export function listeners(lsof: string): Array<{ pid: number; command: string; port: number }> {
+  const out: Array<{ pid: number; command: string; port: number }> = []
+  let pid = 0
+  let command = ''
+  for (const line of lsof.split('\n')) {
+    const tag = line[0]
+    const value = line.slice(1)
+    if (tag === 'p') pid = Number(value)
+    else if (tag === 'c') command = value
+    else if (tag === 'n') {
+      const port = Number(/:(\d+)$/.exec(value)?.[1])
+      if (pid && Number.isFinite(port) && !out.some(seen => seen.pid === pid && seen.port === port)) out.push({ pid, command, port })
+    }
+  }
+  return out
+}
+
+// Each process's working directory, from `lsof -a -p <pids> -d cwd -Fpn`.
+export function workingDirs(lsof: string): Map<number, string> {
+  const dirs = new Map<number, string>()
+  let pid = 0
+  for (const line of lsof.split('\n')) {
+    if (line[0] === 'p') pid = Number(line.slice(1))
+    else if (line[0] === 'n' && pid) dirs.set(pid, line.slice(1))
+  }
+  return dirs
+}

@@ -34,6 +34,7 @@ import {
   stageLabel,
   statusLine,
   t,
+  busyTasks,
 } from './model'
 
 const MODE_LINES: Record<string, { icon: string; color: string; hint: Record<string, string> }> = {
@@ -151,6 +152,8 @@ export type WorktreeInfo = {
   instance?: boolean
   // The instance's databases with their open connections, and the local Postgres' total against its max_connections.
   databases?: { list: Array<{ name: string; connections: number }>; total: number | null; max: number | null } | null
+  // Other ports served from inside the work tree: servers the run left up beside the configured ones.
+  others?: Array<{ name: string; port: number }>
 }
 
 function home(path: string, homeDir: string | undefined): string {
@@ -194,13 +197,15 @@ function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string |
     git.push([es ? 'cambios' : 'changes', [span(`${info.dirty} ${files}`, 'warning')]])
   }
   if (git.length > 0) blocks.push({ label: 'git', lines: named(git), gap: true })
-  if (info && (info.ports.length > 0 || info.instance)) {
+  const others = info?.others ?? []
+  if (info && (info.ports.length > 0 || info.instance || others.length > 0)) {
     const ports: Array<[string, Span[]]> = [[info.instance ? (es ? 'instancia' : 'instance') : 'slot', [span(String(run.slot), 'text')]]]
     for (const port of info.ports) {
       const state =
         port.listening === null ? [] : port.listening ? [span(es ? '  en uso' : '  in use', 'claude')] : [span(es ? '  libre' : '  free', 'subtle')]
       ports.push([port.name, [span(String(port.port), 'text'), ...state]])
     }
+    for (const other of others) ports.push([other.name.length > 24 ? `${other.name.slice(0, 23)}…` : other.name, [span(String(other.port), 'text'), span(es ? '  en uso' : '  in use', 'claude')]])
     blocks.push({ label: es ? 'puertos' : 'ports', lines: named(ports) })
   }
   const databases = info?.databases
@@ -352,7 +357,7 @@ function statusSince(run: Run, status: Status): number | null {
     case 'in_review':
       return run.pr_review?.since ?? null
     case 'waiting_agents':
-      return oldest([...liveAgents(run), ...liveTasks(run)].map(entry => entry.started_at))
+      return oldest([...liveAgents(run), ...busyTasks(run)].map(entry => entry.started_at))
     case 'waiting_tests':
     case 'waiting_ci': {
       const kind = status === 'waiting_ci' ? 'ci' : 'tests'
