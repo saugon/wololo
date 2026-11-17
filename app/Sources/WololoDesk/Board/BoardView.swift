@@ -21,6 +21,47 @@ struct BoardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if mode == .grid {
+                grid
+            } else {
+                columns
+            }
+            ThemeBand()
+            sections
+        }
+    }
+
+    /// The active runs as large cards, as many per row as fit at `GridCard.minWidth`.
+    private var grid: some View {
+        let runs = board.columns.first?.runs ?? []
+        return ScrollView(.vertical) {
+            if runs.isEmpty {
+                Text(theme.spec.texts.empty)
+                    .font(theme.font(.body, size: 13))
+                    .foregroundStyle(theme.faint)
+                    .frame(maxWidth: .infinity)
+                    .padding(22)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: theme.r(10))
+                            .strokeBorder(theme.border, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    )
+                    .padding(Self.cardMargin)
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)], spacing: 16) {
+                ForEach(runs, id: \.id) { run in
+                    GridCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
+                        goToTerminal(run)
+                    }
+                }
+            }
+            .padding(.horizontal, Self.cardMargin)
+            .padding(.top, 20)
+            .padding(.bottom, 28)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var columns: some View {
             GeometryReader { proxy in
                 let count = CGFloat(max(board.columns.count, 1))
                 let width = max(Self.minColumnWidth, (proxy.size.width / count).rounded(.down))
@@ -37,9 +78,6 @@ struct BoardView: View {
                 }
                 .scrollIndicators(.automatic)
             }
-            ThemeBand()
-            sections
-        }
     }
 
     private func columnView(_ column: BoardColumn, index: Int, width: CGFloat) -> some View {
@@ -111,7 +149,7 @@ struct BoardView: View {
             let text = theme.spec.columnText(column.id, fallback: column.label(.es))
             let subtitle = text.subtitle.flatMap { $0.isEmpty ? nil : $0 }
             return ThemeSpec.ColumnText(title: text.title, subtitle: subtitle)
-        case .byStage:
+        case .byStage, .grid:
             return ThemeSpec.ColumnText(title: "\(index + 1) · \(column.label(.es))")
         }
     }

@@ -45,6 +45,7 @@ public struct LaunchOptions: Equatable, Sendable {
         switch Self.value(environment["WOLOLO_DESK_COLUMNS"]) {
         case "status": columns = .byStatus
         case "stage": columns = .byStage
+        case "grid": columns = .grid
         default: columns = nil
         }
         snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map(Self.fileURL)

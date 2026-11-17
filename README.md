@@ -152,7 +152,7 @@ Every run is a directory any app can read. Several terminals and projects write 
 
 - **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
 - **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first. ⌘⇧L shows or hides it from any app.
-- **Window**: a sidebar by project and a board of cards by status or by stage, with search.
+- **Window**: a sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card, with search.
 - **Detail**: a run's stages, what it is doing or waiting on, items, agents, PR and CI, timeline, documents, screenshots and cost. **Ir a la terminal** (also on each widget row) brings the iTerm2 or Ghostty tab of its session to the front, or opens one in its directory and copies `/wololo resume <run>`.
 
 It only reads the store, except **Descartar** in a run's detail: for a run no session holds anymore (paused or orphaned, no heartbeat for 90 s), it records `run.finished {outcome: cancelled}` and its snapshot, as the mod's cancel would, after a confirmation. The worktree, branch and files stay in place. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.
@@ -172,7 +172,7 @@ scripts/sample-data.sh /tmp/wololo-sample     # a data directory with sample run
 WOLOLO_DATA_DIR=/tmp/wololo-sample .build/debug/WololoDesk
 ```
 
-To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings` or `run:<id>[:timeline|documents|screenshots|cost]`) and quits; `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status` or `stage`) set the board's filters, and `WOLOLO_DESK_THEME` and `WOLOLO_DESK_THEMES_DIR` the theme (see **Themes**). The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
+To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings` or `run:<id>[:timeline|documents|screenshots|cost]`) and quits; `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status`, `stage` or `grid`) set the board's filters, and `WOLOLO_DESK_THEME` and `WOLOLO_DESK_THEMES_DIR` the theme (see **Themes**). The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
 
 ### Themes
 

@@ -48,7 +48,7 @@ struct MainView: View {
         let visible = filterRuns(model.runs, query: state.search, project: state.project)
         let board = Board(runs: visible, now: model.now, mode: state.boardMode)
         return VStack(spacing: 0) {
-            header(visible, now: model.now, runs: model.runs)
+            header(visible, now: model.now, runs: model.runs, hiddenFinished: state.boardMode == .byStatus ? 0 : board.recentlyFinished.count)
             ThemeBand()
             BoardView(
                 board: board,
@@ -63,7 +63,7 @@ struct MainView: View {
 
     /// The title and the counts, then the counters and the column picker; when they do not fit beside the title,
     /// they move to a line of their own.
-    private func header(_ visible: [Run], now: TimeInterval, runs: [Run]) -> some View {
+    private func header(_ visible: [Run], now: TimeInterval, runs: [Run], hiddenFinished: Int) -> some View {
         let active = visible.filter { isActive($0, now: now) }.count
         let waiting = visible.filter { isWaitingOnPerson($0, now: now) }.count
         let counters = boardCounters(visible, now: now)
@@ -74,7 +74,7 @@ struct MainView: View {
                 .foregroundStyle(theme.title)
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
-            Text(subtitle(active: active, waiting: waiting))
+            Text(subtitle(active: active, waiting: waiting, hiddenFinished: hiddenFinished))
                 .font(theme.font(.body, size: 13))
                 .foregroundStyle(theme.muted)
                 .lineLimit(1)
@@ -108,9 +108,13 @@ struct MainView: View {
         return runs.first { $0.project.key == key }?.project.display ?? key
     }
 
-    private func subtitle(active: Int, waiting: Int) -> String {
+    /// "4 activos · 0 te esperan", and in the modes without a finished column, how many of the last 24 h it hides.
+    private func subtitle(active: Int, waiting: Int, hiddenFinished: Int) -> String {
         let search = state.search.trimmingCharacters(in: .whitespacesAndNewlines)
-        let counts = "\(active) \(active == 1 ? "activo" : "activos") · \(waiting) \(waiting == 1 ? "te espera" : "te esperan")"
+        var counts = "\(active) \(active == 1 ? "activo" : "activos") · \(waiting) \(waiting == 1 ? "te espera" : "te esperan")"
+        if hiddenFinished > 0 {
+            counts += " · \(hiddenFinished) \(hiddenFinished == 1 ? "terminado oculto" : "terminados ocultos")"
+        }
         return search.isEmpty ? counts : "\(counts) · buscando “\(search)”"
     }
 }
@@ -171,7 +175,7 @@ private struct CountersBox: View {
     }
 }
 
-/// "Por estado" / "Por etapa", as the mockup's segmented control.
+/// "Por estado" / "Por etapa" / "Grilla", as the mockup's segmented control.
 private struct ModePicker: View {
     @Binding var mode: BoardMode
 
@@ -181,6 +185,7 @@ private struct ModePicker: View {
         HStack(spacing: 2) {
             segment("Por estado", .byStatus)
             segment("Por etapa", .byStage)
+            segment("Grilla", .grid)
         }
         .padding(3)
         .themeFrame(theme, fill: theme.field) { picker in

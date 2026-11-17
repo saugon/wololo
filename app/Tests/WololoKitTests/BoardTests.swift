@@ -115,6 +115,21 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(ago(orphan.updatedAt, now: now, lang: orphan.lang), "hace 2m")
     }
 
+    func testGridShowsTheActiveRunsInTheWidgetsOrder() throws {
+        let runs = [
+            try makeRun("works", status: "running", updatedAt: now - 60),
+            try makeRun("asks", status: "waiting_user", updatedAt: now - 30),
+            try makeRun("fresh", status: "done", updatedAt: now - 3600, ["finished_at": now - 3600]),
+            try makeRun("paused", status: "paused", updatedAt: now - 3600, ["owner": ["heartbeat_at": now - 3600]]),
+        ]
+        let board = Board(runs: runs, now: now, mode: .grid)
+
+        XCTAssertEqual(board.columns.count, 1)
+        XCTAssertEqual(board.columns[0].runs.map(\.id), ["asks", "works"])
+        XCTAssertEqual(board.recentlyFinished.map(\.id), ["fresh"])
+        XCTAssertEqual(board.onHold.map(\.id), ["paused"])
+    }
+
     func testOldFinishedRunsGoToTheArchive() throws {
         let day: TimeInterval = 24 * 3600
         let runs = [

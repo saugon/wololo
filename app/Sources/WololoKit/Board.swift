@@ -43,6 +43,8 @@ public enum StatusGroup: String, CaseIterable, Sendable {
 public enum BoardMode: String, Sendable {
     case byStatus
     case byStage
+    /// The active runs as a grid of large cards, each with the stages beside it.
+    case grid
 }
 
 public struct BoardColumn: Equatable, Sendable {
@@ -75,6 +77,8 @@ public struct Board: Equatable, Sendable {
     public let onHold: [Run]
     /// Finished runs older than the finished window, and cancelled ones at once, newest first. Kept in both modes.
     public let archive: [Run]
+    /// Runs finished in the last 24 h: the by-status board's last column, hidden by the other modes.
+    public let recentlyFinished: [Run]
 
     public var onHoldCount: Int { onHold.count }
     public var archiveCount: Int { archive.count }
@@ -87,6 +91,7 @@ public struct Board: Equatable, Sendable {
         }
         let recentIDs = Set(recent.map(\.id))
         archive = byFinish(finished.filter { !recentIDs.contains($0.id) })
+        recentlyFinished = ordered(recent, in: .finished, now: now)
         onHold = ordered(runs.filter { StatusGroup($0, now: now) == .onHold }, in: .onHold, now: now)
 
         switch mode {
@@ -102,6 +107,10 @@ public struct Board: Equatable, Sendable {
                 let members = active.filter { stageIndex($0) == index }
                 return BoardColumn(id: stage.id, es: stage.label(.es), en: stage.label(.en), runs: byStart(members))
             }
+        case .grid:
+            // One column, in the widget's order: what waits on the person first, then what works, then what is in review.
+            let active = runs.filter { ![.finished, .onHold].contains(StatusGroup($0, now: now)) }
+            columns = [BoardColumn(id: "active", es: "Activos", en: "Active", runs: widgetRuns(active, now: now))]
         }
     }
 }
