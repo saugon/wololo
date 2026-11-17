@@ -1,8 +1,9 @@
+import AppKit
 import SwiftUI
 import WololoKit
 
 /// An active run in the widget: the status dot, the title with how long ago it changed, the project beside a thin
-/// progress bar with `n/8`, and the activity line. Clicking it opens the run's detail; the button on the right goes
+/// PR's link and a progress bar with `n/8`, and the activity line. Clicking it opens the run's detail; the button on the right goes
 /// to its terminal.
 struct WidgetRow: View {
     let run: Run
@@ -46,6 +47,14 @@ struct WidgetRow: View {
                         }
                         .layoutPriority(1)
                         .help(run.project.branch ?? run.project.display)
+                        if let pr = prLink {
+                            Link(pr.text, destination: pr.url)
+                                .font(theme.font(.mono, size: 11, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .help("Abrir el PR en el navegador: \(pr.url.absoluteString)")
+                        }
                         ProgressBarView(
                             progress: progress,
                             height: 3,
@@ -72,6 +81,10 @@ struct WidgetRow: View {
                 cornerRadius: theme.r(6),
                 action: open
             )
+            // The row reads as one button to VoiceOver, so the PR is one of its actions.
+            .accessibilityAction(named: "Abrir el PR") {
+                if let pr = prLink { NSWorkspace.shared.open(pr.url) }
+            }
 
             Button(action: goToTerminal) {
                 Image(systemName: "terminal")
@@ -90,6 +103,12 @@ struct WidgetRow: View {
         .padding(.vertical, 11)
         .background(isHovered ? theme.widgetHover : Color.clear)
         .onHover { isHovered = $0 }
+    }
+
+    /// "PR #4873" and where it lives, once the run opened one with a URL.
+    private var prLink: (text: String, url: URL)? {
+        guard let pr = run.pr, let url = URL(string: pr.url), url.scheme?.hasPrefix("http") == true else { return nil }
+        return (prChip(run)?.text ?? "PR", url)
     }
 
     /// What VoiceOver reads after the title: status, project, stage, activity and when it changed.
