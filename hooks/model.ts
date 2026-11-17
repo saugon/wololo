@@ -191,6 +191,17 @@ export type TimeKind = 'work' | 'agents' | 'tests' | 'you' | 'paused' | 'review'
 
 export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'you', 'paused', 'review']
 
+// The mod ticks every second while the machine is awake: a gap between ticks longer than this is the machine asleep (the lid closed),
+// when nothing of the run moves but the clock does.
+export const ASLEEP_AFTER_SECONDS = 30
+
+// Up to when a stretch of time from since to at counts: all of it, unless the ticks stopped for longer than ASLEEP_AFTER_SECONDS in
+// between, and then only up to the last tick before the machine slept.
+export function awakeUntil(since: number, at: number, lastTick: number | null): number {
+  if (lastTick === null || at - lastTick <= ASLEEP_AFTER_SECONDS) return at
+  return Math.max(since, Math.min(lastTick, at))
+}
+
 export type StageTime = Partial<Record<TimeKind, number>> & { roles: Record<string, number> }
 
 export function timeKind(status: Status): TimeKind | null {

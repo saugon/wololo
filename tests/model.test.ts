@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusDetail, statusLine } from '../hooks/model'
+import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusDetail, statusLine, awakeUntil } from '../hooks/model'
 
 const IDLE: Live = { isTurnRunning: false, question: null, permission: null }
 
@@ -204,4 +204,15 @@ test('a run whose PR is ready waits in review, works on the review, and is never
   expect(closed.pr?.state).toBe('closed')
   expect(deriveStatus(closed, IDLE)).toBe('waiting_user')
   expect(closed.waiting?.question).toBe('El PR #7 se cerró sin mergear: ¿lo doy por cancelado?')
+})
+
+test('time while the machine slept is left out: a stretch counts only up to the last tick before the gap', async () => {
+  // Ticking every second: all of it counts.
+  expect(awakeUntil(1_000, 1_600, 1_599)).toBe(1_600)
+  // The lid closed after the tick at 1_100 and the machine woke at 37_000: only up to 1_100 counts.
+  expect(awakeUntil(1_000, 37_000, 1_100)).toBe(1_100)
+  // A stretch that began after the last tick (an event while waking) counts nothing of the sleep.
+  expect(awakeUntil(1_200, 37_000, 1_100)).toBe(1_200)
+  // No tick yet (the mod just loaded): the whole stretch counts.
+  expect(awakeUntil(1_000, 37_000, null)).toBe(37_000)
 })

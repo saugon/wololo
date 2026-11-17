@@ -52,6 +52,8 @@ import {
   sinceLastSeen,
   stageIndex,
   timeKind,
+  ASLEEP_AFTER_SECONDS,
+  awakeUntil,
 } from './model'
 import { connections, maxConnections } from './postgres'
 import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, urlIn } from './github'
@@ -187,6 +189,8 @@ let pendingUsage = new Map<
 >()
 let lastUsd: number | null = null
 let timeMark: { stage: StageId; kind: TimeKind; since: number } | null = null
+// When the last tick ran, to tell the machine slept from the gap between two ticks.
+let lastTickAt: number | null = null
 let pendingTime = new Map<string, { stage: StageId; kind: TimeKind; seconds: number }>()
 const headers = new Map<string, string>()
 const statusRenders = new Map<string, StatusCard[]>()
@@ -443,7 +447,8 @@ async function emit($: Engine, type: EventType, data: Record<string, unknown> = 
 
 function closeTime(at: number) {
   if (!timeMark) return
-  const seconds = at - timeMark.since
+  // While the machine slept, the run did not work nor wait: that time is left out, and shows as unmeasured.
+  const seconds = awakeUntil(timeMark.since, at, lastTickAt) - timeMark.since
   if (seconds > 0) {
     const key = `${timeMark.stage}|${timeMark.kind}`
     const was = pendingTime.get(key) ?? { stage: timeMark.stage, kind: timeMark.kind, seconds: 0 }
@@ -2328,6 +2333,7 @@ function classifyTask(command: string): 'ci' | 'tests' | 'external' | 'server' |
 
 function startTicking($: Engine) {
   timer?.cancel()
+  lastTickAt = null
   timer = $.clock.every(TICK_MS, () => {
     if (isWriting) return
     isWriting = true
@@ -2337,6 +2343,10 @@ function startTicking($: Engine) {
         return
       }
       ticks += 1
+      const at = await nowSeconds($)
+      // Woken up: the time asleep is closed out of the run's time before anything else is measured.
+      if (lastTickAt !== null && at - lastTickAt > ASLEEP_AFTER_SECONDS) closeTime(at)
+      lastTickAt = at
       if (ticks % HEARTBEAT_TICKS === 0) await heartbeat($)
       if (ticks % HEARTBEAT_TICKS === 0) await checkJob($)
       if (ticks % HEARTBEAT_TICKS === 0) await checkPr($)
