@@ -11,6 +11,6 @@ How the run starts the project's app, for the screenshots (`stages/05-evidence.m
      - Then wait for the port in one command: `for i in $(seq 90); do lsof -nP -iTCP:<port> -sTCP:LISTEN -t && break; sleep 2; done`.
      - Record its pid and port in `run_dir/servers.json`.
 3. **Stop them** when the step that started them ends, always, even after a failure:
-   - kill the servers recorded in `servers.json` and remove them from it. Record each with its `pid`: when the run finishes, wololo also stops any of them still running one of the project's start commands, in case one was missed;
+   - kill the servers recorded in `servers.json` and remove them from it. Record each with its `pid`: when the run finishes (done, failed, cancelled or its PR merged), wololo also stops any of them still running one of the project's start commands, and everything that serves a port from inside the worktree, in case one was missed, and then gives the instance back (`config.instance.release`);
    - check that each port is free again;
    - never stop a server you reused.

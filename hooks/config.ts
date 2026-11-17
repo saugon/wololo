@@ -88,8 +88,9 @@ export type Config = {
   // Runs another tool drives without a session, shown in /wololo status: the command that lists them, and the one that says where one stands ({run}).
   mirror: { list: string; run: string }
   // The instance the project itself gives each worktree, when it keeps its own registry: read prints its number, run in the work
-  // tree, and the run's slot follows it (so the ports are that instance's); databases names that instance's ({slot}).
-  instance: { read: string; databases: string[] }
+  // tree, and the run's slot follows it (so the ports are that instance's); databases names that instance's ({slot}); release gives
+  // it back when the run finishes, run in the work tree once its servers are down.
+  instance: { read: string; databases: string[]; release: string }
   // Paths whose change makes a run high risk, whatever risk it was given.
   risk_paths: string[]
   // Variables every project command runs with (set) or without (unset), so the session's own environment does not leak in.
@@ -151,7 +152,7 @@ export const DEFAULT_CONFIG: Config = {
   keep_awake: false,
   adapters: {},
   mirror: { list: '', run: '' },
-  instance: { read: '', databases: [] },
+  instance: { read: '', databases: [], release: '' },
   risk_paths: [],
   env: { set: {}, unset: [] },
   view: {

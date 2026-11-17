@@ -12,7 +12,7 @@ const DATA = `${HOME}/.claude/wololo`
 type BeforeKind = 'git' | 'clock.now' | 'fs.read' | 'fs.exists' | 'fs.list' | 'fs.write' | 'fs.stat' | 'append'
 type Before = (kind: BeforeKind, what: string) => string | number | undefined | Promise<string | number | undefined>
 // commands holds every process the plugin ran, its argv joined.
-type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; commands: string[]; before: Before }
+type Host = { opens: Array<{ id: string; focus?: boolean }>; files: Map<string, string>; gh: string[]; tools: Map<string, boolean>; ps: Map<string, string>; dead: Set<string>; stubborn: Set<string>; killed: string[]; shells: string[]; answers: Array<{ match: RegExp; stdout: string; exit: number }>; git: Map<string, string>; commands: string[]; before: Before }
 
 function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unplaced?: string; session?: () => string } = {}): Host {
   const opens: Array<{ id: string; focus?: boolean }> = []
@@ -26,7 +26,7 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
   const answers: Array<{ match: RegExp; stdout: string; exit: number }> = []
   // What a git command answers, by its arguments, beside the ones every test gets.
   const git = new Map<string, string>()
-  const host: Host = { opens, files, gh, tools, ps, dead, killed, shells, answers, git, commands: [], before: () => undefined }
+  const host: Host = { opens, files, gh, tools, ps, dead, stubborn: new Set<string>(), killed, shells, answers, git, commands: [], before: () => undefined }
 
   on('env.get', (_, e) => ({ value: e.name === 'HOME' ? HOME : undefined }))
   on('session.id', () => ({ value: options.session?.() ?? 's1' }))
@@ -115,7 +115,13 @@ function fakeHost(on: Parameters<TestBody>[1], options: { clock?: boolean; unpla
     if (cmd === 'kill') {
       if (args[0] === '-0') return done('', dead.has(args[1] ?? '') ? 1 : 0)
       killed.push(args.join(' '))
+      // A group sent TERM or KILL is gone, unless it ignores the TERM: the cleanup's kill -0 then finds nothing.
+      if (args[1] && !(args[0] === '-TERM' && host.stubborn.has(args[1]))) dead.add(args[1])
       return done()
+    }
+    if (cmd === 'lsof') {
+      const found = answers.find(answer => answer.match.test(`lsof ${args.join(' ')}`))
+      return found ? done(found.stdout, found.exit) : done('', 1)
     }
     if (cmd === 'gh') {
       gh.push(args.join(' '))
@@ -990,6 +996,22 @@ test('a run in review ends as done when its PR merges', async ($, on) => {
   const lines = eventLines(host, id)
   expect(lines.map(line => line.type).slice(-2)).toEqual(['pr.merged', 'run.finished'])
   expect(lines.at(-1)?.data).toEqual({ outcome: 'done', summary: 'PR #4813 mergeado.' })
+})
+
+test('a run finished by its PR merging stops its servers too', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  const id = 'repo-4796-rev003'
+  seedReview(host, id)
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ commands: { start: [{ name: 'backend', cmd: 'make backend.run', port: '4000' }] } }))
+  host.files.set(`${DATA}/runs/${id}/servers.json`, JSON.stringify([{ name: 'backend', pid: 4242, port: 4000 }]))
+  host.ps.set('4242', '4240 make backend.run')
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  await clock.advance(330_000)
+  expect(eventLines(host, id).map(line => line.type)).toContain('run.finished')
+  expect(host.killed).toEqual(['-TERM -4240'])
 })
 
 test('a run in review whose PR is closed without merging asks the person', async ($, on) => {
@@ -1943,6 +1965,57 @@ test('a finished run stops the servers it started, and only those', async ($, on
   )
   expect(host.killed).toEqual(['-TERM -4240'])
   expect((finished.cleanup as { stopped: string[] }).stopped).toEqual(['4242 (make backend.run)'])
+})
+
+test('a finished run also stops whatever serves a port from inside its worktree, but never the session\'s own group', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  const worktree = String(started.worktree)
+  host.answers.push(
+    { match: /^lsof -nP -iTCP -sTCP:LISTEN -Fpcn$/, stdout: ['p7001', 'cpython3', 'n127.0.0.1:8671', 'p7002', 'cnode', 'n[::1]:3064', 'p7003', 'cpostgres', 'n[::1]:5432', 'p7004', 'cnode', 'n127.0.0.1:9229'].join('\n'), exit: 0 },
+    { match: /^lsof -a -p 7001,7002,7003,7004 -d cwd -Fpn$/, stdout: ['p7001', `n${worktree}`, 'p7002', `n${worktree}/frontend`, 'p7003', 'n/Users/me/.local/share/pg', 'p7004', `n${worktree}`].join('\n'), exit: 0 },
+    { match: /^ps -o pgid= -p \$PPID$/, stdout: '9000\n', exit: 0 },
+  )
+  host.ps.set('7001', '7000 python3 tools/mock/server.py')
+  host.ps.set('7002', '6990 node vite.js')
+  host.ps.set('7004', '9000 node --inspect')
+  const finished = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'done', summary: 's' } } as never)).result,
+  )
+  expect(host.killed).toEqual(['-TERM -7000', '-TERM -6990'])
+  expect((finished.cleanup as { stopped: string[] }).stopped).toEqual(['7001 (python3 tools/mock/server.py, :8671)', '7002 (node vite.js, :3064)'])
+})
+
+test('a finished run gives its instance back once its servers are down', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ instance: { release: 'make inst.release' } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  host.answers.push({ match: /make inst\.release$/, stdout: 'Released instance 3.', exit: 0 })
+  const finished = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'done', summary: 's' } } as never)).result,
+  )
+  expect(host.shells.filter(line => line.endsWith('make inst.release'))).toHaveLength(1)
+  expect((finished.cleanup as { released: string }).released).toBe('ok')
+})
+
+test('a group that ignores the TERM gets a KILL before the run says it finished', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'text', ref: 'x' }, title: 'X' } as never)).result)
+  host.answers.push(
+    { match: /^lsof -nP -iTCP -sTCP:LISTEN -Fpcn$/, stdout: 'p7001\ncmix\nn127.0.0.1:4070', exit: 0 },
+    { match: /^lsof -a -p 7001 -d cwd -Fpn$/, stdout: `p7001\nn${String(started.worktree)}/backend`, exit: 0 },
+  )
+  host.ps.set('7001', '7000 mix phx.server')
+  // The TERM is ignored: the group stays alive until the KILL.
+  host.stubborn.add('-7000')
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'run.finished', data: { outcome: 'done', summary: 's' } } as never)
+  expect(host.killed).toEqual(['-TERM -7000', '-KILL -7000'])
 })
 
 const RUNNER = {

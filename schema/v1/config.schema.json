@@ -487,6 +487,10 @@
             "type": "string"
           },
           "description": "The instance's databases ({slot}), shown with their open connections."
+        },
+        "release": {
+          "type": "string",
+          "description": "Gives the work tree's instance back when the run finishes, once its servers are down."
         }
       }
     },

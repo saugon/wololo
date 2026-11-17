@@ -1200,16 +1200,9 @@ async function inspectWorktree($: Engine) {
 
 // The ports served from inside the work tree: the servers the run left up, on whatever port they took, beside the configured ones.
 async function worktreeListeners($: Engine, dir: string): Promise<Array<{ name: string; port: number }>> {
-  const listed = await $.process.run(['lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fpcn'], { timeoutMs: 5_000 }).catch(() => undefined)
-  if (!listed || listed.exitCode !== 0) return []
-  const all = listeners(listed.stdout)
-  const pids = [...new Set(all.map(seen => seen.pid))]
-  if (pids.length === 0) return []
-  const cwd = await $.process.run(['lsof', '-a', '-p', pids.join(','), '-d', 'cwd', '-Fpn'], { timeoutMs: 5_000 }).catch(() => undefined)
-  const dirs = workingDirs(cwd?.stdout ?? '')
   const tasks = run ? liveTasks(run) : []
-  return all
-    .filter(seen => isInside(dirs.get(seen.pid) ?? '', dir))
+  const inside = await insideListeners($, dir)
+  return inside
     .sort((a, b) => a.port - b.port)
     .filter((seen, i, list) => list.findIndex(other => other.port === seen.port) === i)
     .map(seen => ({ name: tasks.find(task => task.port === seen.port)?.label ?? seen.command, port: seen.port }))
@@ -1456,10 +1449,18 @@ async function riskyChange($: Engine, type: string, data: Record<string, unknown
 
 const LOG_KEEP_BYTES = 1024 * 1024
 
-// A finished run takes its servers down and leaves its logs readable: each server recorded in servers.json that is still running one of the
-// project's start commands is stopped, with its process group, and each log past 5 MB keeps its last megabyte.
-async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; trimmed: string[] }> {
+// A finished run takes everything it left up down and leaves its logs readable: each server recorded in servers.json that is still running
+// one of the project's start commands, and every process serving a port from inside the run's worktree (a server started by hand, a mock,
+// a dev server on a port of its own), each with its process group; the session's own group is never touched. Each log past 5 MB keeps
+// its last megabyte.
+async function cleanUp(
+  $: Engine,
+  dir: string,
+  worktree: string | null,
+): Promise<{ stopped: string[]; trimmed: string[]; released?: string }> {
   const stopped: string[] = []
+  const groups = new Set<string>()
+  const own = await ownGroup($)
   const recorded = parseJson(await readText($, `${dir}/servers.json`)).value
   const entries = Array.isArray(recorded) ? recorded : isObject(recorded) ? Object.values(recorded) : []
   // A start command as ps shows it: its first two words, without the VAR=value assignments before it.
@@ -1475,9 +1476,33 @@ async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; tri
     if (!Number.isInteger(pid) || pid <= 1) continue
     const shown = await $.process.run(['ps', '-o', 'pgid=,command=', '-p', String(pid)], { timeoutMs: 5_000 }).catch(() => undefined)
     const [pgid, ...command] = (shown?.stdout ?? '').trim().split(/\s+/)
-    if (!pgid || !starts.some(start => start && command.join(' ').includes(start))) continue
-    await $.process.run(['kill', '-TERM', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    if (!pgid || pgid === own || !starts.some(start => start && command.join(' ').includes(start))) continue
+    if (!groups.has(pgid)) await $.process.run(['kill', '-TERM', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    groups.add(pgid)
     stopped.push(`${pid} (${command.join(' ').slice(0, 60)})`)
+  }
+  for (const seen of worktree ? await insideListeners($, worktree) : []) {
+    const shown = await $.process.run(['ps', '-o', 'pgid=,command=', '-p', String(seen.pid)], { timeoutMs: 5_000 }).catch(() => undefined)
+    const [pgid, ...command] = (shown?.stdout ?? '').trim().split(/\s+/)
+    if (!pgid || pgid === '1' || pgid === own || groups.has(pgid)) continue
+    await $.process.run(['kill', '-TERM', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    groups.add(pgid)
+    stopped.push(`${seen.pid} (${command.join(' ').slice(0, 60) || seen.command}, :${seen.port})`)
+  }
+  // What ignored the TERM after a few seconds gets a KILL, so the ports are free when the run says it is finished.
+  for (let wait = 0; wait < 5 && groups.size > 0; wait++) {
+    const alive = await groupsAlive($, groups)
+    if (alive.length === 0) break
+    if (wait === 4) for (const pgid of alive) await $.process.run(['kill', '-KILL', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    else await $.process.run(['sleep', '1'], { timeoutMs: 5_000 }).catch(() => undefined)
+  }
+  // With its servers down, the instance the project gave the work tree goes back to its registry (config.instance.release).
+  let released: string | undefined
+  if (worktree && config.instance.release) {
+    const ran = await $.process
+      .run(['sh', '-c', withEnv(config.instance.release, envPrefix(config.env))], { cwd: worktree, timeoutMs: 30_000 })
+      .catch(() => undefined)
+    released = ran?.exitCode === 0 ? 'ok' : `failed: ${(ran?.stderr || ran?.stdout || 'did not run').trim().slice(0, 200)}`
   }
   const trimmed: string[] = []
   const found = await $.process.run(['find', dir, '-name', '*.log', '-size', '+5M'], { timeoutMs: 10_000 }).catch(() => undefined)
@@ -1491,7 +1516,38 @@ async function cleanUp($: Engine, dir: string): Promise<{ stopped: string[]; tri
     )
     trimmed.push(file.slice(dir.length + 1))
   }
-  return { stopped, trimmed }
+  return { stopped, trimmed, ...(released ? { released } : {}) }
+}
+
+// The process group the session runs in: the parent of the shell the mod starts. Never stopped with a run's servers.
+async function ownGroup($: Engine): Promise<string | null> {
+  const shown = await $.process.run(['sh', '-c', 'ps -o pgid= -p $PPID'], { timeoutMs: 5_000 }).catch(() => undefined)
+  const pgid = shown?.exitCode === 0 ? shown.stdout.trim() : ''
+  return /^\d+$/.test(pgid) ? pgid : null
+}
+
+// The groups among `groups` with a process still in them (`kill -0 -<pgid>` succeeds).
+async function groupsAlive($: Engine, groups: Set<string>): Promise<string[]> {
+  const alive: string[] = []
+  for (const pgid of groups) {
+    const probed = await $.process.run(['kill', '-0', `-${pgid}`], { timeoutMs: 5_000 }).catch(() => undefined)
+    if (probed?.exitCode === 0) alive.push(pgid)
+  }
+  return alive
+}
+
+// The TCP listeners whose process works inside `dir`, one per process.
+async function insideListeners($: Engine, dir: string): Promise<Array<{ pid: number; command: string; port: number }>> {
+  const listed = await $.process.run(['lsof', '-nP', '-iTCP', '-sTCP:LISTEN', '-Fpcn'], { timeoutMs: 5_000 }).catch(() => undefined)
+  if (!listed || listed.exitCode !== 0) return []
+  const all = listeners(listed.stdout)
+  const pids = [...new Set(all.map(seen => seen.pid))]
+  if (pids.length === 0) return []
+  const cwd = await $.process.run(['lsof', '-a', '-p', pids.join(','), '-d', 'cwd', '-Fpn'], { timeoutMs: 5_000 }).catch(() => undefined)
+  const dirs = workingDirs(cwd?.stdout ?? '')
+  return all
+    .filter(seen => isInside(dirs.get(seen.pid) ?? '', dir))
+    .filter((seen, i, list) => list.findIndex(other => other.pid === seen.pid) === i)
 }
 
 // The tree `git add -A && git commit` would make of the work tree now, built in a scratch index so the real one is left alone.
@@ -1548,11 +1604,11 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
     if (type === 'gate.resolved') data.snapshot = current
   }
   if (!(await emit($, type as EventType, data))) return notOwner(run.id)
-  let cleanup: { stopped: string[]; trimmed: string[] } | null = null
+  let cleanup: Awaited<ReturnType<typeof cleanUp>> | null = null
   if (type === 'run.finished') {
     // Once its line is written the run is finished, whoever owns the session after; dropped, the owner still has it running.
     if (!(await flush($)) && !(await isOwner($))) return notOwner(run.id)
-    cleanup = await cleanUp($, runDir(paths, run.id))
+    cleanup = await cleanUp($, runDir(paths, run.id), run.project.worktree ?? null)
   }
   // Kept short: the answer stays in the conversation and is read again on every request after it. The card already shows the header,
   // and get still returns it.
@@ -1792,7 +1848,11 @@ async function checkPr($: Engine) {
   const es = run.lang === 'es'
   if (state === 'MERGED') {
     await emit($, 'pr.merged', {})
-    await emit($, 'run.finished', { outcome: 'done', summary: es ? `PR #${n} mergeado.` : `PR #${n} merged.` })
+    const dir = paths ? runDir(paths, run.id) : null
+    const worktree = run.project.worktree ?? null
+    if (!(await emit($, 'run.finished', { outcome: 'done', summary: es ? `PR #${n} mergeado.` : `PR #${n} merged.` }))) return
+    // Finished by the merge, not by the event tool: its servers go down here.
+    if (dir) await cleanUp($, dir, worktree)
     return
   }
   if (state === 'OPEN' && run.pr?.state === 'closed') {
