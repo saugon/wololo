@@ -150,6 +150,8 @@ export type WorktreeInfo = {
   ports: Array<{ name: string; port: number; listening: boolean | null }>
   // Whether the slot is the instance the project gave the work tree (config.instance.read).
   instance?: boolean
+  // The instance the project's registry gives the work tree, when it has one; differs from the run's slot while instance.used holds another.
+  registered?: number | null
   // The instance's databases with their open connections, and the local Postgres' total against its max_connections.
   databases?: { list: Array<{ name: string; connections: number }>; total: number | null; max: number | null } | null
   // Other ports served from inside the work tree: servers the run left up beside the configured ones.
@@ -199,7 +201,10 @@ function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string |
   if (git.length > 0) blocks.push({ label: 'git', lines: named(git), gap: true })
   const others = info?.others ?? []
   if (info && (info.ports.length > 0 || info.instance || others.length > 0)) {
-    const ports: Array<[string, Span[]]> = [[info.instance ? (es ? 'instancia' : 'instance') : 'slot', [span(String(run.slot), 'text')]]]
+    const slot: Span[] = [span(String(run.slot), 'text')]
+    const registered = info.registered ?? null
+    if (run.instance_used && registered !== null && registered !== run.slot) slot.push(span(es ? `  (worktree: ${registered})` : `  (work tree: ${registered})`, 'subtle'))
+    const ports: Array<[string, Span[]]> = [[info.instance || run.instance_used ? (es ? 'instancia' : 'instance') : 'slot', slot]]
     for (const port of info.ports) {
       const state =
         port.listening === null ? [] : port.listening ? [span(es ? '  en uso' : '  in use', 'claude')] : [span(es ? '  libre' : '  free', 'subtle')]

@@ -403,6 +403,33 @@ test("the run's slot follows the instance the project gave its work tree, and th
   expect(host.commands).toContain('ps -A -o command=')
 })
 
+test('an instance the person asked for holds over the work tree\'s until it is cleared', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(
+    `${DATA}/projects/acme__shop/config.json`,
+    JSON.stringify({
+      commands: { start: [{ name: 'backend', cmd: 'make backend.run', port: '4000+10*{slot}' }] },
+      instance: { read: 'cat .vertex-inst', databases: ['shop_dev_{slot}'] },
+    }),
+  )
+  host.answers.push({ match: /cat \.vertex-inst/, stdout: '9\n', exit: 0 })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)
+  await clock.advance(15_000)
+  expect(String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'instance.used', data: { slot: 6 } } as never)).result)).toContain('data.reason')
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'instance.used', data: { slot: 6, reason: 'the person tests on 6' } } as never)
+  await clock.advance(15_000)
+  const held = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((held.run as Run).slot).toBe(6)
+  expect((held.ports as Array<{ name: string; port: number }>).map(p => [p.name, p.port])).toEqual([['backend', 4060]])
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'instance.used', data: { slot: null } } as never)
+  await clock.advance(15_000)
+  const back = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
+  expect((back.run as Run).slot).toBe(9)
+})
+
 test('the branch gets its name from the spec, by the config template, until it is on origin', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))

@@ -343,6 +343,16 @@ test('the summary names the worktree, its branch against the base, its HEAD and 
   expect(summary.slice(-3).map(entry => entry.label)).toEqual(['git', 'puertos', 'ruta'])
 })
 
+test('with an instance the person asked for, the summary shows it beside the work tree\'s', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 9, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/wt', branch: 'wololo/x', base: 'main' } }],
+    ['instance.used', { from: 9, slot: 6, reason: 'la persona prueba en la 6' }],
+  ])
+  const info = { head: null, subject: null, ahead: null, behind: null, dirty: null, ports: [{ name: 'backend', port: 4060, listening: true }], instance: true, registered: 9 }
+  const summary = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').pane.summary
+  expect(block(summary, 'puertos')).toEqual(['instancia  6  (worktree: 9)', 'backend    4060  en uso'])
+})
+
 test("with the project's instance, the summary names it and shows its databases with their connections", async () => {
   const list = events([
     ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 3, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/wt', branch: 'wololo/x', base: 'main' } }],

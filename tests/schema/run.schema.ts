@@ -158,6 +158,26 @@ export default {
       "type": "integer",
       "description": "Port slot of the run; parallel runs get different slots."
     },
+    "instance_used": {
+      "description": "The instance the person asked the run to use in place of the work tree's; while set, slot stays on it.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "slot",
+        "reason"
+      ],
+      "properties": {
+        "slot": {
+          "type": "integer"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
     "status": {
       "enum": [
         "running",

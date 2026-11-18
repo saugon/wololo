@@ -58,6 +58,7 @@ export const EVENT_TYPES = [
   'branch.renamed',
   'base.changed',
   'slot.changed',
+  'instance.used',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -108,6 +109,7 @@ export type EventType = (typeof EVENT_TYPES)[number]
 
 export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'base.changed',
+  'instance.used',
   'risk.set',
   'stage.entered',
   'stage.completed',
@@ -279,6 +281,8 @@ export type Run = {
   risk: Risk
   lang: Lang
   slot: number
+  // The instance the person asked the run to use in place of the one the project gave its work tree: while set, the slot stays on it.
+  instance_used?: { slot: number; reason: string } | null
   stage: { id: StageId; index: number; total: number; since: number } | null
   stages: StageEntry[]
   gates: Partial<
@@ -489,6 +493,12 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'slot.changed':
       if (typeof d.to === 'number' && Number.isInteger(d.to) && d.to >= 0) r.slot = d.to
+      break
+    case 'instance.used':
+      if (typeof d.slot === 'number' && Number.isInteger(d.slot) && d.slot >= 0) {
+        r.slot = d.slot
+        r.instance_used = { slot: d.slot, reason: str(d.reason) }
+      } else if (d.slot === null) r.instance_used = null
       break
     case 'risk.set':
       r.risk = (d.risk as Risk) ?? r.risk

@@ -95,6 +95,11 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
       }
       return null
     }
+    case 'instance.used':
+      if (data.slot === null) return null
+      if (typeof data.slot !== 'number' || !Number.isInteger(data.slot) || data.slot < 0)
+        return 'instance.used needs data.slot, the instance the person asked for (a whole number), or null to follow the work tree\'s again.'
+      return text(data.reason) ? null : 'instance.used needs data.reason: why this instance and not the work tree\'s.'
     case 'base.changed':
       return text(data.to) ? null : 'base.changed needs data.to, the branch the run now builds on.'
     case 'stage.completed':

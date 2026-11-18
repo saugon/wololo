@@ -34,6 +34,10 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('⎇', `${es ? 'Base cambiada' : 'Base changed'}: ${str(d.from)} → ${str(d.to)}${d.reason ? ` (${str(d.reason)})` : ''}`)
     case 'slot.changed':
       return one('⇄', `${es ? 'Instancia del proyecto' : "Project's instance"}: ${str(d.to)} (slot ${str(d.from)})`, false)
+    case 'instance.used':
+      return d.slot === null
+        ? one('⇄', es ? 'Vuelve a la instancia del worktree' : "Back to the work tree's instance")
+        : one('⇄', `${es ? 'Instancia' : 'Instance'} ${str(d.slot)}${d.reason ? `: ${str(d.reason)}` : ''}`)
     case 'risk.set':
       return one('·', `${es ? 'Riesgo' : 'Risk'} ${str(d.risk)}${d.reason ? `: ${str(d.reason)}` : ''}`, false)
     case 'stage.entered':

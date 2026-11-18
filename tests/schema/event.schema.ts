@@ -35,6 +35,7 @@ export default {
         "branch.renamed",
         "base.changed",
         "slot.changed",
+        "instance.used",
         "risk.set",
         "stage.entered",
         "stage.completed",

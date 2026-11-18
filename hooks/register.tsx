@@ -1174,7 +1174,8 @@ async function inspectWorktree($: Engine) {
   if (!dir) return
   await syncBranch($)
   const instance = await projectInstance($, dir)
-  if (instance !== null && instance !== run.slot) await emit($, 'slot.changed', { from: run.slot, to: instance })
+  // An instance the person asked for wins over the work tree's until it is cleared (instance.used {slot: null}).
+  if (!run.instance_used && instance !== null && instance !== run.slot) await emit($, 'slot.changed', { from: run.slot, to: instance })
   const base = run.project.base ?? config.pr.base
   const upstream = base.startsWith('origin/') ? base : `origin/${base}`
   const [head, counts, status] = await Promise.all([
@@ -1193,6 +1194,7 @@ async function inspectWorktree($: Engine) {
     dirty: status === null ? null : status.split('\n').filter(Boolean).length,
     ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port) }))),
     instance: instance !== null,
+    registered: instance,
     databases: await instanceDatabases($, databaseNames(config, run.slot)),
     others: (await worktreeListeners($, dir)).filter(seen => !started.some(p => p.port === seen.port)),
   }
@@ -1582,6 +1584,7 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   const data: Record<string, unknown> = isObject(input.data) ? { ...input.data } : {}
   const worktree = run.project.worktree
   if (type === 'branch.named') return nameBranch($, data)
+  if (type === 'instance.used') data.from = run.slot
   if (type === 'base.changed') {
     if (typeof data.to === 'string') data.to = data.to.trim().replace(/^origin\//, '')
     data.from = run.project.base ?? config.pr.base
@@ -2083,7 +2086,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, branch.named {slug} (renames the run's branch from config.branch with that slug, a few words on what the change does; at the start of the plan stage, before anything is pushed), base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, branch.named {slug} (renames the run's branch from config.branch with that slug, a few words on what the change does; at the start of the plan stage, before anything is pushed), base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), instance.used {slot, reason} (the person asked to run the servers on another instance than the work tree's: the card's ports and databases follow it; {slot: null} goes back to the work tree's), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {
