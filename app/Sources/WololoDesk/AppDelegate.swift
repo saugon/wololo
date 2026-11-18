@@ -89,9 +89,9 @@ final class AppState {
         model = RunsModel(dataDirectory: dataDirectory)
         isWidgetVisible = false
         planningPrefs = PlanningPrefs(defaults: defaults, persists: persists)
-        goalSession = GoalSession(store: Self.makeGoalStore(directory: GoalStore.directory(options: options),
-                                                            dataDirectory: dataDirectory, options: options,
-                                                            persists: persists))
+        let goalsDirectory = GoalStore.directory(options: options, dataDirectory: dataDirectory.url)
+        goalSession = GoalSession(store: Self.makeGoalStore(directory: goalsDirectory, dataDirectory: dataDirectory,
+                                                            options: options, persists: persists))
         // A snapshot starts where `WOLOLO_DESK_OPEN` says, not where the person left the app.
         if persists {
             tab = planningPrefs.tab
@@ -145,8 +145,10 @@ final class AppState {
         model.stop()
         model = RunsModel(dataDirectory: next)
         model.start()
-        goalSession.replaceStore(Self.makeGoalStore(directory: goalSession.store.directory, dataDirectory: next,
-                                                    options: options, persists: persists))
+        // Going to or from the sample data changes where the goals are read from, not only their copy.
+        let goalsDirectory = GoalStore.directory(options: options, dataDirectory: next.url)
+        goalSession.replaceStore(Self.makeGoalStore(directory: goalsDirectory, dataDirectory: next, options: options,
+                                                    persists: persists))
         dropMissingSelection()
     }
 
@@ -195,7 +197,7 @@ extension AppState {
     @discardableResult
     func createGoal(in projectID: String) -> Goal? {
         guard let project = project(id: projectID) else { return nil }
-        let goal = goalSession.createGoal(in: project)
+        guard let goal = goalSession.createGoal(in: project) else { return nil }
         selectedProjectID = project.id
         selectedGoalID = goal.id
         return goal
@@ -272,7 +274,7 @@ extension AppState {
         }
     }
 
-    /// `options.goalsDirectory` or Application Support, with its copy in `<data>/goals`. On the sample data the goals
+    /// `directory` (see `GoalStore.directory`), with its copy in `<data>/goals`. On the sample data the goals
     /// are only written to a folder chosen with `WOLOLO_DESK_GOALS_DIR` (see `GoalStore.writesGoals`).
     fileprivate static func makeGoalStore(directory: URL, dataDirectory: DataDirectory, options: LaunchOptions,
                                           persists: Bool) -> GoalStore {

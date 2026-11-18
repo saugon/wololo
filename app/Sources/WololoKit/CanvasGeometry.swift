@@ -74,13 +74,21 @@ public struct Viewport: Equatable, Sendable, Codable {
     public static let maxZoom = 2.0
     public static let identity = Viewport(offset: .zero, zoom: 1)
 
-    /// Where the canvas origin lands on screen.
-    public var offset: CanvasPoint
+    /// Where the canvas origin lands on screen. A non-finite component set on it (a runaway gesture) or decoded (a
+    /// corrupt file) becomes 0, so the canvas is never lost off to infinity. `init` keeps what it is given, so
+    /// `PlanningPrefs.setViewport` can still tell a runaway viewport and keep the saved one.
+    public var offset: CanvasPoint {
+        didSet { offset = Self.finite(offset) }
+    }
     public private(set) var zoom: Double
 
     public init(offset: CanvasPoint = .zero, zoom: Double = 1) {
         self.offset = offset
         self.zoom = Self.clamp(zoom)
+    }
+
+    private static func finite(_ point: CanvasPoint) -> CanvasPoint {
+        CanvasPoint(x: point.x.isFinite ? point.x : 0, y: point.y.isFinite ? point.y : 0)
     }
 
     public static func clamp(_ zoom: Double) -> Double {
@@ -141,7 +149,7 @@ public struct Viewport: Equatable, Sendable, Codable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: AnyKey.self)
-        offset = c.value("offset", or: .zero)
+        offset = Self.finite(c.value("offset", or: .zero))
         zoom = Self.clamp(c.value("zoom", or: 1))
     }
 

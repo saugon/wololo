@@ -49,7 +49,7 @@ final class GoalSessionTests: XCTestCase {
     func testTextEditsAreSavedOnceAfterTheLastOne() async throws {
         let session = session()
         session.saveProjects([shop])
-        var goal = session.createGoal(in: shop)
+        var goal = try XCTUnwrap(session.createGoal(in: shop))
         let created = try XCTUnwrap(saved(goal.id)).updatedAt
 
         goal.title = "E"
@@ -60,7 +60,10 @@ final class GoalSessionTests: XCTestCase {
         XCTAssertEqual(saved(goal.id)?.title, "Objetivo nuevo", "not written per keystroke")
         XCTAssertTrue(session.hasPendingSaves)
 
-        try await Task.sleep(for: .milliseconds(200))
+        let deadline = Date().addingTimeInterval(2)
+        while session.hasPendingSaves, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         let written = try XCTUnwrap(saved(goal.id))
         XCTAssertEqual(written.title, "Ecommerce")
         XCTAssertEqual(written.updatedAt, created + 1, "the two edits are one save")
@@ -70,7 +73,7 @@ final class GoalSessionTests: XCTestCase {
     func testFlushWritesWhatIsWaiting() throws {
         let session = session(delay: .seconds(60))
         session.saveProjects([shop])
-        var goal = session.createGoal(in: shop)
+        var goal = try XCTUnwrap(session.createGoal(in: shop))
         goal.title = "Ecommerce terminado"
         session.updateText(goal)
         XCTAssertEqual(saved(goal.id)?.title, "Objetivo nuevo")
@@ -83,7 +86,7 @@ final class GoalSessionTests: XCTestCase {
     func testAStructuralChangeSavesNowWithThePendingText() throws {
         let session = session(delay: .seconds(60))
         session.saveProjects([shop])
-        var goal = session.createGoal(in: shop)
+        var goal = try XCTUnwrap(session.createGoal(in: shop))
         goal.title = "Ecommerce terminado"
         session.updateText(goal)
         goal.addNode(GoalNode(id: "a", title: "Checkout"))
@@ -97,7 +100,7 @@ final class GoalSessionTests: XCTestCase {
 
     func testCreatingAGoalSavesTheProjectTheRunsName() throws {
         let session = session()
-        let goal = session.createGoal(in: shop)
+        let goal = try XCTUnwrap(session.createGoal(in: shop))
 
         let snapshot = store().load()
         XCTAssertEqual(snapshot.projects, [shop])
@@ -108,7 +111,7 @@ final class GoalSessionTests: XCTestCase {
 
     func testDeletingAGoalRemovesItsFileAndCopy() throws {
         let session = session()
-        let goal = session.createGoal(in: shop)
+        let goal = try XCTUnwrap(session.createGoal(in: shop))
         XCTAssertTrue(exists(local.appendingPathComponent("\(goal.id).json")))
         XCTAssertTrue(exists(mirror.appendingPathComponent("\(goal.id).json")))
 
@@ -121,9 +124,9 @@ final class GoalSessionTests: XCTestCase {
     func testDeletingAProjectRemovesItsGoalsAndKeepsTheOthers() throws {
         let blog = PlanningProject(id: "acme__blog", name: "blog", path: "/code/blog", repo: "acme/blog")
         let session = session()
-        let first = session.createGoal(in: shop)
-        let second = session.createGoal(in: shop)
-        let kept = session.createGoal(in: blog)
+        let first = try XCTUnwrap(session.createGoal(in: shop))
+        let second = try XCTUnwrap(session.createGoal(in: shop))
+        let kept = try XCTUnwrap(session.createGoal(in: blog))
 
         XCTAssertTrue(session.deleteProject(id: shop.id))
         XCTAssertEqual(session.storedProjects, [blog])
@@ -139,8 +142,8 @@ final class GoalSessionTests: XCTestCase {
 
     func testAProjectStaysWhenOneOfItsGoalsCantBeDeleted() throws {
         let session = session()
-        let first = session.createGoal(in: shop)
-        let stuck = session.createGoal(in: shop)
+        let first = try XCTUnwrap(session.createGoal(in: shop))
+        let stuck = try XCTUnwrap(session.createGoal(in: shop))
         // The first goal's copy is already gone; the second's sits in a copy folder that can't be changed.
         try FileManager.default.removeItem(at: mirror.appendingPathComponent("\(first.id).json"))
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: mirror.path)
@@ -160,7 +163,7 @@ final class GoalSessionTests: XCTestCase {
 
     func testAProjectIsNotDeletedWhileProjectsJSONIsUnreadable() throws {
         let session = session()
-        let goal = session.createGoal(in: shop)
+        let goal = try XCTUnwrap(session.createGoal(in: shop))
         try Data("{ broken".utf8).write(to: local.appendingPathComponent(GoalStore.projectsFileName))
         session.load()
 
@@ -195,6 +198,20 @@ final class GoalSessionTests: XCTestCase {
         XCTAssertEqual(reports.first?.first, "No pude guardar los proyectos")
     }
 
+    func testNoGoalIsCreatedWhenItsProjectCantBeSaved() throws {
+        // A file where the goals folder should be: the project the runs name can't be saved.
+        try FileManager.default.createDirectory(at: local.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data().write(to: local)
+        let session = session()
+
+        XCTAssertNil(session.createGoal(in: shop))
+        XCTAssertEqual(session.goals, [])
+        XCTAssertEqual(session.storedProjects, [])
+        XCTAssertEqual(reports.map(\.first),
+                       ["No pude guardar los proyectos", "No creé el objetivo: no pude guardar su proyecto"])
+        XCTAssertFalse(session.projectsUnreadable)
+    }
+
     func testLoadImportsTheCopysGoals() throws {
         let remote = GoalStore(directory: mirror, mirror: nil, writes: true)
         try remote.saveProjects([shop], at: 1)
@@ -215,7 +232,7 @@ final class GoalSessionTests: XCTestCase {
         let session = session(writes: false)
         session.load()
         XCTAssertEqual(session.goals.map(\.id), ["ecommerce"], "imported in memory")
-        var goal = session.createGoal(in: shop)
+        var goal = try XCTUnwrap(session.createGoal(in: shop))
         goal.title = "Otro"
         session.updateText(goal)
         session.update(goal)

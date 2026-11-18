@@ -50,22 +50,97 @@ final class RunLaunchTests: XCTestCase {
     func testITermNotRunningTypesTheLineInTheWindowItOpensOnStart() {
         let script = RunLaunch.iTermScript(folder: "/Users/x/code/shop", command: "/wololo #131")
         XCTAssertTrue(script.contains("set wasRunning to application \"iTerm2\" is running"))
-        XCTAssertTrue(script.contains("if not wasRunning and (count of windows) > 0 then"))
         XCTAssertTrue(script.contains("set w to current window"))
         XCTAssertTrue(script.contains("set w to (create window with default profile)"))
+    }
+
+    func testITermReusesTheStartupWindowOnlyWithOneWindowAndOneSession() {
+        let script = RunLaunch.iTermScript(folder: "/Users/x/code/shop", command: "/wololo #131")
+        XCTAssertTrue(script.contains("""
+                    if not wasRunning and (count of windows) is 1 and (count of tabs of current window) is 1 ¬
+                        and (count of sessions of current tab of current window) is 1 then
+                        set w to current window
+                    else
+                        set w to (create window with default profile)
+            """), script)
+        XCTAssertFalse(script.contains("wasRunning and (count of windows) > 0"))
     }
 
     func testGhosttyOpensAWindowInTheFolderTypingTheClaudeLine() {
         let script = RunLaunch.ghosttyScript(folder: "/Users/x/code/shop", command: "/wololo #131")
         XCTAssertEqual(script, #"""
-        tell application "Ghostty"
-            set c to new surface configuration
-            set initial working directory of c to "/Users/x/code/shop"
-            set initial input of c to "claude '/wololo #131'\n"
-            new window with configuration c
-            activate
-        end tell
+        with timeout of 10 seconds
+            tell application "Ghostty"
+                set c to new surface configuration
+                set initial working directory of c to "/Users/x/code/shop"
+                set initial input of c to "claude '/wololo #131'\n"
+                new window with configuration c
+                try
+                    activate
+                on error
+                    return "opened-failed"
+                end try
+            end tell
+            return "opened"
+        end timeout
         """#)
+    }
+
+    func testEveryScriptGivesUpAfterTenSecondsAndSaysWhetherTheWindowOpened() {
+        for script in scripts {
+            XCTAssertTrue(script.hasPrefix("with timeout of 10 seconds\n"), script)
+            XCTAssertTrue(script.hasSuffix("\n    return \"opened\"\nend timeout"), script)
+        }
+    }
+
+    func testAFailureAfterTheWindowOpensSaysSoInsteadOfFailing() {
+        let iTerm = RunLaunch.iTermScript(folder: "/Users/x/code/shop", command: "/wololo #131")
+        XCTAssertTrue(iTerm.contains("""
+                    try
+                        tell current session of w to write text "cd '/Users/x/code/shop' && claude '/wololo #131'"
+                    on error
+                        return "opened-failed"
+                    end try
+            """))
+        let terminal = RunLaunch.terminalScript(folder: "/Users/x/code/shop", command: "/wololo #131")
+        XCTAssertTrue(terminal.contains("""
+                        try
+                            do script "cd '/Users/x/code/shop' && claude '/wololo #131'" in window 1
+                        on error
+                            return "opened-failed"
+                        end try
+            """))
+        XCTAssertEqual(RunLaunch.openedResult, "opened")
+        XCTAssertEqual(RunLaunch.openedFailedResult, "opened-failed")
+    }
+
+    // Spec: the scripts must compile against each terminal's dictionary. Only compiled, never run.
+    func testTerminalScriptCompiles() throws {
+        try assertCompiles(RunLaunch.terminalScript(folder: "/tmp", command: "/wololo #1"),
+                           app: "/System/Applications/Utilities/Terminal.app")
+    }
+
+    func testGhosttyScriptCompiles() throws {
+        try assertCompiles(RunLaunch.ghosttyScript(folder: "/tmp", command: "/wololo #1"),
+                           app: "/Applications/Ghostty.app")
+    }
+
+    func testITermScriptCompiles() throws {
+        try assertCompiles(RunLaunch.iTermScript(folder: "/tmp", command: "/wololo #1"), app: "/Applications/iTerm.app")
+    }
+
+    private var scripts: [String] {
+        [RunLaunch.iTermScript(folder: "/Users/x/code/shop", command: "/wololo #131"),
+         RunLaunch.terminalScript(folder: "/Users/x/code/shop", command: "/wololo #131"),
+         RunLaunch.ghosttyScript(folder: "/Users/x/code/shop", command: "/wololo #131")]
+    }
+
+    private func assertCompiles(_ source: String, app: String, file: StaticString = #filePath,
+                                line: UInt = #line) throws {
+        guard FileManager.default.fileExists(atPath: app) else { throw XCTSkip("\(app) is not installed") }
+        let script = try XCTUnwrap(NSAppleScript(source: source), file: file, line: line)
+        var error: NSDictionary?
+        XCTAssertTrue(script.compileAndReturnError(&error), "\(error ?? [:])", file: file, line: line)
     }
 
     // Scenario 10

@@ -61,6 +61,30 @@ final class CanvasPressTests: XCTestCase {
         XCTAssertNil(CanvasPress.dropTarget(goal: goal, point: CanvasPoint(x: 284, y: 200), viewport: viewport))
     }
 
+    func testDropTargetFollowsTheZoomAndOffset() {
+        let zoomed = Viewport(offset: CanvasPoint(x: 50, y: 20), zoom: 2)
+        // B spans x 400…568, y 0…72 on the canvas: x 850…1186, y 20…164 on screen.
+        XCTAssertEqual(CanvasPress.dropTarget(goal: goal, point: CanvasPoint(x: 900, y: 80), viewport: zoomed), "B")
+        XCTAssertNil(CanvasPress.dropTarget(goal: goal, point: CanvasPoint(x: 840, y: 80), viewport: zoomed))
+        XCTAssertNil(CanvasPress.dropTarget(goal: goal, point: CanvasPoint(x: 450, y: 30), viewport: zoomed))
+        XCTAssertEqual(CanvasPress.dropResult(goal: goal, from: "B", point: CanvasPoint(x: 100, y: 80),
+                                              viewport: zoomed), .cycle)
+    }
+
+    func testEdgeToleranceIsInScreenPointsAtEveryZoom() {
+        // Along y = 36 near x 284 the arrow A → B runs flat, so a point straight below is that far from it.
+        for zoom in [0.5, 2.0] {
+            let viewport = Viewport(offset: CanvasPoint(x: 30, y: 10), zoom: zoom)
+            let onArrow = viewport.toScreen(CanvasPoint(x: 284, y: 36))
+            let hit = CanvasPoint(x: onArrow.x, y: onArrow.y + 6)
+            let miss = CanvasPoint(x: onArrow.x, y: onArrow.y + 7)
+            XCTAssertEqual(CanvasPress.target(goal: goal, viewport: viewport, selectedNodeID: nil, point: hit),
+                           .edge(GoalEdge(from: "A", to: "B")), "zoom \(zoom)")
+            XCTAssertEqual(CanvasPress.target(goal: goal, viewport: viewport, selectedNodeID: nil, point: miss),
+                           .background, "zoom \(zoom)")
+        }
+    }
+
     func testDropResults() {
         let onB = CanvasPoint(x: 450, y: 30)
         let onA = CanvasPoint(x: 50, y: 30)

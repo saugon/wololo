@@ -14,7 +14,8 @@ struct GoalCanvas: View {
     /// What a press on the canvas turned into, until the release.
     private enum Drag {
         case none
-        case pan(startOffset: CanvasPoint, start: CGPoint, moved: Bool)
+        /// `followedSize` is `followsSize` at the press, so Escape puts back the automatic fit along with the offset.
+        case pan(startOffset: CanvasPoint, start: CGPoint, moved: Bool, followedSize: Bool)
         /// `grab` is where the node was taken, relative to its top-left corner, in canvas units; `position` is where
         /// the drag has it, nil until it moves. Only the position is kept, so edits made meanwhile survive the release.
         case node(id: String, grab: CanvasPoint, start: CGPoint, position: CanvasPoint?)
@@ -226,15 +227,20 @@ struct GoalCanvas: View {
             },
             cancel: {
                 guard !state.isTextFocused, !state.isSearchFocused else { return }
-                // Escape during a drag drops the drag and leaves the selection as it was; a pan goes back to where it
-                // began.
+                // Escape during a drag drops it and keeps the selection: a pan goes back to where it began, following
+                // the canvas's size again if it did; a dragged node stays where it was and, selected by the press but
+                // never revealed while held, is brought into view now; an arrow being drawn is not made.
                 switch drag {
                 case .none:
                     clearSelection()
-                case .pan(let startOffset, _, _):
+                case .pan(let startOffset, _, _, let followedSize):
                     viewport.offset = startOffset
+                    followsSize = followedSize
                     drag = .none
-                case .node, .connect:
+                case .node(let id, _, _, _):
+                    drag = .none
+                    reveal(id)
+                case .connect:
                     drag = .none
                 }
             }
@@ -266,7 +272,7 @@ struct GoalCanvas: View {
             drag = .node(id: id, grab: CanvasPoint(x: canvas.x - position.x, y: canvas.y - position.y), start: point,
                          position: nil)
         case .edge, .background:
-            drag = .pan(startOffset: viewport.offset, start: point, moved: false)
+            drag = .pan(startOffset: viewport.offset, start: point, moved: false, followedSize: followsSize)
         }
     }
 
@@ -274,12 +280,12 @@ struct GoalCanvas: View {
         switch drag {
         case .none:
             break
-        case .pan(let startOffset, let start, let moved):
+        case .pan(let startOffset, let start, let moved, let followedSize):
             let isMoving = moved || distance(start, point) > Self.clickSlop
             guard isMoving else { return }
             followsSize = false
             viewport.offset = CanvasPoint(x: startOffset.x + point.x - start.x, y: startOffset.y + point.y - start.y)
-            drag = .pan(startOffset: startOffset, start: start, moved: true)
+            drag = .pan(startOffset: startOffset, start: start, moved: true, followedSize: followedSize)
         case .node(let id, let grab, let start, let position):
             guard position != nil || distance(start, point) > Self.clickSlop else { return }
             let canvas = viewport.toCanvas(canvasPoint(point))
@@ -296,7 +302,7 @@ struct GoalCanvas: View {
         switch finished {
         case .none:
             break
-        case .pan(_, _, let moved):
+        case .pan(_, _, let moved, _):
             if moved {
                 saveViewport()
             } else {

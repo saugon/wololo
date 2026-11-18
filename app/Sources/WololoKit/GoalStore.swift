@@ -113,9 +113,10 @@ public struct GoalStore: Sendable {
     }
 
     /// The goals in the copy whose id this machine doesn't have, and the projects that the goals it imports or already
-    /// has need and it doesn't have (so a project that failed to save is retried on the next import). They are written to the source of truth (unless `writes` is false), so they are this machine's from now
-    /// on. A goal that has a file locally is never touched, even if that file can't be read; unreadable files in the
-    /// copy are ignored. While the local `projects.json` can't be read the projects are returned but not written.
+    /// has need and it doesn't have (so a project that failed to save is retried on the next import). They are written
+    /// to the source of truth (unless `writes` is false), so they are this machine's from now on. A goal that has a
+    /// file locally is never touched, even if that file can't be read; unreadable files in the copy are ignored. While
+    /// the local `projects.json` can't be read the projects are returned but not written.
     public func importMirror() -> (projects: [PlanningProject], goals: [Goal]) {
         guard let mirror else { return ([], []) }
         let local = load()
@@ -261,11 +262,13 @@ public struct GoalStore: Sendable {
 extension GoalStore {
     public static let directoryEnvironmentKey = "WOLOLO_DESK_GOALS_DIR"
 
-    /// Where the app keeps the goals: `WOLOLO_DESK_GOALS_DIR`, else for a snapshot an empty folder that isn't there
-    /// (a snapshot never reads the person's goals), else `standard`.
-    public static func directory(options: LaunchOptions, standard: @autoclosure () -> URL = defaultDirectory()) -> URL {
+    /// Where the app keeps the goals: `WOLOLO_DESK_GOALS_DIR`, else for a snapshot or the sample data (a
+    /// `dataDirectory` with `.wololo-sample`) an empty folder that isn't there (neither reads the person's goals), else
+    /// `standard`.
+    public static func directory(options: LaunchOptions, dataDirectory: URL? = nil,
+                                 standard: @autoclosure () -> URL = defaultDirectory()) -> URL {
         if let chosen = options.goalsDirectory { return chosen }
-        if options.snapshotURL != nil {
+        if options.snapshotURL != nil || dataDirectory.map(DataDirectory.isSampleData) == true {
             return FileManager.default.temporaryDirectory
                 .appendingPathComponent("wololo-desk-snapshot-\(UUID().uuidString)/Goals", isDirectory: true)
         }

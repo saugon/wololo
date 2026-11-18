@@ -4,11 +4,15 @@ import WololoKit
 /// "Arrancar run": runs `claude '<command>'` in a new window of the first terminal installed (iTerm2, Ghostty,
 /// Terminal), in `folder`, told through AppleScript, which needs the Automation permission. When that fails (permission
 /// denied, a terminal without support, no terminal), the terminal opens in the folder as "Ir a la terminal" does, the
-/// line goes to the pasteboard and a toast says to paste it, and why when the permission was denied.
+/// line goes to the pasteboard and a toast says to paste it, and why when the permission was denied. When the window
+/// opened but the line did not get into it, only the pasteboard and the toast: a second window would be one too many.
 @MainActor
 enum RunLauncher {
     private enum ScriptResult {
         case ran
+        /// The script opened the window and then failed (`RunLaunch.openedFailedResult`): the line is copied, but no
+        /// second terminal is opened.
+        case openedFailed
         /// macOS denied the Automation permission (-1743, -1744).
         case denied
         case failed
@@ -25,6 +29,7 @@ enum RunLauncher {
             defer { pending.remove(key) }
             let (result, terminal) = await launchDirectly(command: command, folder: folder)
             if result == .ran { return }
+            if result == .openedFailed { return copyOnly(command: command, state: state) }
             let denied = result == .denied ? terminal : nil
             await fallBack(command: command, folder: folder, denied: denied, state: state)
         }
@@ -49,20 +54,31 @@ enum RunLauncher {
     }
 
     /// On `TerminalFocuser`'s queue, so no two scripts ever run at once. A script that does not compile (a Ghostty
-    /// without the dictionary) or fails in any other way is `.failed`.
+    /// without the dictionary) or fails in any other way before its window exists is `.failed`; one that says it failed
+    /// after opening it is `.openedFailed`.
     private static func runScript(_ source: String) async -> ScriptResult {
         await withCheckedContinuation { continuation in
             TerminalFocuser.queue.async {
                 guard let script = NSAppleScript(source: source) else { return continuation.resume(returning: .failed) }
                 var error: NSDictionary?
-                script.executeAndReturnError(&error)
-                guard let error else { return continuation.resume(returning: .ran) }
+                let output = script.executeAndReturnError(&error)
+                guard let error else {
+                    let opened = output.stringValue != RunLaunch.openedFailedResult
+                    return continuation.resume(returning: opened ? .ran : .openedFailed)
+                }
                 switch error[NSAppleScript.errorNumber] as? Int ?? 0 {
                 case -1743, -1744: continuation.resume(returning: .denied)
                 default: continuation.resume(returning: .failed)
                 }
             }
         }
+    }
+
+    /// The window is open but the line did not get there: copy it and say to paste it, in the window already open.
+    private static func copyOnly(command: String, state: AppState) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(RunLaunch.shellLine(command: command), forType: .string)
+        state.showToast(["Copié el comando: pegalo en la terminal"], holdsUntilActive: true)
     }
 
     /// The pasteboard and the toast come first: once the terminal opens it covers the window.

@@ -59,11 +59,22 @@ public enum RunLaunch {
         "cd \(shellQuote(folder)) && \(shellLine(command: command))"
     }
 
+    /// What a launch script returns once the line is in a terminal window.
+    public static let openedResult = "opened"
+    /// What a launch script returns when it failed after the window was already open: the launcher then copies the line
+    /// and says to paste it, without opening a second window. A failure before the window exists is a script error.
+    public static let openedFailedResult = "opened-failed"
+
+    /// How long a launch script waits on the terminal before giving up, in seconds, so a terminal that hangs never
+    /// blocks the queue every script runs on.
+    static let scriptTimeout = 10
+
     /// Types the `cd … && claude …` line in a new iTerm2 window with the default profile. When iTerm2 was not running
-    /// it opens a window of its own as it starts: the line goes there instead of in a second one.
+    /// it opens a window of its own as it starts: the line goes there instead of in a second one, but only while that
+    /// is a single window with a single session (a restored arrangement is left alone).
     public static func iTermScript(folder: String, command: String) -> String {
         let line = appleScriptString(cdLine(folder: folder, command: command))
-        return """
+        return guarded("""
         set wasRunning to application "iTerm2" is running
         tell application "iTerm2"
             activate
@@ -73,21 +84,27 @@ public enum RunLaunch {
                     delay 0.1
                 end repeat
             end if
-            if not wasRunning and (count of windows) > 0 then
+            if not wasRunning and (count of windows) is 1 and (count of tabs of current window) is 1 ¬
+                and (count of sessions of current tab of current window) is 1 then
                 set w to current window
             else
                 set w to (create window with default profile)
             end if
-            tell current session of w to write text \(line)
+            try
+                tell current session of w to write text \(line)
+            on error
+                return "\(openedFailedResult)"
+            end try
         end tell
-        """
+        """)
     }
 
     /// Runs the `cd … && claude …` line in a new Terminal window. When Terminal was not running it opens a window of
-    /// its own as it starts: the line runs there instead of in a second one.
+    /// its own as it starts: the line runs there instead of in a second one. A plain `do script` opens the window and
+    /// runs the line in one step, so only the reused window can fail after it exists.
     public static func terminalScript(folder: String, command: String) -> String {
         let line = appleScriptString(cdLine(folder: folder, command: command))
-        return """
+        return guarded("""
         set wasRunning to application "Terminal" is running
         tell application "Terminal"
             activate
@@ -98,26 +115,41 @@ public enum RunLaunch {
                 end repeat
             end if
             if not wasRunning and (count of windows) > 0 then
-                do script \(line) in window 1
+                try
+                    do script \(line) in window 1
+                on error
+                    return "\(openedFailedResult)"
+                end try
             else
                 do script \(line)
             end if
         end tell
-        """
+        """)
     }
 
     /// Opens a new Ghostty window in `folder` and types `claude '<command>'` and a return in it, through the
     /// dictionary Ghostty 1.4 ships (`Ghostty.sdef`); an older Ghostty fails to compile it and falls back.
     public static func ghosttyScript(folder: String, command: String) -> String {
-        """
+        guarded("""
         tell application "Ghostty"
             set c to new surface configuration
             set initial working directory of c to \(appleScriptString(folder))
             set initial input of c to \(appleScriptString(shellLine(command: command) + "\n"))
             new window with configuration c
-            activate
+            try
+                activate
+            on error
+                return "\(openedFailedResult)"
+            end try
         end tell
-        """
+        """)
+    }
+
+    /// `body` inside a timeout, returning `openedResult` when it gets to the end.
+    private static func guarded(_ body: String) -> String {
+        let indented = body.split(separator: "\n", omittingEmptySubsequences: false).map { "    " + $0 }
+        return (["with timeout of \(scriptTimeout) seconds"] + indented
+            + ["    return \"\(openedResult)\"", "end timeout"]).joined(separator: "\n")
     }
 
     private static func issue(of node: GoalNode, projectRepo: String?) -> IssueRef? {

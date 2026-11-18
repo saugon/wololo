@@ -156,6 +156,21 @@ final class GoalLayoutTests: XCTestCase {
         XCTAssertEqual(wild, Viewport(offset: .zero, zoom: 2))
     }
 
+    func testViewportOffsetStaysFinite() throws {
+        var viewport = Viewport(offset: CanvasPoint(x: 1, y: 2))
+        viewport.offset = CanvasPoint(x: 7, y: .nan)
+        XCTAssertEqual(viewport.offset, CanvasPoint(x: 7, y: 0))
+        viewport.offset.x = -.infinity
+        XCTAssertEqual(viewport.offset, CanvasPoint(x: 0, y: 0))
+
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+            positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan"
+        )
+        let json = Data(#"{"offset": {"x": "inf", "y": "nan"}, "zoom": 1}"#.utf8)
+        XCTAssertEqual(try decoder.decode(Viewport.self, from: json), Viewport(offset: .zero, zoom: 1))
+    }
+
     // MARK: - Free spot
 
     func testFreeSpotAvoidsNodesAndStaysVisible() {
@@ -219,5 +234,47 @@ final class GoalLayoutTests: XCTestCase {
         XCTAssertNil(goal.hitNode(at: CanvasPoint(x: 300, y: 10)))
         XCTAssertEqual(goal.handlePoint(of: "a"), CanvasPoint(x: 168, y: 36))
         XCTAssertNil(goal.rect(of: "missing"))
+    }
+
+    func testHitNodePicksTheTopmostOfOverlappingNodes() {
+        var goal = goal(["a", "b", "c"])
+        goal.move("a", to: CanvasPoint(x: 0, y: 0))
+        goal.move("b", to: CanvasPoint(x: 50, y: 0))
+        goal.move("c", to: CanvasPoint(x: 400, y: 0))
+        goal.move(Goal.finalID, to: CanvasPoint(x: 450, y: 10))
+        // a and b overlap from x 50 to 168: b comes later in `nodes`, so it is drawn on top.
+        XCTAssertEqual(goal.hitNode(at: CanvasPoint(x: 100, y: 30)), "b")
+        XCTAssertEqual(goal.hitNode(at: CanvasPoint(x: 20, y: 30)), "a")
+        // The final node is drawn over every step.
+        XCTAssertEqual(goal.hitNode(at: CanvasPoint(x: 500, y: 40)), Goal.finalID)
+        XCTAssertEqual(goal.hitNode(at: CanvasPoint(x: 420, y: 40)), "c")
+    }
+
+    func testHitEdgeFindsAnArrowIntoTheFinalNode() throws {
+        var goal = goal(["a"], edges: [("a", Goal.finalID)])
+        goal.move("a", to: CanvasPoint(x: 0, y: 0))
+        goal.move(Goal.finalID, to: CanvasPoint(x: 400, y: 100))
+        let curve = edgeCurve(from: try XCTUnwrap(goal.rect(of: "a")), to: try XCTUnwrap(goal.rect(of: Goal.finalID)))
+        XCTAssertEqual(goal.hitEdge(at: curve.point(at: 0.5), tolerance: 6), GoalEdge(from: "a", to: Goal.finalID))
+        XCTAssertNil(goal.hitEdge(at: CanvasPoint(x: 284, y: 300), tolerance: 6))
+    }
+
+    func testHitEdgePicksTheNearestOfTwoCloseArrows() throws {
+        var goal = goal(["a", "b", "c"], edges: [("a", "c"), ("b", "c")])
+        goal.move("a", to: CanvasPoint(x: 0, y: 0))
+        goal.move("b", to: CanvasPoint(x: 0, y: 20))
+        goal.move("c", to: CanvasPoint(x: 400, y: 10))
+        goal.move(Goal.finalID, to: CanvasPoint(x: 0, y: 600))
+        let upper = edgeCurve(from: try XCTUnwrap(goal.rect(of: "a")), to: try XCTUnwrap(goal.rect(of: "c")))
+        let lower = edgeCurve(from: try XCTUnwrap(goal.rect(of: "b")), to: try XCTUnwrap(goal.rect(of: "c")))
+        // Both arrows lie within the tolerance of each point; the closer one wins.
+        let nearUpper = CanvasPoint(x: 200, y: 40)
+        let nearLower = CanvasPoint(x: 200, y: 52)
+        XCTAssertLessThan(distance(from: nearUpper, toCurve: upper), distance(from: nearUpper, toCurve: lower))
+        XCTAssertLessThan(distance(from: nearLower, toCurve: lower), distance(from: nearLower, toCurve: upper))
+        XCTAssertLessThanOrEqual(distance(from: nearUpper, toCurve: lower), 20)
+        XCTAssertLessThanOrEqual(distance(from: nearLower, toCurve: upper), 20)
+        XCTAssertEqual(goal.hitEdge(at: nearUpper, tolerance: 20), GoalEdge(from: "a", to: "c"))
+        XCTAssertEqual(goal.hitEdge(at: nearLower, tolerance: 20), GoalEdge(from: "b", to: "c"))
     }
 }

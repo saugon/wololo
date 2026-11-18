@@ -512,6 +512,20 @@ final class GoalStoreTests: XCTestCase {
         XCTAssertFalse(exists(snapshot))
     }
 
+    func testTheSampleDataNeverReadsThePersonsGoals() throws {
+        let standard = URL(fileURLWithPath: "/Users/someone/Library/Application Support/Wololo Desk/Goals")
+        let chosen = URL(fileURLWithPath: "/tmp/goals")
+        XCTAssertEqual(GoalStore.directory(options: LaunchOptions(), dataDirectory: data, standard: standard), standard)
+
+        try Data().write(to: data.appendingPathComponent(DataDirectory.sampleMarker))
+        let sample = GoalStore.directory(options: LaunchOptions(), dataDirectory: data, standard: standard)
+        XCTAssertNotEqual(sample, standard)
+        XCTAssertTrue(sample.path.hasPrefix(FileManager.default.temporaryDirectory.path))
+        XCTAssertFalse(exists(sample))
+        XCTAssertEqual(GoalStore.directory(options: LaunchOptions(goalsDirectory: chosen), dataDirectory: data,
+                                           standard: standard), chosen)
+    }
+
     func testGoalsAreNotWrittenFromTheSampleDataUnlessTheirFolderIsChosen() throws {
         let chosen = LaunchOptions(goalsDirectory: fixture.root.appendingPathComponent("goals"))
         XCTAssertTrue(GoalStore.writesGoals(persists: true, dataDirectory: data, options: LaunchOptions()))

@@ -58,11 +58,14 @@ public final class GoalSession {
     }
 
     /// A new goal in the project, with only its final node, saved. A project that so far only came from the runs is
-    /// saved first, so the goal has a project to come back to.
+    /// saved first, so the goal has a project to come back to; when that save fails (and not just because
+    /// `projects.json` can't be read, which is reported once already) there is no goal, nil, and it is reported.
     @discardableResult
-    public func createGoal(in project: PlanningProject, title: String = "Objetivo nuevo") -> Goal {
-        if !isStored(project, in: storedProjects) {
-            saveProjects(upserting(project, into: storedProjects))
+    public func createGoal(in project: PlanningProject, title: String = "Objetivo nuevo") -> Goal? {
+        if !isStored(project, in: storedProjects), !saveProjects(upserting(project, into: storedProjects)),
+           !projectsUnreadable {
+            report(["No creé el objetivo: no pude guardar su proyecto"])
+            return nil
         }
         let goal = Goal(id: UUID().uuidString.lowercased(), projectID: project.id, title: title, updatedAt: clock())
         goals.append(goal)
