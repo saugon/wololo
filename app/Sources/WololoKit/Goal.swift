@@ -109,7 +109,7 @@ public struct PlanningProjectsFile: Equatable, Sendable, Codable {
                                                    debugDescription: "Written by a newer version of the app")
         }
         updatedAt = c.value("updated_at", or: 0)
-        projects = c.list("projects")
+        projects = Self.uniqueProjects(c.list("projects"))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -126,6 +126,12 @@ public struct PlanningProjectsFile: Equatable, Sendable, Codable {
 
     public func encoded() throws -> Data {
         try GoalJSON.encoder.encode(self)
+    }
+
+    /// A hand-edited file may repeat a project; the first one wins so goals point at a single project.
+    private static func uniqueProjects(_ projects: [PlanningProject]) -> [PlanningProject] {
+        var seen = Set<String>()
+        return projects.filter { seen.insert($0.id).inserted }
     }
 }
 
