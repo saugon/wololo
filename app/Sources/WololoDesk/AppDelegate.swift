@@ -64,6 +64,10 @@ final class AppState {
     var focusTitleRequest = 0
     /// While a text field of the planning view has the focus, ⌫ and Escape are the field's and not the canvas's.
     var isTextFocused = false
+    /// The project sheet on screen: "Nuevo proyecto" or editing one.
+    var projectSheet: ProjectSheetMode?
+    /// The goal whose title the header should put the focus on ("Renombrar" in the sidebar); the header clears it.
+    var renameGoalRequest: String?
     /// The goals and projects, and when they are written.
     let goalSession: GoalSession
     @ObservationIgnored let planningPrefs: PlanningPrefs
@@ -219,8 +223,35 @@ extension AppState {
         if selectedGoalID == id { selectedGoalID = nil }
     }
 
-    func saveProjects(_ projects: [PlanningProject]) {
+    @discardableResult
+    func saveProjects(_ projects: [PlanningProject]) -> Bool {
         goalSession.saveProjects(projects)
+    }
+
+    /// Saves a project from the sheet (a new one, an edited one or a derived one being stored) and chooses it.
+    @discardableResult
+    func save(project: PlanningProject) -> Bool {
+        guard goalSession.saveProjects(upserting(project, into: goalSession.storedProjects)) else { return false }
+        if selectedGoal?.projectID != project.id { selectProject(project.id) }
+        return true
+    }
+
+    /// Removes a project, its goals and their saved viewports (spec 7). One whose runs are still around comes back
+    /// as a derived project, without goals.
+    func deleteProject(id: String) {
+        let goalIDs = goals.filter { $0.projectID == id }.map(\.id)
+        let deleted = goalSession.deleteProject(id: id)
+        for goalID in goalIDs where goal(id: goalID) == nil {
+            planningPrefs.removeViewport(forGoal: goalID)
+        }
+        if let goalID = selectedGoalID, goal(id: goalID) == nil { selectedGoalID = nil }
+        if deleted, selectedProjectID == id { selectedProjectID = nil }
+    }
+
+    /// Shows the goal with the focus on its title in the header.
+    func renameGoal(_ id: String) {
+        showGoal(id)
+        renameGoalRequest = id
     }
 
     fileprivate func loadGoals() {
@@ -337,6 +368,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             state.showGoal(id)
             state.selectedNodeID = options.node
             openWindow()
+        case .newProject:
+            state.tab = .planning
+            state.projectSheet = .create
+            openWindow()
         case .settings:
             openSettings()
         case .widget:
@@ -399,6 +434,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func snapshotWindow() -> NSWindow? {
         switch options.open ?? .window {
         case .window, .run, .planning, .goal: return mainWindow?.window
+        case .newProject: return mainWindow?.window?.attachedSheet ?? mainWindow?.window
         case .settings: return settingsWindow?.window
         case .widget: return widgetPanel?.window
         }

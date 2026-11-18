@@ -101,7 +101,9 @@ public struct GoalStore: Sendable {
     }
 
     /// Removes a project: its goals (`goalIDs`), then `projects.json` saved with `projects` minus it. It stops at the
-    /// first goal it can't remove, before touching the projects.
+    /// first goal it can't remove, before touching the projects. The app doesn't call it: it deletes through
+    /// `GoalSession.deleteProject` (`deleteGoal` for each goal, then `saveProjects`) so what is on screen matches the
+    /// disk after a partial failure. Kept for the tests of that order.
     public func deleteProject(id: String, goalIDs: [String], remaining projects: [PlanningProject],
                               at now: TimeInterval) throws {
         for goalID in goalIDs {

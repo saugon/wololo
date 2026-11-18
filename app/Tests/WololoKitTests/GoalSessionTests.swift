@@ -118,6 +118,57 @@ final class GoalSessionTests: XCTestCase {
         XCTAssertNil(session.goal(id: goal.id))
     }
 
+    func testDeletingAProjectRemovesItsGoalsAndKeepsTheOthers() throws {
+        let blog = PlanningProject(id: "acme__blog", name: "blog", path: "/code/blog", repo: "acme/blog")
+        let session = session()
+        let first = session.createGoal(in: shop)
+        let second = session.createGoal(in: shop)
+        let kept = session.createGoal(in: blog)
+
+        XCTAssertTrue(session.deleteProject(id: shop.id))
+        XCTAssertEqual(session.storedProjects, [blog])
+        XCTAssertEqual(session.goals.map(\.id), [kept.id])
+        let snapshot = store().load()
+        XCTAssertEqual(snapshot.projects, [blog])
+        XCTAssertEqual(snapshot.goals.map(\.id), [kept.id])
+        for id in [first.id, second.id] {
+            XCTAssertFalse(exists(local.appendingPathComponent("\(id).json")))
+            XCTAssertFalse(exists(mirror.appendingPathComponent("\(id).json")))
+        }
+    }
+
+    func testAProjectStaysWhenOneOfItsGoalsCantBeDeleted() throws {
+        let session = session()
+        let first = session.createGoal(in: shop)
+        let stuck = session.createGoal(in: shop)
+        // The first goal's copy is already gone; the second's sits in a copy folder that can't be changed.
+        try FileManager.default.removeItem(at: mirror.appendingPathComponent("\(first.id).json"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: mirror.path)
+        addTeardownBlock { [mirror] in
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mirror.path)
+        }
+
+        XCTAssertFalse(session.deleteProject(id: shop.id))
+        XCTAssertEqual(session.storedProjects, [shop])
+        XCTAssertEqual(store().load().projects, [shop])
+        XCTAssertEqual(session.goals.map(\.id), [stuck.id])
+        XCTAssertFalse(exists(local.appendingPathComponent("\(first.id).json")))
+        XCTAssertTrue(exists(local.appendingPathComponent("\(stuck.id).json")))
+        XCTAssertTrue(exists(mirror.appendingPathComponent("\(stuck.id).json")))
+        XCTAssertEqual(reports.first?.first, "No pude borrar el objetivo")
+    }
+
+    func testAProjectIsNotDeletedWhileProjectsJSONIsUnreadable() throws {
+        let session = session()
+        let goal = session.createGoal(in: shop)
+        try Data("{ broken".utf8).write(to: local.appendingPathComponent(GoalStore.projectsFileName))
+        session.load()
+
+        XCTAssertFalse(session.deleteProject(id: shop.id))
+        XCTAssertEqual(session.goals.map(\.id), [goal.id])
+        XCTAssertTrue(exists(local.appendingPathComponent("\(goal.id).json")))
+    }
+
     func testProjectsAreNotSavedOverAnUnreadableFile() throws {
         try FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
         let file = local.appendingPathComponent(GoalStore.projectsFileName)

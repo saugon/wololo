@@ -76,6 +76,29 @@ final class PlanningProjectsTests: XCTestCase {
                                         repo: "Acme/shop", key: "Acme__shop")])
     }
 
+    func testDerivedIDIsTheOldestRunsSpellingWhateverTheOrder() throws {
+        let runs = [
+            try run("b", key: "acme__shop", createdAt: 200),
+            try run("z", key: "ACME__shop", createdAt: 100),
+            try run("a", key: "Acme__shop", createdAt: 100),
+        ]
+        for order in [runs, runs.reversed(), [runs[1], runs[0], runs[2]]] {
+            XCTAssertEqual(mergedProjects(stored: [], runs: order).map(\.id), ["Acme__shop"])
+        }
+    }
+
+    func testSavingASuffixedProjectAndMergingAgainAddsNoOther() throws {
+        let edited = PlanningProject(id: "acme__shop", name: "Otra", path: "/code/other", repo: "acme/other",
+                                     key: "acme__other")
+        let runs = [try run("a", key: "acme__shop"), try run("b", key: "acme__other")]
+        let suffixed = try XCTUnwrap(mergedProjects(stored: [edited], runs: runs).first { $0.id == "acme__shop~2" })
+
+        let stored = upserting(suffixed, into: [edited])
+        let projects = mergedProjects(stored: stored, runs: runs)
+        XCTAssertEqual(projects.map(\.id).sorted(), ["acme__shop", "acme__shop~2"])
+        XCTAssertEqual(mergedProjects(stored: projects, runs: runs), projects, "merging again changes nothing")
+    }
+
     // MARK: - Editing and saving
 
     func testEditingTheRepoAdoptsItsKey() throws {
@@ -148,14 +171,18 @@ final class PlanningProjectsTests: XCTestCase {
                     "ssh://git@github.com/acme/shop.git", "ssh://git@github.com/acme/shop",
                     "https://www.github.com/acme/shop.git", "git@ssh.github.com:acme/shop.git",
                     "ssh://git@ssh.github.com:443/acme/shop.git", "github-work:acme/shop.git",
-                    "git@github-work:acme/shop"] {
+                    "git@github-work:acme/shop", "git@github.com-work:acme/shop.git",
+                    "ssh://git@github-work/acme/shop.git", "ssh://git@github.com-work/acme/shop",
+                    "git+ssh://git@github.com/acme/shop.git"] {
             XCTAssertEqual(originRepo(gitConfig: config(origin: url)), "acme/shop", url)
         }
     }
 
     func testIgnoresOriginsOffGitHub() {
         for url in ["https://gitlab.com/acme/shop.git", "git@gitlab.com:acme/shop.git", "/srv/git/shop.git",
-                    "https://github.com/acme", "https://github.com/acme/shop/extra"] {
+                    "https://github.com/acme", "https://github.com/acme/shop/extra",
+                    "https://github-work/acme/shop.git", "https://github.com-work/acme/shop.git",
+                    "ssh://git@gitlab.com/acme/shop.git", "git@github.com-:acme/shop.git"] {
             XCTAssertNil(originRepo(gitConfig: config(origin: url)), url)
         }
     }
@@ -225,6 +252,26 @@ final class PlanningProjectsTests: XCTestCase {
     func testDefaultProjectNameIsTheFolderName() {
         XCTAssertEqual(defaultProjectName(forFolder: "/Users/me/code/shop"), "shop")
         XCTAssertEqual(defaultProjectName(forFolder: "/Users/me/code/shop/"), "shop")
+    }
+
+    // MARK: - Typing a repo
+
+    func testRepoInputAcceptsTheNameAndGitHubURLs() {
+        for input in ["acme/shop", " acme/shop ", "acme/shop.git", "acme/shop/", "github.com/acme/shop",
+                      "https://github.com/acme/shop", "https://github.com/acme/shop.git",
+                      "http://www.github.com/acme/shop/", "git@github.com:acme/shop.git",
+                      "ssh://git@github.com/acme/shop", "git@github.com-work:acme/shop.git"] {
+            XCTAssertEqual(normalizeRepoInput(input), "acme/shop", input)
+        }
+        XCTAssertEqual(normalizeRepoInput("my-org/my_repo.js"), "my-org/my_repo.js")
+    }
+
+    func testRepoInputRejectsWhatIsNotAGitHubRepo() {
+        for input in ["", "   ", "acme", "acme/", "/shop", "acme/shop/extra", "acme shop/x", "acme/sh op",
+                      "-acme/shop", "acme/..", "https://gitlab.com/acme/shop", "https://github.com/acme",
+                      "acme/shop#12", "a/b:c", "acme:shop/x", "foo:acme/shop"] {
+            XCTAssertNil(normalizeRepoInput(input), input)
+        }
     }
 
     // MARK: - Removing and default repo

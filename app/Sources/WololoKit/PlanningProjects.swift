@@ -36,7 +36,7 @@ private func uniqueID(_ id: String, among projects: [PlanningProject]) -> String
 }
 
 /// One project per non-empty key, ignoring case, with the path of the newest run that has one. The id and key are the
-/// spelling the first run used.
+/// spelling the oldest run used (by `createdAt`, then by run id), so they don't change with the order runs are read in.
 func derivedProjects(_ runs: [Run]) -> [PlanningProject] {
     var order: [String] = []
     var groups: [String: [Run]] = [:]
@@ -46,7 +46,8 @@ func derivedProjects(_ runs: [Run]) -> [PlanningProject] {
         groups[group, default: []].append(run)
     }
     return order.compactMap { groups[$0] }.map { members in
-        let key = members[0].project.key
+        let oldest = members.min { ($0.createdAt, $0.id) < ($1.createdAt, $1.id) } ?? members[0]
+        let key = oldest.project.key
         let path = members.filter { !$0.project.path.isEmpty }
             .max { $0.createdAt < $1.createdAt }?.project.path ?? ""
         let name = key.hasPrefix("local__") && !path.isEmpty
@@ -95,7 +96,8 @@ public func upserting(_ project: PlanningProject, into stored: [PlanningProject]
 }
 
 /// `project` with what the edit sheet changed. A new repo brings its key along, so the project collects that repo's
-/// runs; clearing the repo keeps the key, so the runs it already collects stay with it.
+/// runs. Clearing the repo keeps the key on purpose: the runs it already collects stay with it (and so do its goals'
+/// issue states) instead of splitting off into a derived project of their own.
 public func projectEditing(_ project: PlanningProject, name: String, path: String,
                            repo: String?) -> PlanningProject {
     var edited = project
@@ -113,7 +115,8 @@ public func projectEditing(_ project: PlanningProject, name: String, path: Strin
 }
 
 /// What deleting a project leaves: the other projects, and the ids of the goals that go with it. A project whose runs
-/// are still around shows up again as a derived project, without goals.
+/// are still around shows up again as a derived project, without goals: the runs still name it, and the app doesn't
+/// hide what the runs name.
 public func projectRemoving(id: String, from projects: [PlanningProject],
                             goals: [Goal]) -> (projects: [PlanningProject], goalIDs: [String]) {
     (projects.filter { $0.id != id }, goals.filter { $0.projectID == id }.map(\.id))
@@ -174,21 +177,22 @@ public func originRepo(gitConfig: String) -> String? {
 }
 
 /// The `owner/name` of a GitHub remote url: `https://github.com/o/n(.git)`, `git@github.com:o/n(.git)` or
-/// `ssh://git@github.com/o/n(.git)`, also on `www.github.com` and `ssh.github.com`. An scp-like url whose host has no
-/// dot (`github-work:o/n.git`) is taken as an SSH host alias for GitHub.
+/// `ssh://git@github.com/o/n(.git)`, also on `www.github.com` and `ssh.github.com`. Over SSH (scp-like or `ssh://`) a
+/// host with no dot (`github-work:o/n.git`, `ssh://git@github-work/o/n`) or named `github.com-<alias>` is taken as an
+/// SSH host alias for GitHub.
 func githubRepo(fromRemoteURL url: String) -> String? {
     var rest = url
     if let scheme = rest.range(of: "://") {
+        let name = rest[..<scheme.lowerBound].lowercased()
         rest = String(rest[scheme.upperBound...])
         guard let slash = rest.firstIndex(of: "/") else { return nil }
-        guard githubHosts.contains(hostDroppingUserAndPort(String(rest[..<slash]))) else { return nil }
+        let host = hostDroppingUserAndPort(String(rest[..<slash]))
+        guard isGitHubHost(host, overSSH: name == "ssh" || name == "git+ssh") else { return nil }
         rest = String(rest[rest.index(after: slash)...])
     } else {
         guard let colon = rest.firstIndex(of: ":") else { return nil }
         let host = hostDroppingUserAndPort(String(rest[..<colon]))
-        guard githubHosts.contains(host) || (!host.isEmpty && !host.contains(".") && !host.contains("/")) else {
-            return nil
-        }
+        guard !host.contains("/"), isGitHubHost(host, overSSH: true) else { return nil }
         rest = String(rest[rest.index(after: colon)...])
     }
     while rest.hasSuffix("/") { rest.removeLast() }
@@ -199,6 +203,61 @@ func githubRepo(fromRemoteURL url: String) -> String? {
 }
 
 private let githubHosts: Set<String> = ["github.com", "www.github.com", "ssh.github.com"]
+
+/// GitHub itself, or over SSH a host alias: one with no dot, or `github.com-<alias>`.
+private func isGitHubHost(_ host: String, overSSH: Bool) -> Bool {
+    if githubHosts.contains(host) { return true }
+    guard overSSH, !host.isEmpty else { return false }
+    let aliasPrefix = "github.com-"
+    return !host.contains(".") || (host.hasPrefix(aliasPrefix) && host.count > aliasPrefix.count)
+}
+
+/// The `owner/name` a person typed for a project's repo: `owner/name`, `owner/name.git`, `github.com/owner/name` or a
+/// GitHub url (https, `git@…:` or `ssh://`). Nil when it is empty or none of those, so the sheet can say so.
+public func normalizeRepoInput(_ input: String) -> String? {
+    var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return nil }
+    let candidate: String?
+    if text.contains("://") {
+        candidate = githubRepo(fromRemoteURL: text)
+    } else if let colon = text.firstIndex(of: ":") {
+        guard isTypedSCPAuthority(String(text[..<colon])) else { return nil }
+        candidate = githubRepo(fromRemoteURL: text)
+    } else {
+        for prefix in ["www.github.com/", "github.com/"] where text.lowercased().hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count))
+        }
+        while text.hasSuffix("/") { text.removeLast() }
+        if text.lowercased().hasSuffix(".git") { text.removeLast(4) }
+        candidate = text
+    }
+    guard let candidate else { return nil }
+    let parts = candidate.split(separator: "/", omittingEmptySubsequences: false)
+    guard parts.count == 2, isGitHubOwner(parts[0]), isGitHubRepoName(parts[1]) else { return nil }
+    return candidate
+}
+
+/// Whether what comes before the `:` of a typed scp-like url looks like GitHub: the user `git@`, or a GitHub host
+/// (`github.com-<alias>` too). A `.git/config` may name any SSH alias, but typed text like `acme:shop/x` is a typo.
+private func isTypedSCPAuthority(_ authority: String) -> Bool {
+    if let at = authority.lastIndex(of: "@") { return authority[..<at] == "git" }
+    let host = authority.lowercased()
+    let aliasPrefix = "github.com-"
+    return githubHosts.contains(host) || (host.hasPrefix(aliasPrefix) && host.count > aliasPrefix.count)
+}
+
+/// Letters, digits and hyphens, not starting with one, as GitHub allows for a user or organization (older accounts
+/// may still end in a hyphen or have two in a row).
+private func isGitHubOwner(_ owner: Substring) -> Bool {
+    guard !owner.isEmpty, owner.count <= 39, owner.first != "-" else { return false }
+    return owner.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+}
+
+/// Letters, digits, `.`, `-` and `_`, other than `.` and `..`.
+private func isGitHubRepoName(_ name: Substring) -> Bool {
+    guard !name.isEmpty, name.count <= 100, name != ".", name != ".." else { return false }
+    return name.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || "._-".contains($0)) }
+}
 
 private func hostDroppingUserAndPort(_ authority: String) -> String {
     var host = authority

@@ -1,8 +1,9 @@
 import SwiftUI
 import WololoKit
 
-/// The goal's header: its title, renamed in place, the "web · acme/web · 2 de 7 pasos hechos" line, and "Ordenar" and
-/// "+ Nodo". While the title is being edited, ⌫ and Escape are the field's, not the canvas's.
+/// The goal's header: its title, renamed in place (also from "Renombrar" in the sidebar), the "web · acme/web · 2 de 7
+/// pasos hechos" line, and "Ordenar" and "+ Nodo". While the title is being edited, ⌫ and Escape are the field's, not
+/// the canvas's.
 struct GoalHeader: View {
     let state: AppState
     let goal: Goal
@@ -42,7 +43,16 @@ struct GoalHeader: View {
         .padding(.top, MainView.titleBarHeight)
         .padding(.bottom, 12)
         .onChange(of: isTitleFocused) { state.isTextFocused = isTitleFocused }
+        .onAppear { takeRenameRequest() }
+        .onChange(of: state.renameGoalRequest) { takeRenameRequest() }
         .onDisappear { if isTitleFocused { state.isTextFocused = false } }
+    }
+
+    /// "Renombrar" in the sidebar asked for this goal's title: the focus goes to it.
+    private func takeRenameRequest() {
+        guard state.renameGoalRequest == goal.id else { return }
+        state.renameGoalRequest = nil
+        DispatchQueue.main.async { isTitleFocused = true }
     }
 
     private var title: Binding<String> {

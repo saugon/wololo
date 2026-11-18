@@ -116,6 +116,24 @@ public final class GoalSession {
         return true
     }
 
+    /// Removes a project and its goals (`projectRemoving`): each goal as `deleteGoal` does, then `projects.json` without
+    /// the project. It stops at the first goal it can't remove, before touching the projects, and returns false; so
+    /// does it, without removing anything, while `projects.json` can't be read. A project whose runs are still around
+    /// comes back as a derived project, without goals.
+    @discardableResult
+    public func deleteProject(id: String) -> Bool {
+        guard !projectsUnreadable else {
+            report(["No borré el proyecto: projects.json no se puede leer"])
+            return false
+        }
+        let removal = projectRemoving(id: id, from: storedProjects, goals: goals)
+        for goalID in removal.goalIDs {
+            guard deleteGoal(id: goalID) else { return false }
+        }
+        guard storedProjects.contains(where: { $0.id == id }) else { return true }
+        return saveProjects(removal.projects)
+    }
+
     /// Replaces the stored projects and writes `projects.json`. While the one on disk can't be read the change stays
     /// on screen only, so the projects in that file aren't lost; a write that fails leaves the stored projects as they
     /// were. Returns whether `projects.json` was written.

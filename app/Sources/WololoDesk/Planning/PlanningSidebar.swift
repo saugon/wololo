@@ -2,11 +2,14 @@ import SwiftUI
 import WololoKit
 
 /// The sidebar on Planificación: "Proyectos" with a "+" for a new project, and under each project its goals with their
-/// progress ("2/7" and a bar) and a "+ Objetivo". The chosen goal is drawn on the selection background.
+/// progress ("2/7" and a bar) and a "+ Objetivo". The chosen goal is drawn on the selection background. A project's
+/// context menu edits or deletes it, a goal's renames or deletes it; deleting asks first.
 struct PlanningSidebar: View {
     @Bindable var state: AppState
 
     @Environment(\.theme) private var theme
+    @State private var projectToDelete: PlanningProject?
+    @State private var goalToDelete: Goal?
 
     var body: some View {
         let model = state.model
@@ -34,6 +37,43 @@ struct PlanningSidebar: View {
             }
         }
         .frame(maxHeight: .infinity, alignment: .top)
+        .alert(projectToDelete.map { "¿Borrar el proyecto «\($0.name)»?" } ?? "",
+               isPresented: isPresenting($projectToDelete), presenting: projectToDelete) { project in
+            Button("Borrar", role: .destructive) { state.deleteProject(id: project.id) }
+            Button("Cancelar", role: .cancel) {}
+        } message: { project in
+            Text(deleteProjectMessage(project))
+        }
+        .alert(goalToDelete.map { "¿Borrar el objetivo «\($0.title.isEmpty ? "Sin título" : $0.title)»?" } ?? "",
+               isPresented: isPresenting($goalToDelete), presenting: goalToDelete) { goal in
+            Button("Borrar", role: .destructive) { state.deleteGoal(id: goal.id) }
+            Button("Cancelar", role: .cancel) {}
+        } message: { goal in
+            Text(deleteGoalMessage(goal))
+        }
+    }
+
+    private func isPresenting<Item>(_ item: Binding<Item?>) -> Binding<Bool> {
+        Binding(get: { item.wrappedValue != nil }, set: { if !$0 { item.wrappedValue = nil } })
+    }
+
+    /// How many goals go with the project and, when its runs are still around, that it comes back without them.
+    private func deleteProjectMessage(_ project: PlanningProject) -> String {
+        let count = state.goals.filter { $0.projectID == project.id }.count
+        var lines = [count == 0 ? "No tiene objetivos."
+                     : count == 1 ? "Se borra también su objetivo." : "Se borran también sus \(count) objetivos."]
+        let key = project.effectiveKey?.lowercased()
+        if let key, state.model.runs.contains(where: { $0.project.key.lowercased() == key }) {
+            lines.append("Como sus runs todavía lo nombran, va a volver a aparecer en la lista, sin objetivos.")
+        }
+        lines.append("No se puede deshacer.")
+        return lines.joined(separator: " ")
+    }
+
+    private func deleteGoalMessage(_ goal: Goal) -> String {
+        let count = goal.nodes.count
+        let steps = count == 0 ? "No tiene pasos." : count == 1 ? "Se borra su paso." : "Se borran sus \(count) pasos."
+        return "\(steps) No se puede deshacer."
     }
 
     private var header: some View {
@@ -41,7 +81,7 @@ struct PlanningSidebar: View {
             SectionHeading(title: "Proyectos")
                 .frame(maxWidth: .infinity, alignment: .leading)
             Button {
-                // The new project sheet comes with the project editing.
+                state.projectSheet = .create
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 11, weight: .bold))
@@ -83,6 +123,12 @@ struct PlanningSidebar: View {
                 }
             }
             .buttonStyle(.plain)
+            .contextMenu {
+                Button("Editar proyecto…") { state.projectSheet = .edit(project) }
+                if isStored(project, in: state.goalSession.storedProjects) {
+                    Button("Borrar proyecto…", role: .destructive) { projectToDelete = project }
+                }
+            }
             .help(project.path.isEmpty ? project.name : project.path)
             .accessibilityLabel(repo.map { "\(project.name), \($0)" } ?? project.name)
             .accessibilityAddTraits(state.selectedProjectID == project.id && state.selectedGoalID == nil ? .isSelected : [])
@@ -91,8 +137,11 @@ struct PlanningSidebar: View {
                 let status = goal.status(defaultRepo: repo, runs: runs, now: now)
                 GoalRow(goal: goal, done: status.done, total: status.total, fraction: status.fraction,
                         isSelected: state.selectedGoalID == goal.id) {
-                    state.selectedProjectID = project.id
-                    state.selectedGoalID = goal.id
+                    state.showGoal(goal.id)
+                }
+                .contextMenu {
+                    Button("Renombrar") { state.renameGoal(goal.id) }
+                    Button("Borrar objetivo…", role: .destructive) { goalToDelete = goal }
                 }
                 .padding(.leading, 22)
             }

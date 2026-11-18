@@ -19,6 +19,8 @@ public struct LaunchOptions: Equatable, Sendable {
         case planning
         /// The window on the Planificación tab, showing the goal with this id.
         case goal(id: String)
+        /// The window on the Planificación tab with the "Nuevo proyecto" sheet open, so a snapshot can draw it.
+        case newProject
     }
 
     public var open: Target?
@@ -75,14 +77,15 @@ public struct LaunchOptions: Equatable, Sendable {
         return trimmed
     }
 
-    /// `window`, `widget`, `settings`, `planning`, `goal:<id>` or `run:<id>[:<tab>]`; an unknown tab opens the run on
-    /// its default tab.
+    /// `window`, `widget`, `settings`, `planning`, `new-project`, `goal:<id>` or `run:<id>[:<tab>]`; an unknown tab
+    /// opens the run on its default tab.
     private static func target(_ raw: String) -> Target? {
         switch raw {
         case "window": return .window
         case "widget": return .widget
         case "settings": return .settings
         case "planning": return .planning
+        case "new-project": return .newProject
         default:
             if raw.hasPrefix("goal:") {
                 let id = String(raw.dropFirst("goal:".count))

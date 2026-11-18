@@ -44,6 +44,11 @@ struct MainView: View {
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
+        .sheet(item: $state.projectSheet) { mode in
+            ProjectSheet(state: state, mode: mode)
+                .environment(\.theme, theme)
+                .preferredColorScheme(.dark)
+        }
     }
 
     private func board(_ model: RunsModel) -> some View {

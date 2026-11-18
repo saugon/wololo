@@ -33,6 +33,7 @@ final class LaunchOptionsTests: XCTestCase {
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "goal:"]).open)
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "goal"]).open)
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "planning:x"]).open)
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "new-project"]).open, .newProject)
     }
 
     func testNodeToSelect() {
