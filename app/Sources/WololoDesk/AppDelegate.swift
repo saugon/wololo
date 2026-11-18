@@ -49,8 +49,19 @@ final class AppState {
     }
     /// The goal the planning view shows.
     var selectedGoalID: String? {
-        didSet { if selectedGoalID != oldValue, remembersSelection { planningPrefs.selectedGoalID = selectedGoalID } }
+        didSet {
+            guard selectedGoalID != oldValue else { return }
+            if remembersSelection { planningPrefs.selectedGoalID = selectedGoalID }
+            selectedNodeID = nil
+            selectedEdge = nil
+        }
     }
+    /// The node selected on the goal's canvas; the drawer shows it.
+    var selectedNodeID: String?
+    /// The arrow selected on the goal's canvas, instead of a node; ⌫ removes it.
+    var selectedEdge: GoalEdge?
+    /// Bumped when the canvas creates a node, so the drawer puts the focus on its title.
+    var focusTitleRequest = 0
     /// While a text field of the planning view has the focus, ⌫ and Escape are the field's and not the canvas's.
     var isTextFocused = false
     /// The goals and projects, and when they are written.
@@ -324,6 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWindow()
         case .goal(let id):
             state.showGoal(id)
+            state.selectedNodeID = options.node
             openWindow()
         case .settings:
             openSettings()

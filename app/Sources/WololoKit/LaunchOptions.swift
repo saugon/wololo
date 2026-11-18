@@ -32,9 +32,12 @@ public struct LaunchOptions: Equatable, Sendable {
     public var themesDirectory: URL?
     /// Where to keep the goals instead of Application Support, in any mode (`WOLOLO_DESK_GOALS_DIR`).
     public var goalsDirectory: URL?
+    /// The node to select on the goal `open` shows (`WOLOLO_DESK_NODE`), so a snapshot can show a selection.
+    public var node: String?
 
     public init(open: Target? = nil, search: String? = nil, project: String? = nil, columns: BoardMode? = nil, snapshotURL: URL? = nil,
-                theme: String? = nil, themesDirectory: URL? = nil, goalsDirectory: URL? = nil) {
+                theme: String? = nil, themesDirectory: URL? = nil, goalsDirectory: URL? = nil,
+                node: String? = nil) {
         self.open = open
         self.search = search
         self.project = project
@@ -43,6 +46,7 @@ public struct LaunchOptions: Equatable, Sendable {
         self.theme = theme
         self.themesDirectory = themesDirectory
         self.goalsDirectory = goalsDirectory
+        self.node = node
     }
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
@@ -59,6 +63,7 @@ public struct LaunchOptions: Equatable, Sendable {
         theme = Self.value(environment["WOLOLO_DESK_THEME"])
         themesDirectory = Self.value(environment["WOLOLO_DESK_THEMES_DIR"]).map(Self.fileURL)
         goalsDirectory = Self.value(environment[GoalStore.directoryEnvironmentKey]).map(Self.fileURL)
+        node = Self.value(environment["WOLOLO_DESK_NODE"])
     }
 
     private static func fileURL(_ path: String) -> URL {

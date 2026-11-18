@@ -20,7 +20,7 @@ struct MainView: View {
             ThemeRod()
             Group {
                 if state.tab == .planning {
-                    PlanningPlaceholder(state: state)
+                    PlanningView(state: state)
                 } else if let id = state.selectedRunID {
                     RunDetailView(state: state, runID: id)
                         .id(id)

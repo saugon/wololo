@@ -35,6 +35,12 @@ final class LaunchOptionsTests: XCTestCase {
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "planning:x"]).open)
     }
 
+    func testNodeToSelect() {
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_NODE": " cuentas "]).node, "cuentas")
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_NODE": "  "]).node)
+        XCTAssertNil(LaunchOptions(environment: [:]).node)
+    }
+
     func testFiltersColumnsAndSnapshot() {
         let options = LaunchOptions(environment: [
             "WOLOLO_DESK_OPEN": "window",
