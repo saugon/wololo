@@ -563,6 +563,29 @@ test('a run whose snapshot predates the items list is rebuilt from its events on
   }
 })
 
+test('while the pane is drawn, the card above the prompt steps aside', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  let paneShown = true
+  on('ui.panes', () => ({ value: paneShown ? [{ id: 'wololo', title: 'wololo', isShown: true, isFocused: false, isPlaced: true }] : [] }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Salones' } as never)
+  const card = () =>
+    $.ui.mount({
+      plugin: 'wololo',
+      surface: 'terminal',
+      component: 'AbovePrompt',
+      props: { hasSurvey: false, isWorking: true, maxRows: 40, bodyColumns: 140, scroll: { offset: 0, bodyRows: 40 }, view: {} },
+    })
+  const hidden = await card()
+  expect(await hidden.find({ type: 'Text', text: /Salones/ })).toBeUndefined()
+  await hidden.unmount()
+  paneShown = false
+  const shown = await card()
+  expect((await shown.find({ type: 'Text', text: /Salones/ }))?.text).toContain('Salones')
+  await shown.unmount()
+})
+
 test('/wololo-status draws every active run as a card', async ($, on) => {
   fakeHost(on)
   on('tool.call', () => ({ result: {} }))

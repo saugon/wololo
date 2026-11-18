@@ -2033,6 +2033,12 @@ async function externalTurn($: Engine, input: Record<string, unknown>): Promise<
   })
 }
 
+// While the pane is drawn, the card above the prompt steps aside: the pane already says all it does.
+async function isPaneShown($: Engine): Promise<boolean> {
+  const panes = await $.ui.panes().catch(() => [])
+  return panes.some(pane => pane.id === PANE && pane.isPlaced && pane.isShown)
+}
+
 async function togglePane($: Engine, input: Record<string, unknown>): Promise<string> {
   if (input.open === false) {
     await $.ui.close({ id: PANE })
@@ -2847,7 +2853,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const view = await read($, viewAtom)
-    if (!view || !config.view.band || e.props.hasSurvey) return next(e)
+    if (!view || !config.view.band || e.props.hasSurvey || (await isPaneShown($))) return next(e)
     const { Box, Button, Link, Text } = $.ui.resolve(e)
     const band = view.band
     const isExpanded = await read($, expandedAtom)
@@ -3161,8 +3167,16 @@ export const register: Register = (on, options) => {
     return { text: isExpanded ? 'wololo: card expanded.' : 'wololo: card collapsed.' }
   })
 
+  // The card redraws when the pane comes or goes, to step aside or come back.
+  on('ui.open', async ($, e, next) => {
+    const opened = await next(e)
+    if (e.id === PANE) $.ui.invalidate('ui.render')
+    return opened
+  }).catch(($, e, next) => next(e))
+
   on('ui.close', async ($, e, next) => {
     const closed = await next(e)
+    if (e.id === PANE) $.ui.invalidate('ui.render')
     if (e.id === CONFIG_PANE && e.origin.kind === 'person') {
       await quietly(async () => {
         const dialog = await read($, dialogAtom)
