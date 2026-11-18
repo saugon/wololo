@@ -5,7 +5,8 @@ import WololoKit
 /// `goal.nodes` order and the final node last, which is the order `Goal.hitNode` searches in, so nothing is raised
 /// above it. The person pans by dragging the ground or scrolling, zooms by pinching or with the controls, drags nodes,
 /// drags arrows out of the selected node's handle, double-clicks to add a node, and removes the selected node or arrow
-/// with ⌫. Each goal keeps its own viewport.
+/// with ⌫. Each goal keeps its own viewport. The selected node's details float in a drawer laid out beside the canvas,
+/// which narrows to make room for it without moving what it shows.
 struct GoalCanvas: View {
     let state: AppState
     let goalID: String
@@ -23,15 +24,30 @@ struct GoalCanvas: View {
 
     /// How far, in screen points, a press may move and still count as a click.
     private static let clickSlop: CGFloat = 3
+    /// How far in from the canvas's edges a node selected out of view is brought.
+    private static let revealMargin: CGFloat = 24
+    /// The room the drawer takes beside the canvas: its width and its inset on either side.
+    private static let drawerColumnWidth = NodeDrawer.width + 2 * NodeDrawer.inset
 
     @Environment(\.theme) private var theme
     @State private var viewport = Viewport.identity
-    @State private var size = CGSize.zero
+    /// The canvas and the drawer's column together; the canvas is `size`, what the drawer leaves of it.
+    @State private var area = CGSize.zero
     @State private var hasViewport = false
     /// Set while the viewport is the automatic fit of a goal opened with none saved: it follows the canvas's size
     /// until the person moves it.
     @State private var followsSize = false
     @State private var drag = Drag.none
+    /// The last `focusTitleRequest` the drawer answered; nil until the canvas appears, so an old request is not
+    /// answered by a canvas opened later.
+    @State private var handledTitleRequest: Int?
+
+    /// What the canvas takes the focus on: a new selection, and a text field letting it go.
+    private struct FocusToken: Hashable {
+        var node: String?
+        var edge: GoalEdge?
+        var isTextFocused: Bool
+    }
 
     var body: some View {
         if let stored = state.goal(id: goalID) {
@@ -46,9 +62,15 @@ struct GoalCanvas: View {
                            arrange: arrange, addNode: addNode)
                 ThemeBand()
                 GeometryReader { geometry in
-                    canvas(goal, status: status, repo: repo)
-                        .onAppear { resize(to: geometry.size) }
-                        .onChange(of: geometry.size) { resize(to: geometry.size) }
+                    // Beside the canvas, not over it, so the canvas's AppKit input view can never take its clicks.
+                    // The canvas's left edge stays put as the drawer opens and closes, and so does what it shows.
+                    HStack(spacing: 0) {
+                        canvas(goal, status: status, repo: repo)
+                        drawer(goal, status: status, repo: repo)
+                    }
+                    .background(theme.ground)
+                    .onAppear { resize(to: geometry.size) }
+                    .onChange(of: geometry.size) { resize(to: geometry.size) }
                 }
                 // Below the canvas, not over it, so the canvas's AppKit input view can never take their clicks.
                 HStack(spacing: 20) {
@@ -61,7 +83,42 @@ struct GoalCanvas: View {
                 .background(theme.ground)
                 .overlay(alignment: .top) { theme.border.frame(height: 1) }
             }
+            .onAppear { if handledTitleRequest == nil { handledTitleRequest = state.focusTitleRequest } }
+            .onChange(of: state.selectedNodeID) { _, id in
+                // A node pressed to be dragged is brought into view once it is let go, so it doesn't slip away from
+                // the pointer.
+                if case .none = drag { reveal(id) }
+            }
         }
+    }
+
+    /// The selected node's drawer, in a column of its own at the canvas's right, inset from its edges.
+    @ViewBuilder
+    private func drawer(_ goal: Goal, status: GoalStatus, repo: String?) -> some View {
+        if let id = state.selectedNodeID, goal.contains(id) {
+            NodeDrawer(state: state, goal: goal, nodeID: id, status: status, repo: repo,
+                       focusTitle: handledTitleRequest != nil && handledTitleRequest != state.focusTitleRequest,
+                       didFocusTitle: { handledTitleRequest = state.focusTitleRequest },
+                       close: clearSelection)
+                .id(id)
+                .padding(NodeDrawer.inset)
+                .frame(width: Self.drawerColumnWidth)
+        }
+    }
+
+    private var showsDrawer: Bool {
+        guard let id = state.selectedNodeID, let goal = currentGoal else { return false }
+        return goal.contains(id)
+    }
+
+    /// The canvas's size: the area less the drawer's column while it is open.
+    private var size: CGSize {
+        canvasSize(withDrawer: showsDrawer)
+    }
+
+    private func canvasSize(withDrawer: Bool) -> CGSize {
+        guard withDrawer else { return area }
+        return CGSize(width: max(0, area.width - Self.drawerColumnWidth), height: area.height)
     }
 
     /// The stored goal with the node being dragged where the drag has it.
@@ -81,8 +138,13 @@ struct GoalCanvas: View {
                       pending: pendingArrow(goal))
             nodes(goal, status: status, repo: repo)
             handle(goal)
-            CanvasInput(handlers: handlers)
+            CanvasInput(handlers: handlers,
+                        focusToken: FocusToken(node: state.selectedNodeID, edge: state.selectedEdge,
+                                               isTextFocused: state.isTextFocused),
+                        takesFocus: !state.isTextFocused && !state.isSearchFocused,
+                        focusArea: CGRect(x: 0, y: 0, width: area.width, height: area.height))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .contentShape(Rectangle())
     }
@@ -164,7 +226,17 @@ struct GoalCanvas: View {
             },
             cancel: {
                 guard !state.isTextFocused, !state.isSearchFocused else { return }
-                clearSelection()
+                // Escape during a drag drops the drag and leaves the selection as it was; a pan goes back to where it
+                // began.
+                switch drag {
+                case .none:
+                    clearSelection()
+                case .pan(let startOffset, _, _):
+                    viewport.offset = startOffset
+                    drag = .none
+                case .node, .connect:
+                    drag = .none
+                }
             }
         )
     }
@@ -231,11 +303,13 @@ struct GoalCanvas: View {
                 click(at: point)
             }
         case .node(let id, _, _, let position):
+            defer { reveal(id) }
             // Moved onto the goal as it is now, so a rename saved during the drag isn't undone.
             guard let position, var goal = currentGoal, goal.move(id, to: position) else { return }
             state.update(goal: goal)
-        case .connect(_, _, _, false):
-            click(at: point)
+        case .connect(let from, _, _, false):
+            // A click on the handle, even on its half outside the node, is a click on the node.
+            select(node: from)
         case .connect(let from, _, _, true):
             guard var goal = currentGoal,
                   let result = CanvasPress.dropResult(goal: goal, from: from, point: canvasPoint(point),
@@ -275,8 +349,18 @@ struct GoalCanvas: View {
         switch CanvasPress.target(goal: goal, viewport: viewport, selectedNodeID: nil, point: canvasPoint(point)) {
         case .node(let id):
             select(node: id)
-            guard !Goal.isFinal(id) else { return [] }
-            return [CanvasMenuItem(title: "Borrar paso") { remove(node: id) }]
+            return NodeMenuEntry.entries(for: nodeStatus(of: id, in: goal), isFinal: Goal.isFinal(id)).map { entry in
+                switch entry {
+                case .startAnyway:
+                    return CanvasMenuItem(title: entry.title) {
+                        if let goal = currentGoal { NodeRun.start(nodeID: id, goal: goal, state: state) }
+                    }
+                case .viewRun(let runID):
+                    return CanvasMenuItem(title: entry.title) { state.showRun(runID) }
+                case .delete:
+                    return CanvasMenuItem(title: entry.title) { remove(node: id) }
+                }
+            }
         case .edge(let edge):
             state.selectedNodeID = nil
             state.selectedEdge = edge
@@ -284,6 +368,12 @@ struct GoalCanvas: View {
         case .handle, .background:
             return []
         }
+    }
+
+    private func nodeStatus(of id: String, in goal: Goal) -> NodeStatus? {
+        let repo = state.project(id: goal.projectID).flatMap(defaultRepo(for:))
+        return goal.status(defaultRepo: repo, runs: RunIndex(runs: state.model.runs), now: state.model.now)
+            .status(of: id)
     }
 
     // MARK: Editing
@@ -308,11 +398,12 @@ struct GoalCanvas: View {
         state.focusTitleRequest += 1
     }
 
-    /// "+ Nodo": a step in a free spot of what is on screen. When the screen is full the spot lies outside it, so the
-    /// canvas scrolls to show the new step.
+    /// "+ Nodo": a step in a free spot of what is on screen beside the drawer it opens. When the screen is full the spot
+    /// lies outside it, so the canvas scrolls to show the new step.
     private func addNode() {
         guard let goal = currentGoal else { return }
-        let screen = CanvasSize(width: size.width, height: size.height)
+        let canvas = canvasSize(withDrawer: true)
+        let screen = CanvasSize(width: canvas.width, height: canvas.height)
         let visible = viewport.visibleRect(in: screen)
         let spot = goal.freeSpot(visible: visible)
         let rect = CanvasRect(origin: spot, size: GoalNodeMetrics.stepSize)
@@ -355,14 +446,17 @@ struct GoalCanvas: View {
 
     // MARK: Viewport
 
-    /// Takes the canvas's size; the first time, the goal opens where the person left it, or fitted on screen.
-    private func resize(to newSize: CGSize) {
-        size = newSize
+    /// Takes the area's size; the first time, the goal opens where the person left it, or fitted on screen, with the
+    /// selected node in view.
+    private func resize(to newArea: CGSize) {
+        area = newArea
+        let newSize = size
         guard newSize.width > 0, newSize.height > 0 else { return }
         if !hasViewport {
             hasViewport = true
             if let saved = state.planningPrefs.viewport(forGoal: goalID) {
                 viewport = saved
+                reveal(state.selectedNodeID)
                 return
             }
             followsSize = true
@@ -383,6 +477,16 @@ struct GoalCanvas: View {
 
     private func zoomFromCenter(_ factor: Double) {
         viewport = viewport.zoomed(by: factor, anchor: CanvasPoint(x: size.width / 2, y: size.height / 2))
+        saveViewport()
+    }
+
+    /// Pans just enough to bring the node fully into the canvas beside its drawer, when part of it is out of view.
+    private func reveal(_ id: String?) {
+        guard let id, let rect = currentGoal?.rect(of: id), size.width > 0, size.height > 0 else { return }
+        let revealed = viewport.revealing(rect, in: CanvasSize(width: size.width, height: size.height),
+                                          margin: Self.revealMargin)
+        guard revealed != viewport else { return }
+        viewport = revealed
         saveViewport()
     }
 

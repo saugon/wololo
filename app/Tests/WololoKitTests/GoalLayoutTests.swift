@@ -129,6 +129,26 @@ final class GoalLayoutTests: XCTestCase {
         XCTAssertEqual(tiny.zoom, 2)
     }
 
+    // A node selected beside the drawer comes into the narrower canvas by the least pan.
+    func testRevealingPansJustEnoughToShowTheRect() {
+        let viewport = Viewport(offset: CanvasPoint(x: 10, y: 20), zoom: 0.5)
+        let size = CanvasSize(width: 600, height: 400)
+        let inside = CanvasRect(x: 100, y: 100, width: 200, height: 100)
+        XCTAssertEqual(viewport.revealing(inside, in: size, margin: 16), viewport)
+
+        // Right edge at 1300 × 0.5 + 10 = 660, 76 past the 584 limit; the vertical position is kept.
+        let right = viewport.revealing(CanvasRect(x: 1100, y: 100, width: 200, height: 100), in: size, margin: 16)
+        XCTAssertEqual(right, Viewport(offset: CanvasPoint(x: -66, y: 20), zoom: 0.5))
+
+        // Top-left at (-90, -30) on screen, brought to (16, 16).
+        let left = viewport.revealing(CanvasRect(x: -200, y: -100, width: 100, height: 50), in: size, margin: 16)
+        XCTAssertEqual(left, Viewport(offset: CanvasPoint(x: 116, y: 66), zoom: 0.5))
+
+        // Wider than the view: its left edge goes to the margin.
+        let wide = viewport.revealing(CanvasRect(x: 400, y: 100, width: 2000, height: 100), in: size, margin: 16)
+        XCTAssertEqual(wide.offset.x, 16 - 400 * 0.5, accuracy: 1e-9)
+    }
+
     func testViewportRoundTripsAndClampsWhenDecoded() throws {
         let viewport = Viewport(offset: CanvasPoint(x: 12, y: 34), zoom: 1.25)
         XCTAssertEqual(try JSONDecoder().decode(Viewport.self, from: JSONEncoder().encode(viewport)), viewport)

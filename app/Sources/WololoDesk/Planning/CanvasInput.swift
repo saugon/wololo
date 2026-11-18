@@ -28,23 +28,54 @@ struct CanvasInput: NSViewRepresentable {
     }
 
     let handlers: Handlers
+    /// Changes when the selection changes; the view then takes the focus, so ⌫ and Escape reach it without a click
+    /// first (after "+ Nodo", say), unless `takesFocus` is false or the focus is somewhere it must stay.
+    var focusToken: AnyHashable
+    var takesFocus: Bool
+    /// The canvas and what is laid out beside it (the node drawer), in the view's coordinates: a control in there
+    /// gives the focus up to the canvas, one elsewhere (the sidebar, the header) keeps it.
+    var focusArea: CGRect
 
     func makeNSView(context: Context) -> InputView {
         let view = InputView()
         view.handlers = handlers
+        view.focusToken = focusToken
+        view.focusArea = focusArea
         return view
     }
 
     func updateNSView(_ nsView: InputView, context: Context) {
         nsView.handlers = handlers
+        nsView.focusArea = focusArea
+        guard nsView.focusToken != focusToken else { return }
+        nsView.focusToken = focusToken
+        guard takesFocus else { return }
+        // After this update, so a field SwiftUI focuses in the same pass has already taken the focus and keeps it.
+        DispatchQueue.main.async { [weak nsView] in nsView?.takeFocusIfFree() }
     }
 
     final class InputView: NSView {
         var handlers: Handlers?
+        var focusToken: AnyHashable?
+        var focusArea = CGRect.zero
 
         override var isFlipped: Bool { true }
         override var acceptsFirstResponder: Bool { true }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        /// Becomes the first responder when nothing in particular has the focus (the window, or the hosting view the
+        /// canvas is drawn in) or a control of the canvas or its drawer has it; never from a text field being edited
+        /// (its field editor is a text view), nor from a control elsewhere in the window.
+        func takeFocusIfFree() {
+            guard let window, window.firstResponder !== self, !(window.firstResponder is NSText) else { return }
+            if let responder = window.firstResponder, responder !== window {
+                guard let view = responder as? NSView else { return }
+                let isFree = isDescendant(of: view)
+                    || focusArea.contains(convert(view.convert(view.bounds, to: nil), from: nil))
+                guard isFree else { return }
+            }
+            window.makeFirstResponder(self)
+        }
 
         override func mouseDown(with event: NSEvent) {
             // Taking the focus ends the editing of a text field, so ⌫ and Escape go back to the canvas.

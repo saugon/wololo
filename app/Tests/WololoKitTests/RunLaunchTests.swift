@@ -112,6 +112,16 @@ final class RunLaunchTests: XCTestCase {
         XCTAssertEqual(RunLaunch.command(for: node, projectRepo: "acme/shop"), "/wololo Monitoreo")
     }
 
+    func testIssueThatNamesNoIssueDisablesTheStart() {
+        for issue in ["pronto", "acme/shop#", "#abc"] {
+            let node = GoalNode(id: "n1", title: "Monitoreo", issue: issue)
+            XCTAssertEqual(RunLaunch.folder(for: node, project: shop, projects: [shop]),
+                           .disabled(reason: "No reconozco ese issue"), issue)
+        }
+        let blank = GoalNode(id: "n1", title: "Monitoreo", issue: "  ")
+        XCTAssertEqual(RunLaunch.folder(for: blank, project: shop, projects: [shop]), .folder("/Users/x/code/shop"))
+    }
+
     func testSingleQuotesAreShellEscaped() {
         let node = GoalNode(id: "n1", title: "Arreglar el 'checkout'")
         let command = RunLaunch.command(for: node, projectRepo: "acme/shop")

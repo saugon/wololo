@@ -26,7 +26,7 @@ public enum RunLaunch {
     }
 
     /// The project's folder, or for another repo's issue the folder of the project with that repo. A node with no
-    /// issue, title or description has nothing to launch.
+    /// issue, title or description has nothing to launch, and neither has one whose issue field names no issue.
     public static func folder(for node: GoalNode, project: PlanningProject, projects: [PlanningProject]) -> LaunchFolder {
         let projectRepo = defaultRepo(for: project)
         let ref = issue(of: node, projectRepo: projectRepo)
@@ -39,6 +39,7 @@ public enum RunLaunch {
         if ref == nil, oneLine(node.title).isEmpty, oneLine(node.description).isEmpty {
             return .disabled(reason: "Escribí un título o vinculá un issue")
         }
+        if ref == nil, !oneLine(node.issue ?? "").isEmpty { return .disabled(reason: "No reconozco ese issue") }
         guard !project.path.isEmpty else { return .disabled(reason: "Elegí una carpeta para \(project.name)") }
         return .folder(project.path)
     }

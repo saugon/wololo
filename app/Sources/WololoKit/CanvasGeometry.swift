@@ -126,6 +126,19 @@ public struct Viewport: Equatable, Sendable, Codable {
         CanvasRect(origin: toCanvas(.zero), size: CanvasSize(width: size.width / zoom, height: size.height / zoom))
     }
 
+    /// The viewport moved just enough for `rect` to lie inside a view of `size`, `margin` in from its edges, at the same
+    /// zoom; unchanged when it already does. A rect too big for the view shows its top-left part.
+    public func revealing(_ rect: CanvasRect, in size: CanvasSize, margin: Double = 0) -> Viewport {
+        func shift(from start: Double, to end: Double, length: Double) -> Double {
+            if start < margin { return margin - start }
+            if end > length - margin { return max(length - margin - end, margin - start) }
+            return 0
+        }
+        let dx = shift(from: rect.minX * zoom + offset.x, to: rect.maxX * zoom + offset.x, length: size.width)
+        let dy = shift(from: rect.minY * zoom + offset.y, to: rect.maxY * zoom + offset.y, length: size.height)
+        return Viewport(offset: CanvasPoint(x: offset.x + dx, y: offset.y + dy), zoom: zoom)
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: AnyKey.self)
         offset = c.value("offset", or: .zero)
