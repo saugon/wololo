@@ -29,8 +29,13 @@ enum TerminalAction {
             var focused = false
             if plan.triesFocus {
                 // An app can only hand the focus to another while it is active itself (the widget does not activate it).
+                // Activating brings the app's main window to the front: from the widget, the windows step out first and
+                // go back behind the others once the terminal has the focus, so only the terminal shows.
+                let stepped = origin == .widget ? stepOutWindows() : []
                 NSApp.activate()
-                switch await TerminalFocuser.focus(sessionID: run.owner.sessionID, cwd: run.owner.cwd, projectPath: run.project.path) {
+                let result = await TerminalFocuser.focus(sessionID: run.owner.sessionID, cwd: run.owner.cwd, projectPath: run.project.path)
+                for window in stepped { window.orderBack(nil) }
+                switch result {
                 case .found:
                     focused = true
                 case .notFound:
@@ -100,6 +105,14 @@ enum TerminalAction {
                 return "No pude abrir \(terminal.name): \(error.localizedDescription)"
             }
         }
+    }
+
+    /// The app's visible windows other than its panels (the widget, the toasts), taken off the screen for the moment
+    /// the app is active only to hand the focus on.
+    private static func stepOutWindows() -> [NSWindow] {
+        let windows = NSApp.windows.filter { $0.isVisible && !($0 is NSPanel) }
+        for window in windows { window.orderOut(nil) }
+        return windows
     }
 
     private static func missing(_ cwd: String) -> String {
