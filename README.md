@@ -168,11 +168,14 @@ To develop:
 
 ```sh
 cd app && swift build && swift test           # WololoKit has the tests
-scripts/sample-data.sh /tmp/wololo-sample     # a data directory with sample runs
+scripts/sample-data.sh /tmp/wololo-sample     # a data directory with sample runs and a sample goal
 WOLOLO_DATA_DIR=/tmp/wololo-sample .build/debug/WololoDesk
+WOLOLO_DATA_DIR=/tmp/wololo-sample WOLOLO_DESK_GOALS_DIR=/tmp/wololo-sample-goals .build/debug/WololoDesk
 ```
 
-To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings` or `run:<id>[:timeline|documents|screenshots|cost]`) and quits; `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status`, `stage` or `grid`) set the board's filters, and `WOLOLO_DESK_THEME` and `WOLOLO_DESK_THEMES_DIR` the theme (see **Themes**). The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
+The goals are kept in `~/Library/Application Support/Wololo Desk/Goals`, or in `WOLOLO_DESK_GOALS_DIR` when it is set. On the sample data (a data directory with the `.wololo-sample` marker) the sample goal is shown but nothing is written to your own goals, so edits are not kept; to try edits on it, point `WOLOLO_DESK_GOALS_DIR` at a throwaway folder, as in the last line.
+
+To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings`, `run:<id>[:timeline|documents|screenshots|cost]`, `planning` or `goal:<id>`) and quits, without writing settings or goals and without reading your goals (only those in `WOLOLO_DESK_GOALS_DIR`, if set, and the data directory's copy); `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status`, `stage` or `grid`) set the board's filters, and `WOLOLO_DESK_THEME` and `WOLOLO_DESK_THEMES_DIR` the theme (see **Themes**). The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
 
 ### Themes
 

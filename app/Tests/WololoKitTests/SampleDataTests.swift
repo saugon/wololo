@@ -99,6 +99,35 @@ final class SampleDataTests: XCTestCase {
         XCTAssertEqual(shortAgo(busy.updatedAt, now: later, lang: busy.lang), "53s")
     }
 
+    /// The planning snapshots: the sample goal is imported from `goals/` in memory, under a project the runs name,
+    /// with the mockup's graph (scenario 18: 2 of 7 steps done).
+    func testSampleGoalIsImportedUnderARunProject() throws {
+        let fixture = try StoreFixture(createRuns: false)
+        XCTAssertEqual(try runScript(into: fixture.root), 0)
+        let local = fixture.root.appendingPathComponent("support/Goals")
+        let goalStore = GoalStore(directory: local, mirror: GoalStore.mirrorDirectory(dataDirectory: fixture.root),
+                                  writes: false)
+        let imported = goalStore.importMirror()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: local.path), "a snapshot writes nothing")
+
+        let goal = try XCTUnwrap(imported.goals.first)
+        XCTAssertEqual(imported.goals.map(\.id), ["ecommerce-terminado"])
+        XCTAssertLessThan(Date().timeIntervalSince1970 - goal.updatedAt, 7200, "times are stamped relative to now")
+        XCTAssertEqual(goal.steps.count, 7)
+        XCTAssertEqual(goal.edges.count, 9)
+
+        let store = RunStore(runsURL: fixture.runsURL)
+        store.scan()
+        let project = try XCTUnwrap(mergedProjects(stored: imported.projects, runs: store.runs)
+            .first { $0.id == goal.projectID })
+        let now = Date().timeIntervalSince1970
+        let status = goal.status(defaultRepo: defaultRepo(for: project), runs: RunIndex(runs: store.runs), now: now)
+        XCTAssertEqual(status.done, 2)
+        XCTAssertEqual(status.total, 7)
+        XCTAssertEqual(status.status(of: "checkout")?.state, .blocked(by: 2))
+        XCTAssertEqual(status.status(of: "cuentas")?.state, .ready)
+    }
+
     func testRefusesToReplaceRunsItDidNotWrite() throws {
         let fixture = try StoreFixture()
         try fixture.write("real-run")
@@ -108,6 +137,20 @@ final class SampleDataTests: XCTestCase {
         let store = RunStore(runsURL: fixture.runsURL)
         store.scan()
         XCTAssertEqual(store.runs.map(\.id), ["real-run"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent(".wololo-sample").path))
+    }
+
+    func testRefusesToReplaceGoalsItDidNotWrite() throws {
+        let fixture = try StoreFixture(createRuns: false)
+        let goals = fixture.root.appendingPathComponent("goals")
+        try FileManager.default.createDirectory(at: goals, withIntermediateDirectories: true)
+        let real = goals.appendingPathComponent("real.json")
+        try Data("{}".utf8).write(to: real)
+
+        XCTAssertNotEqual(try runScript(into: fixture.root), 0)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: real.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.runsURL.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.root.appendingPathComponent(".wololo-sample").path))
     }
 }

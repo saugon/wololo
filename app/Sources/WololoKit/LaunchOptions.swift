@@ -15,6 +15,10 @@ public struct LaunchOptions: Equatable, Sendable {
         case widget
         case settings
         case run(id: String, tab: DetailTab?)
+        /// The window on the Planificación tab, on whatever goal was chosen.
+        case planning
+        /// The window on the Planificación tab, showing the goal with this id.
+        case goal(id: String)
     }
 
     public var open: Target?
@@ -26,9 +30,11 @@ public struct LaunchOptions: Equatable, Sendable {
     public var theme: String?
     /// Where to look for the user's themes instead of Application Support.
     public var themesDirectory: URL?
+    /// Where to keep the goals instead of Application Support, in any mode (`WOLOLO_DESK_GOALS_DIR`).
+    public var goalsDirectory: URL?
 
     public init(open: Target? = nil, search: String? = nil, project: String? = nil, columns: BoardMode? = nil, snapshotURL: URL? = nil,
-                theme: String? = nil, themesDirectory: URL? = nil) {
+                theme: String? = nil, themesDirectory: URL? = nil, goalsDirectory: URL? = nil) {
         self.open = open
         self.search = search
         self.project = project
@@ -36,6 +42,7 @@ public struct LaunchOptions: Equatable, Sendable {
         self.snapshotURL = snapshotURL
         self.theme = theme
         self.themesDirectory = themesDirectory
+        self.goalsDirectory = goalsDirectory
     }
 
     public init(environment: [String: String] = ProcessInfo.processInfo.environment) {
@@ -51,6 +58,7 @@ public struct LaunchOptions: Equatable, Sendable {
         snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map(Self.fileURL)
         theme = Self.value(environment["WOLOLO_DESK_THEME"])
         themesDirectory = Self.value(environment["WOLOLO_DESK_THEMES_DIR"]).map(Self.fileURL)
+        goalsDirectory = Self.value(environment[GoalStore.directoryEnvironmentKey]).map(Self.fileURL)
     }
 
     private static func fileURL(_ path: String) -> URL {
@@ -62,13 +70,19 @@ public struct LaunchOptions: Equatable, Sendable {
         return trimmed
     }
 
-    /// `window`, `widget`, `settings` or `run:<id>[:<tab>]`; an unknown tab opens the run on its default tab.
+    /// `window`, `widget`, `settings`, `planning`, `goal:<id>` or `run:<id>[:<tab>]`; an unknown tab opens the run on
+    /// its default tab.
     private static func target(_ raw: String) -> Target? {
         switch raw {
         case "window": return .window
         case "widget": return .widget
         case "settings": return .settings
+        case "planning": return .planning
         default:
+            if raw.hasPrefix("goal:") {
+                let id = String(raw.dropFirst("goal:".count))
+                return id.isEmpty ? nil : .goal(id: id)
+            }
             let parts = raw.split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
             guard parts.count >= 2, parts[0] == "run", !parts[1].isEmpty else { return nil }
             return .run(id: parts[1], tab: parts.count == 3 ? DetailTab(rawValue: parts[2]) : nil)

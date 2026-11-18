@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import WololoKit
 
-/// The window: the project sidebar and, beside it, the chosen run's detail, the board of the runs that match the
+/// The window: the sidebar and, beside it, on Planificación the chosen goal; on Operación the chosen run's detail, the board of the runs that match the
 /// search and the chosen project, or the empty state when the store has no runs at all.
 struct MainView: View {
     /// The transparent title bar the content runs under: nothing clickable goes in this strip.
@@ -19,7 +19,9 @@ struct MainView: View {
             Sidebar(state: state, openSettings: openSettings)
             ThemeRod()
             Group {
-                if let id = state.selectedRunID {
+                if state.tab == .planning {
+                    PlanningPlaceholder(state: state)
+                } else if let id = state.selectedRunID {
                     RunDetailView(state: state, runID: id)
                         .id(id)
                 } else if model.runs.isEmpty {

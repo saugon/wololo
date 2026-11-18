@@ -471,6 +471,57 @@ final class GoalStoreTests: XCTestCase {
         XCTAssertTrue(imported.goals.isEmpty)
         XCTAssertFalse(exists(local))
     }
+
+    /// What the app shows at launch: a store that writes has put the imported goal and project in the folder it
+    /// loads, so the import repeats them; each id is kept once, and a snapshot shows the copy without writing it.
+    func testLaunchMergesImportedProjectsAndGoalsByID() throws {
+        try FileManager.default.createDirectory(at: mirror, withIntermediateDirectories: true)
+        try goal("x", project: "acme__blog").encoded().write(to: mirror.appendingPathComponent("x.json"))
+        try PlanningProjectsFile(updatedAt: savedAt, projects: [blog]).encoded()
+            .write(to: mirror.appendingPathComponent("projects.json"))
+        try store().save(goal("y"))
+        try store().saveProjects([shop], at: savedAt)
+
+        let writing = store()
+        let imported = writing.importMirror()
+        let merged = writing.load().merging(imported: imported)
+        XCTAssertEqual(merged.projects.map(\.id), ["acme__shop", "acme__blog"])
+        XCTAssertEqual(merged.goals.map(\.id).sorted(), ["x", "y"])
+
+        try FileManager.default.removeItem(at: local)
+        let snapshot = store(writes: false)
+        let shown = snapshot.load().merging(imported: snapshot.importMirror())
+        // The saves above also wrote the copy, so it now holds both goals and both projects.
+        XCTAssertEqual(shown.projects.map(\.id).sorted(), ["acme__blog", "acme__shop"])
+        XCTAssertEqual(shown.goals.map(\.id).sorted(), ["x", "y"])
+        XCTAssertFalse(exists(local))
+    }
+
+    func testAppGoalsDirectory() {
+        let standard = URL(fileURLWithPath: "/Users/someone/Library/Application Support/Wololo Desk/Goals")
+        let chosen = URL(fileURLWithPath: "/tmp/goals")
+        XCTAssertEqual(GoalStore.directory(options: LaunchOptions(), standard: standard), standard)
+        XCTAssertEqual(GoalStore.directory(options: LaunchOptions(goalsDirectory: chosen), standard: standard), chosen)
+        XCTAssertEqual(GoalStore.directory(options: LaunchOptions(snapshotURL: URL(fileURLWithPath: "/tmp/a.png"),
+                                                                  goalsDirectory: chosen), standard: standard), chosen)
+
+        let snapshot = GoalStore.directory(options: LaunchOptions(snapshotURL: URL(fileURLWithPath: "/tmp/a.png")),
+                                           standard: standard)
+        XCTAssertNotEqual(snapshot, standard, "a snapshot never reads the person's goals")
+        XCTAssertTrue(snapshot.path.hasPrefix(FileManager.default.temporaryDirectory.path))
+        XCTAssertFalse(exists(snapshot))
+    }
+
+    func testGoalsAreNotWrittenFromTheSampleDataUnlessTheirFolderIsChosen() throws {
+        let chosen = LaunchOptions(goalsDirectory: fixture.root.appendingPathComponent("goals"))
+        XCTAssertTrue(GoalStore.writesGoals(persists: true, dataDirectory: data, options: LaunchOptions()))
+        XCTAssertFalse(GoalStore.writesGoals(persists: false, dataDirectory: data, options: LaunchOptions()))
+        XCTAssertFalse(GoalStore.writesGoals(persists: false, dataDirectory: data, options: chosen))
+
+        try Data().write(to: data.appendingPathComponent(DataDirectory.sampleMarker))
+        XCTAssertFalse(GoalStore.writesGoals(persists: true, dataDirectory: data, options: LaunchOptions()))
+        XCTAssertTrue(GoalStore.writesGoals(persists: true, dataDirectory: data, options: chosen))
+    }
 }
 
 /// Collects what the store logs; the store may call `log` from any thread.

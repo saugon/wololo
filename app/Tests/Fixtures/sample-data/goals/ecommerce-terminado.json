@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "ecommerce-terminado",
+  "project_id": "acme__web",
+  "title": "Ecommerce terminado",
+  "description": "Tienda online lista para vender: catálogo, carrito, cuentas, pago, deploy y monitoreo.",
+  "nodes": [
+    { "id": "catalogo", "title": "Catálogo de productos", "description": "Listado con filtros por categoría y precio, ficha con fotos y stock.", "issue": "#121", "manual_state": "done", "position": { "x": 0, "y": 0 } },
+    { "id": "diseno", "title": "Diseño de UI", "description": "Sistema visual y pantallas clave, aprobadas por el cliente.", "manual_state": "done", "position": { "x": 0, "y": 170 } },
+    { "id": "infra", "title": "Infra y deploy", "description": "CI/CD, staging con datos de prueba y dominio con TLS.", "issue": "#125", "position": { "x": 0, "y": 340 } },
+    { "id": "carrito", "title": "Carrito de compras", "description": "Agregar, quitar y cambiar cantidades; persiste entre sesiones; cupones.", "issue": "#128", "position": { "x": 216, "y": 0 } },
+    { "id": "cuentas", "title": "Cuentas de usuario", "description": "Registro con email, login, recupero de contraseña y perfil con direcciones.", "issue": "#131", "position": { "x": 216, "y": 170 } },
+    { "id": "monitoreo", "title": "Monitoreo y alertas", "description": "Métricas de negocio, alertas de errores y uptime del checkout.", "position": { "x": 216, "y": 340 } },
+    { "id": "checkout", "title": "Checkout con Mercado Pago", "description": "Checkout en un paso, pago con Mercado Pago y mail de confirmación.", "issue": "#142", "position": { "x": 432, "y": 0 } }
+  ],
+  "edges": [
+    { "from": "catalogo", "to": "carrito" },
+    { "from": "catalogo", "to": "cuentas" },
+    { "from": "diseno", "to": "cuentas" },
+    { "from": "carrito", "to": "checkout" },
+    { "from": "cuentas", "to": "checkout" },
+    { "from": "infra", "to": "monitoreo" },
+    { "from": "checkout", "to": "final" },
+    { "from": "cuentas", "to": "final" },
+    { "from": "monitoreo", "to": "final" }
+  ],
+  "final_position": { "x": 648, "y": 170 },
+  "updated_at": "@now-3600"
+}

@@ -1,9 +1,10 @@
 import SwiftUI
 import WololoKit
 
-/// Search, the runs waiting on the person, the projects (the chosen one with its active runs nested under it) and
+/// The Operación | Planificación tabs, then, on Operación: search, the runs waiting on the person, the projects (the chosen one with its active runs nested under it) and
 /// Ajustes at the foot, as the reference draws them: small headings in the display font, rows with a bullet or an
 /// icon, and the chosen row on a subtle background with a 1 pt border. Choosing a project goes back to the board.
+/// Planificación lists the projects and their goals instead (`PlanningSidebar`).
 struct Sidebar: View {
     static let width: CGFloat = 240
 
@@ -20,14 +21,20 @@ struct Sidebar: View {
             // The window's traffic lights sit here, in the transparent title bar.
             Color.clear.frame(height: MainView.titleBarHeight)
             brand
-            search
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 16) {
-                    waitingSection(waiting, now: model.now)
-                    projectsSection(model.runs, now: model.now)
+            SidebarTabs(tab: $state.tab, waiting: waiting.count)
+            switch state.tab {
+            case .operation:
+                search
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        waitingSection(waiting, now: model.now)
+                        projectsSection(model.runs, now: model.now)
+                    }
                 }
+                .scrollIndicators(.never)
+            case .planning:
+                PlanningSidebar(state: state)
             }
-            .scrollIndicators(.never)
             footer(model.dataDirectory)
         }
         .padding(.horizontal, 12)
@@ -184,8 +191,63 @@ struct Sidebar: View {
     }
 }
 
+/// "Operación | Planificación" as a segmented control. Operación carries the count of runs waiting on the person
+/// (the same as "Te esperan"), so it is seen from Planificación too; at 0 there is no badge.
+private struct SidebarTabs: View {
+    @Binding var tab: PlanningTab
+    let waiting: Int
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        HStack(spacing: 2) {
+            segment("Operación", .operation, badge: waiting)
+            segment("Planificación", .planning, badge: 0)
+        }
+        .padding(3)
+        .themeFrame(theme, fill: theme.field) { picker in
+            picker
+                .background(theme.field, in: RoundedRectangle(cornerRadius: theme.r(9)))
+                .overlay(RoundedRectangle(cornerRadius: theme.r(9)).strokeBorder(theme.border, lineWidth: 1))
+        }
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Vista")
+    }
+
+    private func segment(_ title: String, _ value: PlanningTab, badge: Int) -> some View {
+        let isOn = tab == value
+        let waitingStyle = theme.style(.waitingUser)
+        return Button {
+            tab = value
+        } label: {
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(theme.font(.body, size: 13, weight: isOn ? .semibold : .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                if badge > 0 {
+                    Text("\(badge)")
+                        .font(theme.font(.body, size: 10.5, weight: .bold).monospacedDigit())
+                        .foregroundStyle(waitingStyle.badgeText)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 16, minHeight: 16)
+                        .background(waitingStyle.badge, in: Capsule())
+                }
+            }
+            .foregroundStyle(isOn ? theme.title : theme.muted)
+            .frame(maxWidth: .infinity, minHeight: 28)
+            .background(isOn ? theme.track : .clear, in: RoundedRectangle(cornerRadius: theme.r(7)))
+            .contentShape(RoundedRectangle(cornerRadius: theme.r(7)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(badge > 0 ? "\(title), \(badge) te esperan" : title)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
+    }
+}
+
 /// "Te esperan · 3", "Proyectos": small, in the display font.
-private struct SectionHeading: View {
+struct SectionHeading: View {
     let title: String
 
     @Environment(\.theme) private var theme
@@ -204,7 +266,7 @@ private struct SectionHeading: View {
 
 /// A sidebar row: at least 36 pt tall, white on a subtle background with a 1 pt border when chosen, lighter when
 /// hovered.
-private struct NavRow<Content: View>: View {
+struct NavRow<Content: View>: View {
     let isSelected: Bool
     @ViewBuilder let content: Content
 

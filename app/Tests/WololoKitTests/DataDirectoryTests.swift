@@ -31,4 +31,12 @@ final class DataDirectoryTests: XCTestCase {
 
         XCTAssertEqual(DataDirectory.resolve(environment: [:], setting: "", home: home).origin, .standard)
     }
+
+    func testSampleDataIsToldByItsMarker() throws {
+        let fixture = try StoreFixture(createRuns: false)
+        XCTAssertFalse(DataDirectory.isSampleData(fixture.root))
+        try Data().write(to: fixture.root.appendingPathComponent(".wololo-sample"))
+        XCTAssertTrue(DataDirectory.isSampleData(fixture.root))
+        XCTAssertFalse(DataDirectory.isSampleData(fixture.root.appendingPathComponent("missing")))
+    }
 }

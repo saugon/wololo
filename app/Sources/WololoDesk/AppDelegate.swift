@@ -38,17 +38,53 @@ final class AppState {
     /// The message on screen for a moment, set through `showToast`.
     var toast: Toast?
 
+    // MARK: Planning
+
+    /// Operación (the board) or Planificación (the goals).
+    var tab: PlanningTab = .operation {
+        didSet { if tab != oldValue { planningPrefs.tab = tab } }
+    }
+    var selectedProjectID: String? {
+        didSet { if selectedProjectID != oldValue, remembersSelection { planningPrefs.selectedProjectID = selectedProjectID } }
+    }
+    /// The goal the planning view shows.
+    var selectedGoalID: String? {
+        didSet { if selectedGoalID != oldValue, remembersSelection { planningPrefs.selectedGoalID = selectedGoalID } }
+    }
+    /// While a text field of the planning view has the focus, ⌫ and Escape are the field's and not the canvas's.
+    var isTextFocused = false
+    /// The goals and projects, and when they are written.
+    let goalSession: GoalSession
+    @ObservationIgnored let planningPrefs: PlanningPrefs
+    /// Off while a selection that is gone is cleared: the preference keeps it, in case it comes back.
+    @ObservationIgnored private var remembersSelection = true
+    @ObservationIgnored private let options: LaunchOptions
+
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let persists: Bool
 
-    /// With `persists: false` (snapshots) nothing the app does is written to the settings.
+    /// With `persists: false` (snapshots) nothing the app does is written to the settings, nor to the goals.
     init(options: LaunchOptions = LaunchOptions(environment: [:]), defaults: UserDefaults = .standard, persists: Bool = true) {
         defaults.register(defaults: [SettingsKey.showWidgetAtLaunch: true, SettingsKey.widgetVisible: true])
         self.defaults = defaults
         self.persists = persists
+        self.options = options
         themes = ThemeStore(options: options, defaults: defaults, persists: persists)
-        model = RunsModel(dataDirectory: DataDirectory.resolve(setting: defaults.string(forKey: SettingsKey.dataDirectory)))
+        let dataDirectory = DataDirectory.resolve(setting: defaults.string(forKey: SettingsKey.dataDirectory))
+        model = RunsModel(dataDirectory: dataDirectory)
         isWidgetVisible = false
+        planningPrefs = PlanningPrefs(defaults: defaults, persists: persists)
+        goalSession = GoalSession(store: Self.makeGoalStore(directory: GoalStore.directory(options: options),
+                                                            dataDirectory: dataDirectory, options: options,
+                                                            persists: persists))
+        // A snapshot starts where `WOLOLO_DESK_OPEN` says, not where the person left the app.
+        if persists {
+            tab = planningPrefs.tab
+            selectedProjectID = planningPrefs.selectedProjectID
+            selectedGoalID = planningPrefs.selectedGoalID
+        }
+        goalSession.report = { [weak self] in self?.showToast($0) }
+        loadGoals()
     }
 
     /// The widget comes back at launch if the setting allows it and it was not hidden when the app last quit.
@@ -60,8 +96,10 @@ final class AppState {
         defaults.string(forKey: SettingsKey.dataDirectory) ?? ""
     }
 
+    /// Reads the runs; the chosen project is checked once they are read, since it may be one only they name.
     func start() {
         model.start()
+        dropMissingSelection()
     }
 
     /// The board filters `WOLOLO_DESK_SEARCH`, `_PROJECT` and `_COLUMNS` ask for.
@@ -71,8 +109,9 @@ final class AppState {
         if let columns = options.columns { boardMode = columns }
     }
 
-    /// Shows the run's detail, on `tab` or else on its timeline.
+    /// Shows the run's detail on the Operación tab, on `tab` or else on its timeline.
     func showRun(_ id: String, tab: LaunchOptions.DetailTab? = nil) {
+        self.tab = .operation
         selectedRunID = id
         if let tab { detailTab = tab }
     }
@@ -91,11 +130,113 @@ final class AppState {
         model.stop()
         model = RunsModel(dataDirectory: next)
         model.start()
+        goalSession.replaceStore(Self.makeGoalStore(directory: goalSession.store.directory, dataDirectory: next,
+                                                    options: options, persists: persists))
+        dropMissingSelection()
     }
 
     func setWidgetVisible(_ visible: Bool) {
         isWidgetVisible = visible
         if persists { defaults.set(visible, forKey: SettingsKey.widgetVisible) }
+    }
+}
+
+// MARK: - Goals
+
+extension AppState {
+    var goals: [Goal] { goalSession.goals }
+
+    /// The projects the planning sidebar lists: the stored ones and those the runs name.
+    var projects: [PlanningProject] {
+        mergedProjects(stored: goalSession.storedProjects, runs: model.runs)
+    }
+
+    var selectedGoal: Goal? {
+        selectedGoalID.flatMap(goal(id:))
+    }
+
+    func goal(id: String) -> Goal? {
+        goalSession.goal(id: id)
+    }
+
+    func project(id: String) -> PlanningProject? {
+        projects.first { $0.id == id }
+    }
+
+    /// Shows a goal on the Planificación tab, with its project chosen.
+    func showGoal(_ id: String) {
+        tab = .planning
+        selectedGoalID = id
+        if let goal = goal(id: id) { selectedProjectID = goal.projectID }
+    }
+
+    /// Chooses a project on its own, with no goal shown.
+    func selectProject(_ id: String) {
+        selectedProjectID = id
+        selectedGoalID = nil
+    }
+
+    /// A new goal in the project, with only its final node, saved and chosen (spec 5).
+    @discardableResult
+    func createGoal(in projectID: String) -> Goal? {
+        guard let project = project(id: projectID) else { return nil }
+        let goal = goalSession.createGoal(in: project)
+        selectedProjectID = project.id
+        selectedGoalID = goal.id
+        return goal
+    }
+
+    /// A structural change: saved now.
+    func update(goal: Goal) {
+        goalSession.update(goal)
+    }
+
+    /// A text edit: shown now and saved 0.5 s after the last one.
+    func updateText(goal: Goal) {
+        goalSession.updateText(goal)
+    }
+
+    /// Saves every text edit still waiting, as the app quits.
+    func flushPendingSaves() {
+        goalSession.flush()
+    }
+
+    /// Removes the goal, its copy and its saved viewport. If its file can't be removed it stays on screen.
+    func deleteGoal(id: String) {
+        guard goalSession.deleteGoal(id: id) else { return }
+        planningPrefs.removeViewport(forGoal: id)
+        if selectedGoalID == id { selectedGoalID = nil }
+    }
+
+    func saveProjects(_ projects: [PlanningProject]) {
+        goalSession.saveProjects(projects)
+    }
+
+    fileprivate func loadGoals() {
+        goalSession.load()
+        dropMissingSelection()
+    }
+
+    /// Clears, on screen only, a chosen goal that is no longer there (one whose file can't be read is kept) and, once
+    /// the runs are read, a chosen project no list names.
+    fileprivate func dropMissingSelection() {
+        remembersSelection = false
+        defer { remembersSelection = true }
+        if let id = selectedGoalID, goal(id: id) == nil, !goalSession.unreadableGoalIDs.contains(id) {
+            selectedGoalID = nil
+        }
+        if model.isStarted, let id = selectedProjectID, project(id: id) == nil {
+            selectedProjectID = nil
+        }
+    }
+
+    /// `options.goalsDirectory` or Application Support, with its copy in `<data>/goals`. On the sample data the goals
+    /// are only written to a folder chosen with `WOLOLO_DESK_GOALS_DIR` (see `GoalStore.writesGoals`).
+    fileprivate static func makeGoalStore(directory: URL, dataDirectory: DataDirectory, options: LaunchOptions,
+                                          persists: Bool) -> GoalStore {
+        GoalStore(directory: directory, mirror: GoalStore.mirrorDirectory(dataDirectory: dataDirectory.url),
+                  writes: GoalStore.writesGoals(persists: persists, dataDirectory: dataDirectory.url, options: options),
+                  log: { NSLog("Wololo Desk goals: %@", $0) })
     }
 }
 
@@ -156,6 +297,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Text edits still waiting for their 0.5 s are saved before the app goes.
+    func applicationWillTerminate(_ notification: Notification) {
+        state.flushPendingSaves()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
@@ -172,6 +318,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openWindow()
         case .run(let id, let tab):
             state.showRun(id, tab: tab)
+            openWindow()
+        case .planning:
+            state.tab = .planning
+            openWindow()
+        case .goal(let id):
+            state.showGoal(id)
             openWindow()
         case .settings:
             openSettings()
@@ -234,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func snapshotWindow() -> NSWindow? {
         switch options.open ?? .window {
-        case .window, .run: return mainWindow?.window
+        case .window, .run, .planning, .goal: return mainWindow?.window
         case .settings: return settingsWindow?.window
         case .widget: return widgetPanel?.window
         }

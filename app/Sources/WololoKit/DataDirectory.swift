@@ -10,6 +10,8 @@ public struct DataDirectory: Equatable, Sendable {
 
     public static let environmentKey = "WOLOLO_DATA_DIR"
     public static let settingKey = "dataDirectory"
+    /// The file `scripts/sample-data.sh` leaves in a data directory it wrote.
+    public static let sampleMarker = ".wololo-sample"
 
     public let url: URL
     public let origin: Origin
@@ -38,6 +40,11 @@ public struct DataDirectory: Equatable, Sendable {
             return DataDirectory(url: expand(path, home: home), origin: .setting)
         }
         return DataDirectory(url: standard(home: home), origin: .standard)
+    }
+
+    /// Whether `url` holds the sample data `scripts/sample-data.sh` writes, rather than the person's own.
+    public static func isSampleData(_ url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.appendingPathComponent(sampleMarker).path)
     }
 
     private static func usable(_ value: String?) -> String? {

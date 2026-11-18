@@ -256,6 +256,28 @@ public struct GoalStore: Sendable {
     }
 }
 
+extension GoalStore {
+    public static let directoryEnvironmentKey = "WOLOLO_DESK_GOALS_DIR"
+
+    /// Where the app keeps the goals: `WOLOLO_DESK_GOALS_DIR`, else for a snapshot an empty folder that isn't there
+    /// (a snapshot never reads the person's goals), else `standard`.
+    public static func directory(options: LaunchOptions, standard: @autoclosure () -> URL = defaultDirectory()) -> URL {
+        if let chosen = options.goalsDirectory { return chosen }
+        if options.snapshotURL != nil {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("wololo-desk-snapshot-\(UUID().uuidString)/Goals", isDirectory: true)
+        }
+        return standard()
+    }
+
+    /// Whether the app writes goals to disk. Never in a snapshot (`persists: false`). On the sample data only into a
+    /// folder chosen with `WOLOLO_DESK_GOALS_DIR`: otherwise its goal would be imported into the person's own goals.
+    public static func writesGoals(persists: Bool, dataDirectory: URL, options: LaunchOptions) -> Bool {
+        guard persists else { return false }
+        return options.goalsDirectory != nil || !DataDirectory.isSampleData(dataDirectory)
+    }
+}
+
 /// What `GoalStore.load` found. A file that is there but can't be read shows up in `projectsUnreadable` or
 /// `unreadableGoalIDs` rather than looking like it isn't there.
 public struct GoalStoreSnapshot: Equatable, Sendable {
@@ -270,5 +292,23 @@ public struct GoalStoreSnapshot: Equatable, Sendable {
         self.goals = goals
         self.projectsUnreadable = projectsUnreadable
         self.unreadableGoalIDs = unreadableGoalIDs
+    }
+}
+
+extension GoalStoreSnapshot {
+    /// What the app shows at launch: the loaded goals and projects plus what `importMirror` returned, each id once.
+    /// A store that writes has already put the imported files into the folder `load` read, and one that doesn't
+    /// (snapshots) hasn't, so imported entries whose id was loaded are dropped and the loaded one is kept.
+    public func merging(imported: (projects: [PlanningProject], goals: [Goal])) -> GoalStoreSnapshot {
+        var merged = self
+        var projectIDs = Set(projects.map(\.id))
+        for project in imported.projects where projectIDs.insert(project.id).inserted {
+            merged.projects.append(project)
+        }
+        var goalIDs = Set(goals.map(\.id))
+        for goal in imported.goals where goalIDs.insert(goal.id).inserted {
+            merged.goals.append(goal)
+        }
+        return merged
     }
 }

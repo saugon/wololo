@@ -25,6 +25,16 @@ final class LaunchOptionsTests: XCTestCase {
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "run"]).open)
     }
 
+    /// Spec 30: the Planificación tab, and one goal on it.
+    func testPlanningAndGoal() {
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "planning"]).open, .planning)
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "goal:ecommerce"]).open, .goal(id: "ecommerce"))
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": " goal:a:b "]).open, .goal(id: "a:b"))
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "goal:"]).open)
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "goal"]).open)
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_OPEN": "planning:x"]).open)
+    }
+
     func testFiltersColumnsAndSnapshot() {
         let options = LaunchOptions(environment: [
             "WOLOLO_DESK_OPEN": "window",
@@ -51,5 +61,13 @@ final class LaunchOptionsTests: XCTestCase {
                        (NSHomeDirectory() as NSString).appendingPathComponent("temas"))
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_THEME": ""]).theme)
         XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_THEMES_DIR": "  "]).themesDirectory)
+    }
+
+    func testGoalsDirectory() {
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_GOALS_DIR": "/tmp/wololo/goals"]).goalsDirectory,
+                       URL(fileURLWithPath: "/tmp/wololo/goals"))
+        XCTAssertEqual(LaunchOptions(environment: ["WOLOLO_DESK_GOALS_DIR": "~/objetivos"]).goalsDirectory?.path,
+                       (NSHomeDirectory() as NSString).appendingPathComponent("objetivos"))
+        XCTAssertNil(LaunchOptions(environment: ["WOLOLO_DESK_GOALS_DIR": "  "]).goalsDirectory)
     }
 }
