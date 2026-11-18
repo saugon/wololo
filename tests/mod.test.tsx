@@ -890,6 +890,20 @@ test('the background tasks of a session are closed as gone when its process exit
   expect(await open()).toEqual([])
 })
 
+test('a background task stopped with TaskStop is closed, so the run stops waiting on it', async ($, on) => {
+  fakeHost(on)
+  on('tool.call', (_, e) => (e.tool === 'Bash' ? { result: { backgroundTaskId: 't1' } } : { result: {} }))
+  on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' as const } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)
+  await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
+  await $.tool.call({ tool: 'Bash', command: 'gh pr checks 7 --watch', run_in_background: true, description: 'Watch CI' } as never)
+  const state = async () => parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  expect((await state()).tasks.find(task => task.id === 't1')?.finished_at).toBe(null)
+  await $.tool.call({ tool: 'TaskStop', task_id: 't1' } as never)
+  expect((await state()).tasks.find(task => task.id === 't1')).toMatchObject({ status: 'killed' })
+})
+
 test('/clear lets go of the run: it is paused with no card, and /wololo resume takes it back right away', async ($, on) => {
   let session = 's1'
   const host = fakeHost(on, { session: () => session })

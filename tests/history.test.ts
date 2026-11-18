@@ -285,6 +285,19 @@ test('the summary says what each stage cost, by role, and the total', async () =
   ])
 })
 
+test('time nobody measured, such as the machine asleep, counts as waiting and not as active', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints' }],
+    ['stage.entered', { stage: 'context' }],
+    ['time', { stage: 'context', kind: 'work', seconds: 600 }],
+    ['time', { stage: 'context', kind: 'review', seconds: 300 }],
+  ])
+  // Ten hours in the stage: ten minutes of work, five waiting on the reviewers, the rest asleep.
+  const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_060 + 10 * 3600)
+  const stages = block(view.pane.summary, 'etapas', true)
+  expect(stages[1]).toMatch(/^● Contexto +10m +9h50 +10h00/)
+})
+
 test('the summary says where each stage spent its time, and how long its agents ran by role', async () => {
   const list = events([
     ['run.started', { title: 'Salones', mode: 'checkpoints' }],
@@ -299,15 +312,16 @@ test('the summary says where each stage spent its time, and how long its agents 
     ['time', { stage: 'definition', kind: 'you', seconds: 30 }],
   ])
   const view = buildView(rebuild('r1', list), 'running', list, 1_800_000_720)
-  // Active leaves out what the stage waited for the person; each time rounds up to the unit it shows, never down.
+  // Active is only what was measured as work: the person's wait and the unmeasured time are left out. Each time rounds up to the
+  // unit it shows, never down.
   expect(block(view.pane.detail, 'tiempo', true)).toEqual([
     '            activo  total',
-    'Contexto        7m     7m  trabajando 1m · agentes 2m · sin medir 4m',
+    'Contexto        3m     7m  trabajando 1m · agentes 2m · sin medir 4m',
     '                           agentes en total: explorador 4m',
-    'Definición      4m     4m  te esperó 30s · sin medir 4m',
-    'Total          11m    11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 8m',
+    'Definición      0s     4m  te esperó 30s · sin medir 4m',
+    'Total           3m    11m  trabajando 1m · agentes 2m · te esperó 30s · sin medir 8m',
   ])
-  expect(block(view.pane.summary, 'etapas').slice(0, 2)).toEqual(['✓ Contexto            7m                7m', '● Definición          4m        30s     4m'])
+  expect(block(view.pane.summary, 'etapas').slice(0, 2)).toEqual(['✓ Contexto            3m         4m     7m', '● Definición          0s         4m     4m'])
   expect(durationUp(59)).toBe('59s')
   expect(durationUp(60)).toBe('1m')
   expect(durationUp(61)).toBe('2m')

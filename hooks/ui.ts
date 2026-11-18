@@ -132,6 +132,11 @@ export function toneOf(status: Status): Tone {
   return 'claude'
 }
 
+// The time measured as work: the session's turns, its agents, and the tests and CI it waited on.
+function activeSeconds(time: Partial<Record<TimeKind, number>>): number {
+  return (time.work ?? 0) + (time.agents ?? 0) + (time.tests ?? 0)
+}
+
 function stageSeconds(run: Run, id: string, now: number): number {
   return run.stages.filter(s => s.id === id).reduce((sum, s) => sum + ((s.finished_at ?? now) - s.started_at), 0)
 }
@@ -243,10 +248,8 @@ function timeSection(run: Run, now: number): Row[] {
   })
   if (stages.length === 0) return []
   const labelWidth = Math.max(5, ...stages.map(stage => stage.label.length))
-  // Active is the stage's time less what it waited for the person, stood paused or waited on the PR's reviewers; total is its
-  // wall time, the waits included.
-  const active = (time: Partial<Record<TimeKind, number>>, wall: number) =>
-    Math.max(0, wall - (time.you ?? 0) - (time.paused ?? 0) - (time.review ?? 0))
+  // Active is what was measured as work; total is the wall time, the waits and what went unmeasured (the machine asleep) included.
+  const active = (time: Partial<Record<TimeKind, number>>, wall: number) => Math.min(wall, activeSeconds(time))
   const wallTotal = stages.reduce((sum, stage) => sum + stage.wall, 0)
   const activeTotal = stages.reduce((sum, stage) => sum + active(stage.time, stage.wall), 0)
   const heads = es ? { active: 'activo', wall: 'total' } : { active: 'active', wall: 'total' }
@@ -476,9 +479,11 @@ function stagesBlock(run: Run, now: number, tone: Tone): Block {
     const isAhead = !run.outcome && run.stage !== null && index > run.stage.index
     const wall = stageSeconds(run, stage.id, now)
     const parts = run.time?.[stage.id]
-    // Waited is what the stage stood waiting for the person, paused or on the PR's reviewers; active is the rest of its wall time.
-    const waited = parts ? Math.min(wall, (parts.you ?? 0) + (parts.paused ?? 0) + (parts.review ?? 0)) : 0
-    const active = wall - waited
+    // Active is what was measured as work (the session, its agents, tests and CI); waited is the rest of the wall time: the person, a
+    // pause, the PR's reviewers, and what nobody measured, such as the machine asleep or the session closed. A stage without
+    // measures (a run from before them) counts all of it as active.
+    const active = parts ? Math.min(wall, activeSeconds(parts)) : wall
+    const waited = wall - active
     const used = run.usage?.[stage.id]
     totals.active += active
     totals.waited += waited

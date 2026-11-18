@@ -2695,6 +2695,15 @@ export const register: Register = (on, options) => {
         return ran
       }
 
+      // A background task stopped by hand sends no notification: it ends here, or it would keep the run waiting on it.
+      if (e.tool === 'TaskStop') {
+        const ran = await next(e)
+        const id = e.task_id ?? e.shell_id
+        const task = run && !run.outcome && id ? run.tasks.find(t => t.id === id && t.finished_at === null) : undefined
+        if (task && ran.deny === undefined && !ran.isError) await emit($, 'task.finished', { id: task.id, label: task.label, status: 'killed' })
+        return ran
+      }
+
       return await next(e)
     }
     try {
