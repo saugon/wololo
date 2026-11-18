@@ -91,6 +91,18 @@ export const SECTIONS: Section[] = [
         ],
       },
       {
+        kind: 'text',
+        path: 'review.final.skill',
+        label: t('Revisión final (skill)', 'Final review (skill)'),
+        help: t('revisa todo el cambio antes de cerrar la implementación; vacío: ninguna', 'reviews the whole change before implementation ends; empty: none'),
+      },
+      {
+        kind: 'text',
+        path: 'review.final.args',
+        label: t('Argumentos del skill', 'Skill arguments'),
+        help: t('{base} y {branch} se completan', '{base} and {branch} are filled in'),
+      },
+      {
         kind: 'radio',
         path: 'review.approval',
         label: t('Aprobación del cambio', 'Approving the change'),

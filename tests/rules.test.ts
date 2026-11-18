@@ -326,3 +326,24 @@ test('review.waiting needs the pr stage and an open PR', async () => {
   expect(checkEvent(opened, 'review.waiting', {})).toBe(null)
   expect(checkEvent(opened, 'pr.merged', {})).toMatch(/Unknown event type/)
 })
+
+test('with a final review configured, the implement stage ends only after it passed on the code as committed', async () => {
+  const implementing = (extra: Array<[RunEvent['type'], Record<string, unknown>, number]> = []) =>
+    runAt('full', [
+      ['stage.entered', { stage: 'implement' }, 3],
+      ...extra,
+    ])
+  const done = { stage: 'implement', head_tree: 'tree2' }
+  expect(checkEvent(implementing(), 'stage.completed', done)).toBe(null)
+  expect(checkEvent(implementing(), 'stage.completed', done, undefined, { finalReview: true })).toMatch(/after the final review/)
+  const failed = implementing([['final_review', { verdict: 'fail', findings: 3, tree: 'tree1' }, 4]])
+  expect(checkEvent(failed, 'stage.completed', done, undefined, { finalReview: true })).toMatch(/found 3 to fix/)
+  const passedBefore = implementing([['final_review', { verdict: 'pass', findings: 1, tree: 'tree1' }, 4]])
+  expect(checkEvent(passedBefore, 'stage.completed', done, undefined, { finalReview: true })).toMatch(/changed after the final review/)
+  const passed = implementing([['final_review', { verdict: 'pass', findings: 1, tree: 'tree2' }, 4]])
+  expect(checkEvent(passed, 'stage.completed', done, undefined, { finalReview: true })).toBe(null)
+
+  expect(checkEvent(runAt('full'), 'final_review', { verdict: 'pass', findings: 0 })).toMatch(/implement stage/)
+  expect(checkEvent(implementing(), 'final_review', { verdict: 'ok', findings: 0 })).toMatch(/verdict/)
+  expect(checkEvent(implementing(), 'final_review', { verdict: 'pass' })).toMatch(/findings/)
+})

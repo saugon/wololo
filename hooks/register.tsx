@@ -561,9 +561,10 @@ async function writeBatch($: Engine, held: Run, dir: string, batch: RunEvent[], 
   const id = held.id
   // Nothing of it can have been written: back to pending while the session holds the same load of the run, kept apart with its
   // directory once another load replaced it.
-  const putBack = () => {
-    if (isSameLoad()) pending = [...batch, ...pending]
-    else orphaned.push({ dir, events: batch, of: held })
+  const putBack = (events: RunEvent[] = batch) => {
+    if (events.length === 0) return
+    if (isSameLoad()) pending = [...events, ...pending]
+    else orphaned.push({ dir, events, of: held })
   }
   let diskLast: number
   try {
@@ -594,8 +595,12 @@ async function writeBatch($: Engine, held: Run, dir: string, batch: RunEvent[], 
       `${dir}/events.jsonl`,
       batch.map(ev => JSON.stringify(ev)),
     )
-  } catch {
-    // Launched, the append may have written the batch: tried again, it could write it twice.
+  } catch (error) {
+    await noteWriteError($, dir, error)
+    // Launched, the append may have written part of the batch: the file says which part, and only the rest goes back. A file that cannot
+    // be read leaves it unknown, and the batch goes back whole: an event written twice is better than one lost.
+    const onDisk = await lastSeqOnDisk($, dir).catch(() => null)
+    putBack(onDisk === null ? batch : batch.filter(ev => ev.seq > onDisk))
     return false
   }
   if (!isAppended) {
@@ -605,6 +610,12 @@ async function writeBatch($: Engine, held: Run, dir: string, batch: RunEvent[], 
   await writeHistory($, dir, held)
   if (run?.id !== id) await writeReplaced($, dir, held)
   return true
+}
+
+// Why an append failed, kept beside the run's events: the batch is tried again, and this says what went wrong.
+async function noteWriteError($: Engine, dir: string, error: unknown) {
+  const at = new Date(await $.clock.now()).toISOString()
+  await $.fs.write(`${dir}/write-error.log`, `${at} ${String(error)}\n`).catch(() => undefined)
 }
 
 // The run.json of a run this instance no longer holds, as its load left it.
@@ -1595,7 +1606,13 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
     data.worktree_tree = await worktreeTree($, worktree, runDir(paths, run.id))
   if (worktree && type === 'item.committed' && typeof data.sha === 'string')
     data.commit_tree = await git($, worktree, ['rev-parse', `${data.sha}^{tree}`])
-  const problem = checkEvent(run, type, data, config.budgets)
+  const finalReview = config.review.final.skill.trim() !== ''
+  const isFinalCheck = type === 'final_review' || (type === 'stage.completed' && data.stage === 'implement' && finalReview)
+  if (isFinalCheck) {
+    const head = await git($, run.project.worktree ?? run.project.path, ['rev-parse', 'HEAD^{tree}'])
+    data[type === 'final_review' ? 'tree' : 'head_tree'] = head
+  }
+  const problem = checkEvent(run, type, data, config.budgets, { finalReview })
   if (problem) return fail(problem)
   if (config.risk_paths.length > 0 && worktree) {
     const risky = await riskyChange($, type, data)
@@ -2094,7 +2111,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'event',
     description:
-      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, branch.named {slug} (renames the run's branch from config.branch with that slug, a few words on what the change does; at the start of the plan stage, before anything is pushed), base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), instance.used {slot, reason} (the person asked to run the servers on another instance than the work tree's: the card's ports and databases follow it; {slot: null} goes back to the work tree's), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
+      "Records a transition or a fact of the active run so the person can see it (band, pane, status line, dashboards). The run refuses transitions out of order: a skipped stage, a gate resolved without the person's answer. Types: stage.entered {stage, reason?}, stage.completed {stage, note?}, gate.requested {gate}, gate.resolved {gate, outcome: approved|changes|rejected, by: user|auto}, risk.set {risk, reason}, plan.ready {items:[titles]}, item.started {n, title, reversal?}, item.verified {n, result: pass|fail, tree}, item.reviewed {n, findings, verdict}, item.committed {n, sha, title}, final_review {verdict: pass|fail, findings} (the review of the whole change by config.review.final's skill, after the last item; the implement stage completes only after a pass on the code as committed then), debate.turn {stage, role, round, model, verdict, file}, doing {text} (one plain sentence on what is being done and why, whenever something long starts), assumption {text, stage}, decision {text, by}, corrected {text}, blocked {reason}, unblocked {}, ci.updated {state: pending|passing|failing}, branch.named {slug} (renames the run's branch from config.branch with that slug, a few words on what the change does; at the start of the plan stage, before anything is pushed), base.changed {to, reason?} (when the branch moves onto another base, e.g. the base merged and the branch was rebased onto main), instance.used {slot, reason} (the person asked to run the servers on another instance than the work tree's: the card's ports and databases follow it; {slot: null} goes back to the work tree's), pr.opened {url, number, draft}, pr.ready {}, review.waiting {} (the PR is ready with CI green: the run stays open in review until the PR merges or the person ends it), screenshot.saved {file, caption}, run.finished {outcome: done|failed|cancelled, summary}.",
     inputSchema: {
       type: 'object',
       properties: {

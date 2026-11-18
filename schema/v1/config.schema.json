@@ -85,6 +85,20 @@
             "pr"
           ],
           "description": "Where the change is approved: at Aprobar PR in the session (local), or on the PR once CI is green (pr)."
+        },
+        "final": {
+          "type": "object",
+          "description": "A skill that reviews the whole change before the implement stage ends: the run fixes what it finds and reviews again until it passes.",
+          "properties": {
+            "skill": {
+              "type": "string",
+              "description": "The skill's name, as the Skill tool takes it (e.g. code-review). Empty: no final review."
+            },
+            "args": {
+              "type": "string",
+              "description": "Its arguments. Variables: {base} {branch}."
+            }
+          }
         }
       }
     },

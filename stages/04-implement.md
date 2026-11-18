@@ -65,7 +65,16 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
 
 Never edit a test into passing. Never re-run a flaky check until it turns green.
 
-After the last item, **the full suite**:
+After the last item, **the final review**, when `config.review.final.skill` is set:
+
+1. `event doing {text}`, saying the whole change is being reviewed with that skill.
+2. Invoke it with the Skill tool: `skill` is `config.review.final.skill`, and `args` is `config.review.final.args` with `{base}` and `{branch}` filled in. Tell it the change to review is the run's branch against `origin/<base>`, in the work tree, and that it must not commit, push or publish anything. When it can fix what it finds itself (a `--fix` mode), let it, and treat its edits as the fixes below.
+3. Read what it reports. For each finding, fix it or accept it with a reason; a finding you accept goes into the PR's risks and notes.
+4. When there is something to fix: record `final_review {verdict: "fail", findings}`, fix it through the same loop as an item (`item.started` with the next number and a title like "Final review fixes", implementer, the touched tests, reviewer, commit), then run the skill again from step 2.
+5. When nothing is left to fix: record `final_review {verdict: "pass", findings}`, with `findings` the number it reported. The mod keeps the committed tree it passed on, and refuses to complete the implement stage when the code changed after it, or when it never passed.
+6. After two rounds that each still had something to fix, record `blocked` and ask the person whether to go on, accept what is left, or stop.
+
+Then **the full suite**:
 
 1. Call `mcp__wololo__tests {scope: "suite"}`.
 2. When `suite_runs` is `local`, run every `suite` command; when `e2e_runs` is `local`, also every `e2e` command.

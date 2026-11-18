@@ -70,7 +70,24 @@ function overBudget(run: Run, type: string, data: Record<string, unknown>, budge
   return null
 }
 
-export function checkEvent(run: Run, type: string, data: Record<string, unknown>, budgets?: Budgets): string | null {
+// The implement stage ends only once the final review passed on the code as committed now (head_tree, which the mod adds).
+function finalReviewMissing(run: Run, data: Record<string, unknown>): string | null {
+  const review = run.final_review
+  const how = 'run the skill in config.review.final on the whole change, fix what it finds through the implement loop, and record final_review {verdict, findings}'
+  if (!review) return `The implement stage ends after the final review: ${how}.`
+  if (review.verdict !== 'pass') return `The last final review found ${review.findings} to fix: ${how} again once they are fixed.`
+  if (typeof data.head_tree === 'string' && review.tree !== data.head_tree)
+    return `The code changed after the final review passed: ${how} again on what is committed now.`
+  return null
+}
+
+export function checkEvent(
+  run: Run,
+  type: string,
+  data: Record<string, unknown>,
+  budgets?: Budgets,
+  options: { finalReview?: boolean } = {},
+): string | null {
   if (!MODEL_EVENTS.has(type as EventType)) return `Unknown event type "${type}". Allowed: ${[...MODEL_EVENTS].join(', ')}.`
   if (run.outcome) return `The run already finished (${run.outcome}). Start a new one with /wololo.`
   const budget = budgets ? overBudget(run, type, data, budgets) : null
@@ -103,7 +120,12 @@ export function checkEvent(run: Run, type: string, data: Record<string, unknown>
     case 'base.changed':
       return text(data.to) ? null : 'base.changed needs data.to, the branch the run now builds on.'
     case 'stage.completed':
-      return stageIndex(data.stage as StageId) < 0 ? `Unknown stage "${String(data.stage)}".` : null
+      if (stageIndex(data.stage as StageId) < 0) return `Unknown stage "${String(data.stage)}".`
+      return data.stage === 'implement' && options.finalReview ? finalReviewMissing(run, data) : null
+    case 'final_review':
+      if (run.stage?.id !== 'implement') return 'final_review comes in the implement stage, after the last item.'
+      if (!['pass', 'fail'].includes(String(data.verdict))) return 'data.verdict must be pass (nothing left to fix) or fail.'
+      return typeof data.findings === 'number' ? null : 'data.findings (how many the skill reported) is required.'
     case 'gate.requested':
     case 'gate.resolved': {
       const gate = data.gate as StageId

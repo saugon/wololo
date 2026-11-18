@@ -57,7 +57,8 @@ export type Config = {
     external_cmd: string[]
   }
   // approval: where the change is approved, at Aprobar PR in the session (local) or on the PR itself once CI is green (pr).
-  review: { reviewer: 'claude' | 'external' | 'both'; approval: 'local' | 'pr' }
+  // final: a skill that reviews the whole change before the implement stage ends ('' for none), and its arguments ({base} {branch}).
+  review: { reviewer: 'claude' | 'external' | 'both'; approval: 'local' | 'pr'; final: { skill: string; args: string } }
   isolation: 'worktree' | 'branch'
   worktree_dir: string
   branch: string
@@ -115,7 +116,7 @@ export const DEFAULT_CONFIG: Config = {
     critic: 'claude',
     external_cmd: ['codex', 'exec', '--sandbox', 'read-only', '-'],
   },
-  review: { reviewer: 'claude', approval: 'local' },
+  review: { reviewer: 'claude', approval: 'local', final: { skill: '', args: '' } },
   isolation: 'worktree',
   worktree_dir: '.claude/worktrees/wololo-{run}',
   branch: 'feat/{ref}-{slug}',
@@ -269,6 +270,7 @@ const SWITCHES: Record<string, Overrides> = {
   '--no-screenshots': { 'screenshots.enabled': false },
   '--github-spec': { 'spec.to_github': true },
   '--no-github-spec': { 'spec.to_github': false },
+  '--no-final-review': { 'review.final.skill': '' },
 }
 
 const VALUED: Record<string, string> = {
@@ -276,6 +278,8 @@ const VALUED: Record<string, string> = {
   '--debate': 'debate.depth',
   '--critic': 'debate.critic',
   '--reviewer': 'review.reviewer',
+  '--final-review': 'review.final.skill',
+  '--final-review-args': 'review.final.args',
   '--suite': 'tests.suite_runs',
   '--e2e': 'tests.e2e_runs',
 }

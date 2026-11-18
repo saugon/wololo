@@ -1,8 +1,9 @@
 import Foundation
 
-/// What "Ir a la terminal" does with a run. A live session's terminal is looked for and brought to the front; when
-/// none is found, or the session is gone (orphaned) or over (finished), a terminal opens in the run's directory and,
-/// unless the run finished, `/wololo resume <id>` goes to the pasteboard to pick it up again there.
+/// What "Ir a la terminal" does with a run. The session's terminal is looked for and brought to the front, an orphaned
+/// run's too: a session that stopped beating (stuck on a slow write, say) can still be open. When none is found, or the
+/// run is over (finished), a terminal opens in the run's directory and, unless the run finished, `/wololo resume <id>`
+/// goes to the pasteboard to pick it up again there.
 public struct TerminalPlan: Equatable, Sendable {
     public enum Step: Equatable, Sendable {
         case focus
@@ -20,7 +21,7 @@ public struct TerminalPlan: Equatable, Sendable {
     }
 
     public init(id: String, status: RunStatus) {
-        triesFocus = !status.isTerminal && status != .orphaned
+        triesFocus = !status.isTerminal
         resumeCommand = status.isTerminal ? nil : "/wololo resume \(id)"
     }
 

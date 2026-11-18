@@ -64,7 +64,8 @@ export async function writeJson($: Engine, path: string, value: unknown): Promis
 
 // False when nothing was written: the check before the append failed, or the file is not writable (the script's `[ -w ]`, its only exit
 // 3). Any other failure, a `cat >>` whose redirect fails (exit 1 or 2) included, may have written part of the lines: it throws instead,
-// and the caller does not write them again.
+// and the caller works out from the file what is missing. The session can refuse the command itself (auto mode may deny it as a Bash
+// call): then nothing ran, and the lines are written through the engine's file API instead.
 export async function appendLines($: Engine, path: string, lines: readonly string[]): Promise<boolean> {
   if (lines.length === 0) return true
   const text = lines.map(line => `${line}\n`).join('')
@@ -74,12 +75,23 @@ export async function appendLines($: Engine, path: string, lines: readonly strin
     await $.fs.write(path, text)
     return true
   }
-  const appended = await $.process.run(['/bin/sh', '-c', '[ -w "$1" ] || exit 3; exec cat >> "$1"', 'wololo-append', path], {
-    stdin: text,
-    timeoutMs: 5_000,
-  })
+  const before = await $.fs.read(path).catch(() => undefined)
+  if (before === undefined) return false
+  let appended: Awaited<ReturnType<Engine['process']['run']>>
+  try {
+    appended = await $.process.run(['/bin/sh', '-c', '[ -w "$1" ] || exit 3; exec cat >> "$1"', 'wololo-append', path], {
+      stdin: text,
+      timeoutMs: 5_000,
+    })
+  } catch (error) {
+    // Refused, it never ran and the file is as it was; timed out, it may have written, and the caller sorts it out.
+    if ((await $.fs.read(path).catch(() => undefined)) !== before) throw error
+    await $.fs.write(path, `${before}${before.endsWith('\n') || before === '' ? '' : '\n'}${text}`)
+    return true
+  }
   if (appended.exitCode === 3) return false
-  if (appended.exitCode !== 0) throw new Error(`appending to ${path} failed (exit ${appended.exitCode})`)
+  if (appended.exitCode !== 0)
+    throw new Error(`appending to ${path} failed (exit ${appended.exitCode}): ${appended.stderr.trim().slice(-500)}`)
   return true
 }
 

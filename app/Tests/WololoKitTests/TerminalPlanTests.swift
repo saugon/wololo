@@ -17,12 +17,12 @@ final class TerminalPlanTests: XCTestCase {
         XCTAssertEqual(plan.resumeCommand, "/wololo resume r1")
     }
 
-    func testOrphanedRunIsNotLookedForAndCopiesResume() throws {
+    func testOrphanedRunIsLookedForAndCopiesResumeWhenNotFound() throws {
         let run = try makeRun("r2", status: "running", ["owner": ["cwd": "/tmp", "heartbeat_at": fixtureNow - 120]])
         let plan = TerminalPlan(run, now: fixtureNow)
-        XCTAssertFalse(plan.triesFocus)
+        XCTAssertTrue(plan.triesFocus)
+        XCTAssertEqual(plan.steps(focused: true), [.focus])
         XCTAssertEqual(plan.steps(focused: false), [.open, .copyResume])
-        XCTAssertEqual(plan.steps(focused: true), [.open, .copyResume])
         XCTAssertEqual(plan.resumeCommand, "/wololo resume r2")
     }
 

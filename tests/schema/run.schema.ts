@@ -770,6 +770,33 @@ export default {
         }
       }
     },
+    "final_review": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The latest review of the whole change by config.review.final's skill, and the committed tree it saw.",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "pass",
+            "fail"
+          ]
+        },
+        "findings": {
+          "type": "integer"
+        },
+        "tree": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "at": {
+          "type": "number"
+        }
+      }
+    },
     "pause_requested_at": {
       "type": [
         "number",

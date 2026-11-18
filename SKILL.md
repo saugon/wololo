@@ -49,6 +49,7 @@ Take the text after `/wololo`:
    | `--no-screenshots` | `screenshots.enabled` |
    | `--github-spec`, `--no-github-spec` | `spec.to_github` |
    | `--debate=by_risk\|light\|deep`, `--critic=claude\|external`, `--reviewer=claude\|external\|both` | `debate.depth`, `debate.critic`, `review.reviewer` |
+   | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |
    | `--suite=local\|ci`, `--e2e=local\|ci\|off` | `tests.suite_runs`, `tests.e2e_runs` |
 2. **Source.**
    - `#123`, `123` or a GitHub issue URL → `github_issue`.

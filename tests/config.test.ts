@@ -112,6 +112,14 @@ test('launch flags become a mode, a review and config paths for one run; bad one
   ])
 })
 
+test('the final review is set, given arguments or turned off by flag for one run', async () => {
+  const set = parseFlags(['--final-review=review-v1', '--final-review-args=high {branch}'])
+  expect(set.errors).toEqual([])
+  expect(withOverrides(DEFAULT_CONFIG, set.overrides).review.final).toEqual({ skill: 'review-v1', args: 'high {branch}' })
+  const configured = { ...DEFAULT_CONFIG, review: { ...DEFAULT_CONFIG.review, final: { skill: 'code-review', args: 'high' } } }
+  expect(withOverrides(configured, parseFlags(['--no-final-review']).overrides).review.final.skill).toBe('')
+})
+
 test("the help says, next to each launch flag, what the project's config does without it", async () => {
   const { config } = resolve({}, { autonomy: 'full', keep_awake: true, spec: { to_github: false }, pr: { base: 'develop' } })
   const text = helpText('es', config)

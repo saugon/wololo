@@ -54,6 +54,7 @@ export default {
         "item.verified",
         "item.reviewed",
         "item.committed",
+        "final_review",
         "debate.turn",
         "assumption",
         "decision",

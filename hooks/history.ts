@@ -117,6 +117,12 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
         `${es ? 'Ítem' : 'Item'} ${str(d.n)}: ${es ? 'revisión' : 'review'} ${str(d.verdict)} (${str(d.findings)} ${es ? 'hallazgos' : 'findings'})`,
         false,
       )
+    case 'final_review':
+      return one(
+        d.verdict === 'pass' ? '✓' : '✕',
+        `${es ? 'Revisión final' : 'Final review'}: ${d.verdict === 'pass' ? (es ? 'sin pendientes' : 'nothing left') : es ? 'hay que corregir' : 'to fix'} (${str(d.findings)} ${es ? 'hallazgos' : 'findings'})`,
+        d.verdict !== 'pass',
+      )
     case 'item.committed':
       return one(
         '✓',

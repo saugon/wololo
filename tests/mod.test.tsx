@@ -1664,23 +1664,34 @@ test('a batch is written by the next flush, once, when the last seq on disk cann
 })
 
 // A flush whose append to the run's events fails once it was launched, as failure answers: never tried again.
-async function launchedFailing($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], failure: string | number) {
+async function launchedFailing($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], failure: number) {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  const { runId, log, flush, mine } = await withPending($, host)
+  let fails = 1
+  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? failure : undefined)
+  await flush()
+  expect(fails).toBe(0)
+  expect(mine()).toHaveLength(0)
+  expect(host.files.get(`${DATA}/runs/${runId}/write-error.log`)).toMatch(/Z .*exit 1/)
+  await flush()
+  expect(mine()).toHaveLength(1)
+}
+
+test('an append the session refuses (auto mode may deny it as a Bash call) is written through the file API, once', async ($, on) => {
   const host = fakeHost(on)
   on('tool.call', () => ({ result: {} }))
   const { log, flush, mine } = await withPending($, host)
   let fails = 1
-  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? failure : undefined)
-  await flush()
+  host.before = (kind, what) => (kind === 'append' && what === log && fails-- > 0 ? 'this repeats a Bash call that is not allowed' : undefined)
   await flush()
   expect(fails).toBe(0)
-  expect(mine()).toHaveLength(0)
-}
-
-test('a batch whose append was refused once launched is not tried again', async ($, on) => {
-  await launchedFailing($, on, 'the disk is full')
+  expect(mine()).toHaveLength(1)
+  await flush()
+  expect(mine()).toHaveLength(1)
 })
 
-test('a batch whose append failed after it opened the file is not tried again', async ($, on) => {
+test('a batch whose append failed after it opened the file, with nothing written, is tried again and written once', async ($, on) => {
   await launchedFailing($, on, 1)
 })
 
@@ -2314,4 +2325,24 @@ test("while a background step runs, its status command says on the card what the
   expect(host.shells.filter(line => line.includes('agent.status'))).toHaveLength(1)
   await clock.advance(45_000)
   expect(host.shells.filter(line => line.includes('agent.status'))).toHaveLength(2)
+})
+
+test('with review.final set, the implement stage completes only after a passing final review of the committed code', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ review: { final: { skill: 'code-review', args: 'high {branch}' } } }))
+  host.git.set('rev-parse HEAD^{tree}', '7ree')
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const event = async (type: string, data: Record<string, unknown>) => String((await $.tool.call({ tool: 'mcp__wololo__event', type, data } as never)).result)
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Pagos', mode: 'full' } as never)).result)
+  for (const stage of ['context', 'definition', 'gate_a', 'plan', 'implement']) expect(await event('stage.entered', { stage })).toContain('"ok": true')
+
+  expect(await event('stage.completed', { stage: 'implement' })).toContain('after the final review')
+  expect(await event('final_review', { verdict: 'fail', findings: 2 })).toContain('"ok": true')
+  expect(await event('stage.completed', { stage: 'implement' })).toContain('found 2 to fix')
+  expect(await event('final_review', { verdict: 'pass', findings: 2 })).toContain('"ok": true')
+  host.git.set('rev-parse HEAD^{tree}', '8ree')
+  expect(await event('stage.completed', { stage: 'implement' })).toContain('changed after the final review')
+  expect(await event('final_review', { verdict: 'pass', findings: 0 })).toContain('"ok": true')
+  expect(await event('stage.completed', { stage: 'implement' })).toContain('"ok": true')
 })

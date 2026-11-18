@@ -77,6 +77,7 @@ export const EVENT_TYPES = [
   'item.verified',
   'item.reviewed',
   'item.committed',
+  'final_review',
   'debate.turn',
   'assumption',
   'decision',
@@ -120,6 +121,7 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'item.verified',
   'item.reviewed',
   'item.committed',
+  'final_review',
   'debate.turn',
   'assumption',
   'decision',
@@ -346,6 +348,8 @@ export type Run = {
   outcome: Outcome | null
   summary: string | null
   doing?: { text: string; since: number } | null
+  // The latest review of the whole change by config.review.final's skill: its verdict, findings, and the committed tree it saw.
+  final_review?: { verdict: 'pass' | 'fail'; findings: number; tree: string | null; at: number } | null
   usage?: Partial<Record<StageId, StageUsage>>
   time?: Partial<Record<StageId, StageTime>>
   pause_requested_at?: number | null
@@ -691,6 +695,14 @@ export function apply(run: Run, ev: RunEvent): Run {
       break
     case 'signing.done':
       r.counts.unsigned = 0
+      break
+    case 'final_review':
+      r.final_review = {
+        verdict: d.verdict === 'pass' ? 'pass' : 'fail',
+        findings: typeof d.findings === 'number' ? d.findings : 0,
+        tree: typeof d.tree === 'string' ? d.tree : null,
+        at: ev.ts,
+      }
       break
     case 'adapter.ran':
       if (d.captured && typeof d.captured === 'object') r.adapter_vars = { ...(r.adapter_vars ?? {}), ...(d.captured as Record<string, string>) }
@@ -1203,6 +1215,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'unblocked',
   'item.committed',
   'item.verified',
+  'final_review',
   'pr.opened',
   'pr.ready',
   'ci.updated',
