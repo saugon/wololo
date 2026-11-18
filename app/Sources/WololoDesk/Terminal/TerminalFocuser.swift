@@ -16,8 +16,8 @@ enum TerminalFocuser {
     }
 
     /// Asking iTerm2 for every session's variables is slow, so the scripts run here, off the main thread, one at a
-    /// time (`NSAppleScript` is not thread-safe).
-    private static let queue = DispatchQueue(label: "com.saugon.wololo-desk.terminal-focuser")
+    /// time (`NSAppleScript` is not thread-safe). `RunLauncher`'s run here too, never beside these.
+    static let queue = DispatchQueue(label: "com.saugon.wololo-desk.terminal-focuser")
 
     static let iTermID = "com.googlecode.iterm2"
     static let ghosttyID = "com.mitchellh.ghostty"

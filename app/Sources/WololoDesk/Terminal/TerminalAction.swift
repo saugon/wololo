@@ -7,7 +7,7 @@ import WololoKit
 @MainActor
 enum TerminalAction {
     /// The terminals a new window opens in, the first one installed.
-    private static let terminals: [(id: String, name: String)] = [
+    static let terminals: [(id: String, name: String)] = [
         (TerminalFocuser.iTermID, "iTerm2"),
         (TerminalFocuser.ghosttyID, "Ghostty"),
         ("com.apple.Terminal", "Terminal"),
@@ -110,7 +110,7 @@ enum TerminalAction {
         (path as NSString).abbreviatingWithTildeInPath
     }
 
-    private static func permissionText(_ terminal: String) -> String {
+    static func permissionText(_ terminal: String) -> String {
         "Wololo Desk necesita permiso de Automatización para \(terminal): Ajustes del Sistema › Privacidad y seguridad › Automatización"
     }
 
