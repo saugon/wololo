@@ -15,11 +15,10 @@ A Claude Code plugin that takes an issue to a pull request, and always shows whi
 ## Installation
 
 ```sh
-git clone https://github.com/saugon/wololo ~/saugon/wololo
-ln -s ~/saugon/wololo ~/.claude/skills/wololo
+git clone https://github.com/saugon/wololo ~/.claude/skills/wololo
 ```
 
-A folder in `~/.claude/skills` loads as both the `/wololo` skill and its plugin.
+A folder in `~/.claude/skills` loads as both the `/wololo` skill and its plugin. To update, `git pull` in that folder.
 
 ## Getting started
 
