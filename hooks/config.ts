@@ -118,7 +118,7 @@ export const DEFAULT_CONFIG: Config = {
   review: { reviewer: 'claude', approval: 'local' },
   isolation: 'worktree',
   worktree_dir: '.claude/worktrees/wololo-{run}',
-  branch: 'wololo/{ref}-{slug}',
+  branch: 'feat/{ref}-{slug}',
   tests: {
     follow: 'wololo',
     rules_from: [],

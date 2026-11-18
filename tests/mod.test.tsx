@@ -206,7 +206,7 @@ test('start writes the run, the band shows it, questions are recorded, a push to
     title: 'Partial payments',
   } as never)
   const answer = parse(started.result)
-  expect(answer.branch).toBe('wololo/12-partial-payments')
+  expect(answer.branch).toBe('feat/12-partial-payments')
   const runId = String(answer.run_id)
   expect(answer.worktree).toBe(`/repo/.claude/worktrees/wololo-${runId}`)
   expect(host.files.get('/repo/.git/info/exclude')).toBe('/.claude/worktrees/\n')
@@ -285,7 +285,7 @@ test('start writes the run, the band shows it, questions are recorded, a push to
 
   const refused = await $.tool.check({ tool: 'Bash', input: { command: 'git push origin main' } } as never)
   expect(refused.decision).toBe('deny')
-  const allowed = await $.tool.check({ tool: 'Bash', input: { command: 'git push -u origin wololo/12-partial-payments' } } as never)
+  const allowed = await $.tool.check({ tool: 'Bash', input: { command: 'git push -u origin feat/12-partial-payments' } } as never)
   expect(allowed.decision).toBe('allow')
   const agent = await $.tool.check({ tool: 'Agent', input: { subagent_type: 'wololo:implementer', description: 'item 1', prompt: 'x' } } as never)
   expect(agent.decision).toBe('allow')
@@ -325,7 +325,7 @@ test('the run follows its base when the branch moves onto another one, by hand o
 
   host.files.set('/tmp/pr-body.md', 'body')
   const sent = parse(
-    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_create', title: 'feat: x', base: 'main', head: 'wololo/12-stacked', body_file: '/tmp/pr-body.md' } as never)).result,
+    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_create', title: 'feat: x', base: 'main', head: 'feat/12-stacked', body_file: '/tmp/pr-body.md' } as never)).result,
   )
   expect(sent.published).toBe(true)
   expect(await base()).toBe('main')
@@ -366,6 +366,36 @@ test('with spec.to_github off, issue writes stay in files unless the person aske
   const pr = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_body', number: 40, body_file: '/tmp/pr-body.md' } as never)).result)
   expect(pr.published).toBe(true)
   expect(host.gh).toEqual(['issue edit 12 --body-file /tmp/body.md', 'pr edit 40 --body-file /tmp/pr-body.md'])
+})
+
+test('outside its own repository, nothing the run leaves on GitHub names wololo', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ branch: 'wololo/{ref}-{slug}' }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Pagos' } as never)).result)
+  expect(started.branch).toBe('wololo/12-pagos')
+
+  host.files.set('/tmp/body.md', 'Pagos parciales.')
+  host.files.set('/tmp/pr-body.md', 'Done.\n\nThe full spec is kept in wololo run shop-12-abc.')
+  const refused = parse((await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_body', number: 40, body_file: '/tmp/pr-body.md' } as never)).result)
+  expect(refused.published).toBe(false)
+  expect(String(refused.reason)).toContain('wololo run shop-12-abc')
+  const titled = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'issue_create', title: 'wololo: pagos', body_file: '/tmp/body.md' } as never)).result,
+  )
+  expect(titled.published).toBe(false)
+  expect(host.gh).toEqual([])
+  const asked = parse(
+    (await $.tool.call({ tool: 'mcp__wololo__publish', kind: 'pr_body', number: 40, body_file: '/tmp/pr-body.md', person_asked: true } as never)).result,
+  )
+  expect(asked.published).toBe(true)
+
+  const named = String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'branch.named', data: { slug: 'split payments' } } as never)).result)
+  expect(named).toContain('names wololo')
+  const push = await $.tool.check({ tool: 'Bash', input: { command: 'git push -u origin wololo/12-pagos' } } as never)
+  expect(push.decision).toBe('deny')
+  expect(push.reason).toContain('git branch -m wololo/12-pagos')
 })
 
 test("the run's slot follows the instance the project gave its work tree, and the summary shows that instance's databases", async ($, on) => {
@@ -435,15 +465,15 @@ test('the branch gets its name from the spec, by the config template, until it i
   on('tool.call', () => ({ result: {} }))
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   const started = parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Pagos parciales' } as never)).result)
-  expect(started.branch).toBe('wololo/12-pagos-parciales')
-  host.git.set('branch -m wololo/12-pagos-parciales wololo/12-split-payments', '')
+  expect(started.branch).toBe('feat/12-pagos-parciales')
+  host.git.set('branch -m feat/12-pagos-parciales feat/12-split-payments', '')
   const named = parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'branch.named', data: { slug: 'Split payments' } } as never)).result)
-  expect(named.branch).toBe('wololo/12-split-payments')
+  expect(named.branch).toBe('feat/12-split-payments')
   const run = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
-  expect(run.project.branch).toBe('wololo/12-split-payments')
-  expect(host.commands).toContain('git branch -m wololo/12-pagos-parciales wololo/12-split-payments')
+  expect(run.project.branch).toBe('feat/12-split-payments')
+  expect(host.commands).toContain('git branch -m feat/12-pagos-parciales feat/12-split-payments')
 
-  host.git.set('ls-remote --exit-code --heads origin wololo/12-split-payments', 'abc\trefs/heads/wololo/12-split-payments')
+  host.git.set('ls-remote --exit-code --heads origin feat/12-split-payments', 'abc\trefs/heads/feat/12-split-payments')
   const refused = String((await $.tool.call({ tool: 'mcp__wololo__event', type: 'branch.named', data: { slug: 'partial payments' } } as never)).result)
   expect(refused).toContain('already on origin')
 })
@@ -925,6 +955,36 @@ test('/clear lets go of the run: it is paused with no card, and /wololo resume t
   expect(resumed.stage).toBe('context')
   const back = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
   expect([back.owner.session_id, back.paused]).toEqual(['s2', null])
+})
+
+test('/clear takes down the card of a run that already finished', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('session.end', (_, e) => e)
+  const id = 'repo-txt-done01'
+  const dir = `${DATA}/runs/${id}`
+  const ev = (seq: number, type: string, data: Record<string, unknown>) => JSON.stringify({ v: 1, seq, ts: 1_800_000_000 + seq, run: id, type, data })
+  host.files.set(
+    `${dir}/events.jsonl`,
+    [
+      ev(1, 'run.started', { title: 'Salones', source: { kind: 'text', ref: 'x', url: null }, mode: 'checkpoints', session_id: 's1', cwd: REPO }),
+      ev(2, 'stage.entered', { stage: 'definition' }),
+      ev(3, 'run.finished', { outcome: 'done', summary: 's' }),
+    ].join('\n') + '\n',
+  )
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: 'done', outcome: 'done', owner: { session_id: 's1', cwd: REPO, heartbeat_at: 1_800_000_300 } }))
+  host.files.set(`${DATA}/sessions/s1.json`, JSON.stringify({ session_id: 's1', run_id: id, heartbeat_at: 1_800_000_300 }))
+  let view: unknown = { band: { title: 'old' } }
+  on('state.get', (_, e, next) => (e.key === 'view' ? { value: { value: view, version: 1 } } : next(e)))
+  on('state.set', (_, e, next) => {
+    if (e.key === 'view') view = (e as unknown as { value: unknown }).value
+    return next(e)
+  })
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  expect(view).not.toBe(null)
+  await $.session.end({ reason: 'clear', sessionId: 's1' } as never)
+  expect(view).toBe(null)
+  expect(eventLines(host, id).map(line => line.type)).toEqual(['run.started', 'stage.entered', 'run.finished'])
 })
 
 test('a permission wait left by an earlier load of the mod is cleared when the session takes the run back', async ($, on) => {

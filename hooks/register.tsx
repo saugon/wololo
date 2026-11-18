@@ -57,7 +57,7 @@ import {
   liveTasks,
 } from './model'
 import { connections, maxConnections } from './postgres'
-import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, urlIn } from './github'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, urlIn, wololoMention } from './github'
 import {
   type PolicyContext,
   commandRules,
@@ -1221,6 +1221,8 @@ async function nameBranch($: Engine, data: Record<string, unknown>): Promise<str
   const dir = run.project.worktree ?? run.project.path
   if (!from || !dir) return fail('The run has no branch to name.')
   const to = branchName(config.branch, { repo: run.project.path.split('/').pop() ?? 'repo', run: run.id, ref: branchRef(run.source), slug })
+  if (!isWololoRepo(run.project.key) && wololoMention(to))
+    return fail(`${to} names wololo, and the branch goes to GitHub: give a slug without it, or drop wololo from config.branch.`)
   if (to === from) return ok({ ok: true, branch: from })
   if (run.pr) return fail(`The PR is open on ${from}: the branch keeps its name.`)
   if ((await git($, dir, ['ls-remote', '--exit-code', '--heads', 'origin', from])) !== null)
@@ -2159,7 +2161,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'publish',
     description:
-      'The only way a run writes to GitHub. pr_ready marks the run\'s draft pull request ready for review (number, or the run\'s PR; no body_file) and records pr.ready. The other kinds send body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true.',
+      'The only way a run writes to GitHub. pr_ready marks the run\'s draft pull request ready for review (number, or the run\'s PR; no body_file) and records pr.ready. The other kinds send body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true. Outside wololo\'s own repository it sends nothing whose title, head branch or text names wololo, unless person_asked is true.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -2174,7 +2176,7 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
         person_asked: {
           type: 'boolean',
           description:
-            'True only when the person, in their own message, asked for this exact write to GitHub. It sends an issue write even when spec.to_github is false: that setting is about what the run publishes on its own.',
+            'True only when the person, in their own message, asked for this exact write to GitHub. It sends an issue write even when spec.to_github is false, and text that names wololo: those rules are about what the run publishes on its own.',
         },
       },
       required: ['kind'],
@@ -2201,6 +2203,16 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
   const decision = decide(body.length, summary === undefined ? null : summary.length)
   if (decision.send === 'nothing') return ok({ published: false, reason: decision.reason, length: body.length, limit: GITHUB_BODY_LIMIT })
   const file = decision.send === 'summary' && summaryFile ? summaryFile : bodyFile
+  if (!isWololoRepo(run.project.key) && input.person_asked !== true) {
+    const sent = decision.send === 'summary' ? (summary ?? '') : body
+    const fields = [input.title, input.head].filter((field): field is string => typeof field === 'string')
+    const mention = wololoMention([...fields, sent].join('\n'))
+    if (mention)
+      return ok({
+        published: false,
+        reason: `What goes to GitHub does not name wololo (it is the person's tool, not part of the change), and this text does: "${mention}". Take it out of ${fields.length ? 'the title, the head branch and ' : ''}${file} and call again.`,
+      })
+  }
   const args = ghArgs(
     {
       kind,
@@ -2383,15 +2395,18 @@ async function noteNotifications($: Engine, text: string) {
 
 // A /clear starts a conversation that knows nothing of the run, so the run does not follow it: it is paused where it was, with its card
 // and pane gone, and /wololo resume takes it back. Its background shells go on in the process and are left to the resume.
+// A finished run's card goes too: it belongs to the conversation that was cleared.
 async function releaseRun($: Engine, endingSession: string) {
-  if (!run || run.outcome || !(await isOwner($))) return
-  const es = run.lang === 'es'
-  if (!run.paused)
-    await emit($, 'paused', {
-      note: es ? 'la sesión se limpió con /clear' : 'the session was cleared with /clear',
-    })
-  await flush($)
-  released.add(endingSession || sessionId)
+  if (!(await isOwner($))) return
+  if (run && !run.outcome) {
+    const es = run.lang === 'es'
+    if (!run.paused)
+      await emit($, 'paused', {
+        note: es ? 'la sesión se limpió con /clear' : 'the session was cleared with /clear',
+      })
+    await flush($)
+    released.add(endingSession || sessionId)
+  }
   loadGeneration += 1
   run = undefined
   historyCache = undefined
@@ -2570,6 +2585,11 @@ export const register: Register = (on, options) => {
       ctx = policyContext() ?? ctx
       const denial = pushDenial(input.command, ctx.branch, current)
       if (denial) return { decision: 'deny' as const, reason: denial }
+      if (hasPush(input.command) && ctx.branch && run && !isWololoRepo(run.project.key) && wololoMention(ctx.branch))
+        return {
+          decision: 'deny' as const,
+          reason: `wololo: the branch \`${ctx.branch}\` names wololo, and nothing the run leaves on GitHub does. Rename it first (\`git branch -m ${ctx.branch} <name in the repository's style>\`), then push under the new name.`,
+        }
     }
     const githubDenial = ctx ? githubWriteDenial(e.tool, input) : null
     if (githubDenial) return { decision: 'deny' as const, reason: githubDenial }

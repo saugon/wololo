@@ -56,6 +56,19 @@ export function ghArgs(target: PublishTarget, file: string): string[] | string {
   }
 }
 
+// wololo is the person's tool, not part of the change: nothing the run leaves on GitHub (a branch, a PR or issue title or body, a
+// comment) names it. Its own repository is the exception, where wololo is the subject. The words around the first mention, or null.
+export function wololoMention(text: string): string | null {
+  const match = /wololo/i.exec(text)
+  if (!match) return null
+  const start = Math.max(0, match.index - 30)
+  return text.slice(start, match.index + 36).replace(/\s+/g, ' ').trim()
+}
+
+export function isWololoRepo(projectKey: string): boolean {
+  return /(^|__)wololo$/.test(projectKey)
+}
+
 export function urlIn(text: string): string | null {
   return /https:\/\/github\.com\/\S+\/(?:issues|pull)\/\d+(?:#\S+)?/.exec(text)?.[0] ?? null
 }

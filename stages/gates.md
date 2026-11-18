@@ -80,7 +80,7 @@ Otherwise, publish the minimum someone needs to understand and check the change,
    - **GitHub issue source**: `{kind: "issue_body", number, body_file}`;
    - **text source with `config.spec.create_issue_from_text`**: `{kind: "issue_create", title, body_file}`. Keep the issue number for `Closes #n`.
 3. When `publish` answers that the text does not fit:
-   1. Write `run_dir/issue-summary.md`: the outcome, the scope bullets, the scenario titles, a line saying the full spec is kept in wololo run `<run id>`, and the original body.
+   1. Write `run_dir/issue-summary.md`: the outcome, the scope bullets, the scenario titles, a line saying the full spec is kept locally, and the original body.
    2. Call `publish` again with `summary_file`.
 
    Never cut the spec itself to make it fit.

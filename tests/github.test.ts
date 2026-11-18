@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { decide, ghArgs, urlIn } from '../hooks/github'
+import { decide, ghArgs, isWololoRepo, urlIn, wololoMention } from '../hooks/github'
 
 test('a text that fits goes whole', async () => {
   expect(decide(1_000, null, 65_000)).toEqual({ send: 'full', length: 1_000 })
@@ -27,4 +27,17 @@ test('gh arguments per kind, and their required fields', async () => {
 
 test('the URL gh prints is found', async () => {
   expect(urlIn('Creating pull request\nhttps://github.com/acme/shop/pull/42\n')).toBe('https://github.com/acme/shop/pull/42')
+})
+
+test('wololoMention finds the tool named anywhere, with the words around it', () => {
+  expect(wololoMention('feat: offline payments\n\nCloses #12')).toBeNull()
+  expect(wololoMention('The full spec is kept in Wololo run vertex-12-abc.')).toContain('Wololo run vertex-12-abc')
+  expect(wololoMention('wololo/12-pagos')).toBe('wololo/12-pagos')
+})
+
+test('isWololoRepo is true only for wololo\'s own repository', () => {
+  expect(isWololoRepo('saugon__wololo')).toBe(true)
+  expect(isWololoRepo('wololo')).toBe(true)
+  expect(isWololoRepo('lambdaclass__vertex')).toBe(false)
+  expect(isWololoRepo('acme__wololo-fork')).toBe(false)
 })
