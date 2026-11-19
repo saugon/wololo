@@ -81,9 +81,9 @@ test('a stale heartbeat reads as orphaned, a finished run never does', async () 
 
 test('the header names the issue, the stage and what it waits on', async () => {
   const run = rebuild('r1', started)
-  expect(header(run, 'running', 120)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ trabajando]')
+  expect(header(run, 'running', 120)).toBe('[wololo #4312 · 1/9 Contexto · ⟳ trabajando]')
   const asked = apply(run, { v: 1, seq: 3, ts: 120, run: 'r1', type: 'question.asked', data: { question: 'Gate A' } })
-  expect(header(asked, 'waiting_user', 300)).toBe('[wololo #4312 · 1/8 Contexto · ? te espera: Gate A · hace 3m]')
+  expect(header(asked, 'waiting_user', 300)).toBe('[wololo #4312 · 1/9 Contexto · ? te espera: Gate A · hace 3m]')
 })
 
 test('since_last_seen lists what happened after the given time only', async () => {
@@ -104,7 +104,7 @@ test('a gate answer is remembered for the gate check', async () => {
 test('a running test suite reads as waiting_tests, and the header says so', async () => {
   const run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 120, run: 'r1', type: 'task.started', data: { id: 't1', label: 'make test', kind: 'tests' } })
   expect(deriveStatus(run, IDLE)).toBe('waiting_tests')
-  expect(header(run, 'waiting_tests', 300)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ corriendo tests: make test (3m)]')
+  expect(header(run, 'waiting_tests', 300)).toBe('[wololo #4312 · 1/9 Contexto · ⟳ corriendo tests: make test (3m)]')
 })
 
 test('live agents are named by role and counted, tasks by what they do', async () => {
@@ -113,7 +113,7 @@ test('live agents are named by role and counted, tasks by what they do', async (
     run = apply(run, { v: 1, seq: 3 + i, ts: 120, run: 'r1', type: 'agent.started', data: { id, role: 'explorer' } })
   }
   run = apply(run, { v: 1, seq: 6, ts: 150, run: 'r1', type: 'task.started', data: { id: 't1', label: 'Instalar dependencias del worktree', kind: 'other' } })
-  expect(header(run, 'waiting_agents', 240)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ agentes trabajando: 3 exploradores (2m), Instalar dependencias del worktree (1m)]')
+  expect(header(run, 'waiting_agents', 240)).toBe('[wololo #4312 · 1/9 Contexto · ⟳ agentes trabajando: 3 exploradores (2m), Instalar dependencias del worktree (1m)]')
 })
 
 test('a text run is named by its title, never by its id', async () => {
@@ -121,13 +121,13 @@ test('a text run is named by its title, never by its id', async () => {
     { v: 1, seq: 1, ts: 100, run: 'r1', type: 'run.started', data: { title: 'Salones: más estado de mesa y vista 3D opcional', source: { kind: 'text', ref: 'x', url: null } } },
     { v: 1, seq: 2, ts: 110, run: 'r1', type: 'stage.entered', data: { stage: 'context' } },
   ])
-  expect(statusLine(text, 'running', 120)).toBe('Salones: más estado de mesa y vista 3D… · etapa 1/8 Contexto · ⟳ trabajando')
+  expect(statusLine(text, 'running', 120)).toBe('Salones: más estado de mesa y vista 3D… · etapa 1/9 Contexto · ⟳ trabajando')
 })
 
 test('doing says what is being done until the stage changes or it is replaced', async () => {
   let run = apply(rebuild('r1', started), { v: 1, seq: 3, ts: 130, run: 'r1', type: 'agent.started', data: { id: 'a1', role: 'implementer' } })
   run = apply(run, { v: 1, seq: 4, ts: 140, run: 'r1', type: 'doing', data: { text: 'Investigando por qué falla el e2e de mesas rotadas' } })
-  expect(header(run, 'waiting_agents', 200)).toBe('[wololo #4312 · 1/8 Contexto · ⟳ agentes trabajando: Investigando por qué falla el e2e de mesas rotadas · implementador (1m)]')
+  expect(header(run, 'waiting_agents', 200)).toBe('[wololo #4312 · 1/9 Contexto · ⟳ agentes trabajando: Investigando por qué falla el e2e de mesas rotadas · implementador (1m)]')
   run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'stage.entered', data: { stage: 'definition' } })
   expect(run.doing).toBe(null)
 })
@@ -137,7 +137,7 @@ test('a pause requested while work runs reads as pausing, and as paused once not
   expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('pausing')
   expect(deriveStatus(run, IDLE)).toBe('paused')
   run = apply(run, { v: 1, seq: 4, ts: 140, run: 'r1', type: 'paused', data: { note: 'sigue el ítem 4' } })
-  expect(header(run, 'paused', 200)).toBe('[wololo #4312 · 1/8 Contexto · ⏸ pausado: sigue el ítem 4 · podés cerrar la sesión · /wololo resume para seguir]')
+  expect(header(run, 'paused', 200)).toBe('[wololo #4312 · 1/9 Contexto · ⏸ pausado: sigue el ítem 4 · podés cerrar la sesión · /wololo resume para seguir]')
   expect(effectiveStatus({ ...run, status: 'paused' }, 10_000)).toBe('paused')
   run = apply(run, { v: 1, seq: 5, ts: 150, run: 'r1', type: 'resumed', data: {} })
   expect(deriveStatus(run, { ...IDLE, isTurnRunning: true })).toBe('running')

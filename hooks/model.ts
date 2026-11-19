@@ -4,11 +4,12 @@ export const ORPHAN_AFTER_SECONDS = 90
 export type Mode = 'full' | 'checkpoints' | 'guided'
 export type Risk = 'low' | 'high' | 'unknown'
 export type Lang = 'es' | 'en'
-// Hashes of what a gate approved: the run's spec and plan files, and the worktree's committed tree. null where there was none.
 export type BudgetName = 'design_reversals' | 'ci_fix_attempts' | 'run_minutes'
-export type Snapshot = { spec: string | null; plan: string | null; tree: string | null }
+// Hashes of what a gate approved: the run's spec, mockup and plan files, and the worktree's committed tree. null where there
+// was none; mockup is missing in runs from before it.
+export type Snapshot = { spec: string | null; mockup?: string | null; plan: string | null; tree: string | null }
 
-export type StageId = 'context' | 'definition' | 'gate_a' | 'plan' | 'implement' | 'evidence' | 'gate_b' | 'pr'
+export type StageId = 'context' | 'definition' | 'mockup' | 'gate_a' | 'plan' | 'implement' | 'evidence' | 'gate_b' | 'pr'
 
 export const STAGES: ReadonlyArray<{
   id: StageId
@@ -21,6 +22,7 @@ export const STAGES: ReadonlyArray<{
     isGate: false,
     label: { es: 'Definición', en: 'Definition' },
   },
+  { id: 'mockup', isGate: false, label: { es: 'Mockup', en: 'Mockup' } },
   { id: 'gate_a', isGate: true, label: { es: 'Aprobar spec', en: 'Approve spec' } },
   { id: 'plan', isGate: false, label: { es: 'Plan', en: 'Plan' } },
   {
@@ -102,6 +104,7 @@ export const EVENT_TYPES = [
   'adapter.ran',
   'adapter.started',
   'screenshot.saved',
+  'mockup.published',
   'usage',
   'time',
   'run.finished',
@@ -138,6 +141,7 @@ export const MODEL_EVENTS: ReadonlySet<EventType> = new Set<EventType>([
   'signing.done',
   'paused',
   'screenshot.saved',
+  'mockup.published',
   'run.finished',
 ])
 
@@ -339,6 +343,8 @@ export type Run = {
     ci: 'pending' | 'passing' | 'failing' | null
   } | null
   screenshots: Array<{ file: string; caption: string }>
+  // The UI mockup the mockup stage made: its files in run_dir/mockup, and its page on claude.ai when it was published there.
+  mockup?: { url: string | null; files: string[]; at: number } | null
   owner: { session_id: string; cwd: string; heartbeat_at: number }
   last_seq: number
   last_user_at: number | null
@@ -798,6 +804,13 @@ export function apply(run: Run, ev: RunEvent): Run {
         }
       }
       break
+    case 'mockup.published':
+      r.mockup = {
+        url: typeof d.url === 'string' && d.url ? d.url : null,
+        files: Array.isArray(d.files) ? d.files.filter((f): f is string => typeof f === 'string') : [],
+        at: ev.ts,
+      }
+      break
     case 'screenshot.saved':
       r.screenshots.push({ file: str(d.file), caption: str(d.caption) })
       break
@@ -1236,6 +1249,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'pr.opened',
   'pr.ready',
   'pr.commented',
+  'mockup.published',
   'ci.updated',
   'run.finished',
   'stalled',
@@ -1264,6 +1278,8 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `CI: ${String(d.state)}`
         case 'pr.opened':
           return `PR: ${String(d.url)}`
+        case 'mockup.published':
+          return `Mockup: ${String(d.url ?? (Array.isArray(d.files) ? d.files.join(', ') : ''))}`
         case 'pr.commented':
           return `PR: ${String(d.count)} comentario(s) nuevo(s) de ${Array.isArray(d.authors) ? d.authors.join(', ') : '?'}`
         case 'base.changed':

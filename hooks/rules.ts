@@ -3,6 +3,7 @@ import { type BudgetName, type EventType, MODEL_EVENTS, type Run, STAGES, type S
 export const STAGE_FILES: Record<StageId, string> = {
   context: '01-context.md',
   definition: '02-definition.md',
+  mockup: 'mockup.md',
   gate_a: 'gates.md',
   plan: '03-plan.md',
   implement: '04-implement.md',
@@ -122,6 +123,11 @@ export function checkEvent(
     case 'stage.completed':
       if (stageIndex(data.stage as StageId) < 0) return `Unknown stage "${String(data.stage)}".`
       return data.stage === 'implement' && options.finalReview ? finalReviewMissing(run, data) : null
+    case 'mockup.published':
+      if (run.stage?.id !== 'mockup') return 'mockup.published comes in the mockup stage; to change the mockup later, go back to it with stage.entered {stage: "mockup", reason}.'
+      if (!Array.isArray(data.files) || data.files.length === 0 || !data.files.every(text))
+        return 'data.files (the mockup\'s files, relative to run_dir/mockup) is required.'
+      return data.url === undefined || data.url === null || text(data.url) ? null : 'data.url is the mockup\'s page on claude.ai, or null when it stayed a local file.'
     case 'final_review':
       if (run.stage?.id !== 'implement') return 'final_review comes in the implement stage, after the last item.'
       if (!['pass', 'fail'].includes(String(data.verdict))) return 'data.verdict must be pass (nothing left to fix) or fail.'
@@ -218,12 +224,13 @@ export function hintFor(type: string, data: Record<string, unknown>, root: strin
   return file ? `Read ${root}/stages/${file} before working on this stage.` : null
 }
 
-// What each gate approved, and where the run goes back to redo it when that changed since.
-const GUARDED: ReadonlyArray<{ gate: StageId; keys: ReadonlyArray<keyof Snapshot>; back: StageId }> = [
-  { gate: 'gate_a', keys: ['spec'], back: 'definition' },
-  { gate: 'gate_b', keys: ['spec', 'plan', 'tree'], back: 'implement' },
+// What each gate approved, and where the run goes back to redo it when that changed since: the earliest stage that makes
+// what changed.
+const GUARDED: ReadonlyArray<{ gate: StageId; keys: ReadonlyArray<keyof Snapshot>; back: Partial<Record<keyof Snapshot, StageId>> }> = [
+  { gate: 'gate_a', keys: ['spec', 'mockup'], back: { spec: 'definition', mockup: 'mockup' } },
+  { gate: 'gate_b', keys: ['spec', 'plan', 'tree'], back: { spec: 'implement', plan: 'implement', tree: 'implement' } },
 ]
-const WHAT: Record<keyof Snapshot, string> = { spec: 'spec.md', plan: 'plan.md', tree: 'the committed code' }
+const WHAT: Record<keyof Snapshot, string> = { spec: 'spec.md', mockup: 'the mockup', plan: 'plan.md', tree: 'the committed code' }
 
 // Moving forward, or opening the PR, on something other than what a gate approved: the gate has to see it again.
 export function changedSinceApproval(run: Run, type: string, data: Record<string, unknown>, current: Snapshot): string | null {
@@ -232,10 +239,12 @@ export function changedSinceApproval(run: Run, type: string, data: Record<string
   for (const { gate, keys, back } of GUARDED) {
     const approved = run.gates[gate]?.snapshot
     if (!approved || run.gates[gate]?.resolved_at == null) continue
-    const changed = keys.filter(key => approved[key] !== current[key])
+    // A key the approval did not record (a run from before it) is not checked.
+    const changed = keys.filter(key => key in approved && (approved[key] ?? null) !== (current[key] ?? null))
     if (changed.length > 0) {
       const name = gate === 'gate_a' ? 'Aprobar spec' : 'Aprobar PR'
-      return `${changed.map(key => WHAT[key]).join(' and ')} changed after ${name} approved it: go back with stage.entered {stage: "${back}", reason}, and ask ${name} again.`
+      const to = changed.map(key => back[key] ?? 'implement').sort((a, b) => stageIndex(a) - stageIndex(b))[0]
+      return `${changed.map(key => WHAT[key]).join(' and ')} changed after ${name} approved it: go back with stage.entered {stage: "${to}", reason}, and ask ${name} again.`
     }
   }
   return null

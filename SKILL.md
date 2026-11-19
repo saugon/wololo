@@ -6,9 +6,9 @@ argument-hint: <#issue | issue URL | path.md | "text"> [--full | --checkpoints |
 
 # wololo
 
-wololo carries one issue to a PR in eight stages:
+wololo carries one issue to a PR in nine stages:
 
-`context → definition → gate_a → plan → implement → evidence → gate_b → pr`
+`context → definition → mockup → gate_a → plan → implement → evidence → gate_b → pr`
 
 The wololo mod shows the person the run's stage and what it is waiting on, in a band above the prompt, a pane, the status line and a header on each of your replies. It also writes the run to disk for dashboards. **It only knows what you record**, so recording the run truthfully is part of the work, not overhead.
 
@@ -47,6 +47,7 @@ Take the text after `/wololo`:
    | `--base=<branch>` | `pr.base` |
    | `--no-pr`, `--draft`, `--ready`, `--no-wait-ci` | `pr.enabled`, `pr.draft`, `pr.wait_ci` |
    | `--no-screenshots` | `screenshots.enabled` |
+   | `--mockup`, `--no-mockup` | `mockup.when`: `always` or `never` |
    | `--github-spec`, `--no-github-spec` | `spec.to_github` |
    | `--debate=by_risk\|light\|deep`, `--critic=claude\|external`, `--reviewer=claude\|external\|both` | `debate.depth`, `debate.critic`, `review.reviewer` |
    | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |
@@ -127,7 +128,7 @@ The run enforces the budgets itself: past `budgets.design_reversals` for an item
 - Every subagent prompt starts with: "Your work tree is `<work tree>`. Use absolute paths under it, and start every shell command with `cd <work tree> && `."
 
 **Files.**
-- Every artifact of the run lives in `run_dir`: `source.md`, `context.md`, `spec.md`, `plan.md`, `log.md`, `debate/`, `screenshots/`, `pr-body.md`, `summary.md`.
+- Every artifact of the run lives in `run_dir`: `source.md`, `context.md`, `spec.md`, `mockup/`, `plan.md`, `log.md`, `debate/`, `screenshots/`, `pr-body.md`, `summary.md`.
 - Nothing of wololo's goes into the repository.
 - Write and update the run's files with Write and Edit, never with shell redirection (`cat >>`, `echo >`): the mod approves those tools in `run_dir` without asking, and a shell write stops the run on a permission prompt.
 
@@ -163,6 +164,7 @@ The run enforces the budgets itself: past `budgets.design_reversals` for an item
 |---|---|
 | context | `stages/01-context.md` |
 | definition | `stages/02-definition.md`, and `stages/debate.md` for the debate |
+| mockup | `stages/mockup.md` |
 | gate_a, gate_b | `stages/gates.md` |
 | plan | `stages/03-plan.md` |
 | implement | `stages/04-implement.md` |

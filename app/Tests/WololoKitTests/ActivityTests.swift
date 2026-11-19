@@ -206,7 +206,7 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(originLabel(run), "acme/web #87")
         XCTAssertEqual(status.label(run.lang), "Agentes trabajando")
         XCTAssertEqual(activityLine(run, now: now, prefixed: false), "Implementando ítem 5")
-        XCTAssertEqual(RunProgress(run, now: now).metaText, "5/8 Implementación")
+        XCTAssertEqual(RunProgress(run, now: now).metaText, "6/9 Implementación")
         XCTAssertEqual(prLabel(run), "PR #120")
         XCTAssertEqual(agentsLabel(run, now: now), "2 agentes")
         XCTAssertEqual(shortAgo(run.updatedAt, now: now, lang: run.lang), "53s")

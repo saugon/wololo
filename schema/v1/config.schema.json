@@ -161,6 +161,19 @@
         }
       }
     },
+    "mockup": {
+      "type": "object",
+      "description": "When the mockup stage makes a UI mockup to adjust before the plan: when the definition finds screens to decide (auto), whenever the change has UI (always), or never.",
+      "properties": {
+        "when": {
+          "enum": [
+            "auto",
+            "always",
+            "never"
+          ]
+        }
+      }
+    },
     "screenshots": {
       "type": "object",
       "properties": {

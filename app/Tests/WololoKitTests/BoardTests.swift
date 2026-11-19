@@ -271,7 +271,7 @@ final class BoardTests: XCTestCase {
         let board = Board(runs: [implementing, finished, starting], now: now, mode: .byStage)
 
         XCTAssertEqual(board.columns.map(\.id), Stage.all.map(\.id))
-        XCTAssertEqual(board.columns.map { $0.label(.es) }[4], "Implementación")
+        XCTAssertEqual(board.columns.map { $0.label(.es) }[5], "Implementación")
         XCTAssertEqual(column(board, "implement"), ["impl"])
         XCTAssertEqual(column(board, "context"), ["fresh"])
         XCTAssertFalse(board.columns.flatMap(\.runs).contains { $0.id == "done" })

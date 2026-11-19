@@ -76,8 +76,9 @@ test('only an approving answer approves a gate, and changes leave it pending unt
 })
 
 test('a full run may skip gates and resolve them by itself', async () => {
-  const full = runAt('full', [['stage.entered', { stage: 'definition' }, 3]])
+  const full = runAt('full', [['stage.entered', { stage: 'mockup' }, 3]])
   expect(checkEvent(full, 'stage.entered', { stage: 'plan' })).toBe(null)
+  expect(checkEvent(runAt('full', [['stage.entered', { stage: 'definition' }, 3]]), 'stage.entered', { stage: 'plan' })).toMatch(/Enter mockup before plan/)
   expect(checkEvent(full, 'gate.resolved', { gate: 'gate_a', by: 'auto' })).toBe(null)
 })
 
@@ -346,4 +347,36 @@ test('with a final review configured, the implement stage ends only after it pas
   expect(checkEvent(runAt('full'), 'final_review', { verdict: 'pass', findings: 0 })).toMatch(/implement stage/)
   expect(checkEvent(implementing(), 'final_review', { verdict: 'ok', findings: 0 })).toMatch(/verdict/)
   expect(checkEvent(implementing(), 'final_review', { verdict: 'pass' })).toMatch(/findings/)
+})
+
+test('a mockup is published in its stage, with its files', async () => {
+  const atMockup = runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'mockup' }, 4],
+  ])
+  expect(checkEvent(atMockup, 'mockup.published', { url: 'https://claude.ai/artifact/a', files: ['cart.html'] })).toBe(null)
+  expect(checkEvent(atMockup, 'mockup.published', { url: null, files: ['cart.html'] })).toBe(null)
+  expect(checkEvent(atMockup, 'mockup.published', { files: [] })).toMatch(/data\.files/)
+  expect(checkEvent(atMockup, 'mockup.published', { url: 3, files: ['a.html'] })).toMatch(/data\.url/)
+  expect(checkEvent(pastGateA(), 'mockup.published', { files: ['a.html'] })).toMatch(/go back to it/)
+  expect(stageForFile('mockup.md')).toBe('mockup')
+})
+
+test('a mockup changed after Aprobar spec goes back to the mockup stage, and an approval from before mockups checks none', async () => {
+  const run = runAt('checkpoints', [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'mockup' }, 4],
+    ['stage.entered', { stage: 'gate_a' }, 5],
+    ['question.answered', { pairs: [{ header: 'Aprobar spec', question: '¿Apruebo?', answer: 'Aprobar' }], answered: true }, 6],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user', snapshot: { spec: 'aaa', mockup: 'm1', plan: null, tree: 't1' } }, 7],
+    ['stage.entered', { stage: 'plan' }, 8],
+  ])
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'implement' }, { spec: 'aaa', mockup: 'm1', plan: 'p1', tree: 't2' })).toBe(null)
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'implement' }, { spec: 'aaa', mockup: 'm2', plan: 'p1', tree: 't2' })).toMatch(
+    /the mockup changed after Aprobar spec approved it: go back with stage\.entered \{stage: "mockup"/,
+  )
+  expect(changedSinceApproval(run, 'stage.entered', { stage: 'implement' }, { spec: 'bbb', mockup: 'm2', plan: 'p1', tree: 't2' })).toMatch(
+    /spec\.md and the mockup changed .* \{stage: "definition"/,
+  )
+  expect(changedSinceApproval(pastGateA(), 'stage.entered', { stage: 'implement' }, { spec: 'aaa', mockup: 'm9', plan: 'p1', tree: 't2' })).toBe(null)
 })

@@ -71,6 +71,9 @@ export type Config = {
     login: string | null
   }
   screenshots: { enabled: boolean; max: number }
+  // When the mockup stage makes a UI mockup to adjust before the plan: when the definition finds screens to decide (auto),
+  // whenever the change has UI (always), or never.
+  mockup: { when: 'auto' | 'always' | 'never' }
   pr: { enabled: boolean; draft: boolean; wait_ci: boolean; base: string }
   spec: { to_github: boolean; create_issue_from_text: boolean }
   languages: { chat: Lang; spec: string; issue: string; pr: string }
@@ -138,6 +141,7 @@ export const DEFAULT_CONFIG: Config = {
     login: null,
   },
   screenshots: { enabled: true, max: 5 },
+  mockup: { when: 'auto' },
   pr: { enabled: true, draft: true, wait_ci: true, base: 'main' },
   spec: { to_github: true, create_issue_from_text: false },
   languages: { chat: 'es', spec: 'es', issue: 'es', pr: 'en' },
@@ -193,6 +197,7 @@ const ENUMS: Record<string, readonly string[]> = {
   'tests.follow': ['wololo', 'project'],
   'tests.suite_runs': ['local', 'ci'],
   'tests.e2e_runs': ['local', 'ci', 'off'],
+  'mockup.when': ['auto', 'always', 'never'],
 }
 
 function at(value: unknown, path: string): unknown {
@@ -268,6 +273,8 @@ const SWITCHES: Record<string, Overrides> = {
   '--ready': { 'pr.draft': false },
   '--no-wait-ci': { 'pr.wait_ci': false },
   '--no-screenshots': { 'screenshots.enabled': false },
+  '--mockup': { 'mockup.when': 'always' },
+  '--no-mockup': { 'mockup.when': 'never' },
   '--github-spec': { 'spec.to_github': true },
   '--no-github-spec': { 'spec.to_github': false },
   '--no-final-review': { 'review.final.skill': '' },

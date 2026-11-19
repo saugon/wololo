@@ -222,6 +222,7 @@
           "enum": [
             "context",
             "definition",
+            "mockup",
             "gate_a",
             "plan",
             "implement",
@@ -291,9 +292,15 @@
           },
           "snapshot": {
             "type": "object",
-            "description": "What an approval approved, as hashes of the spec and plan files and of the work tree's committed tree; null where there was none. A later change to any of them needs the gate again.",
+            "description": "What an approval approved, as hashes of the spec, mockup and plan files and of the work tree's committed tree; null where there was none, and mockup missing in runs from before it. A later change to any of them needs the gate again.",
             "properties": {
               "spec": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "mockup": {
                 "type": [
                   "string",
                   "null"
@@ -673,6 +680,30 @@
             "failing",
             null
           ]
+        }
+      }
+    },
+    "mockup": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The UI mockup the mockup stage made: its files in run_dir/mockup, its page on claude.ai (null when it stayed local), and when.",
+      "properties": {
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "at": {
+          "type": "number"
         }
       }
     },

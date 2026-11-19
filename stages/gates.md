@@ -24,12 +24,13 @@ At gate_a the issue is updated as in "After approval" below.
      - **Assumptions**: every one, one line each, saying which ones you took on your own;
      - **Open items**: what the debate left open, if anything;
      - **Risk** and how the debate ended, in one line;
+     - the mockup's link (or its paths), when the mockup stage made one: Aprobar spec approves it too;
      - the path to `spec.md`, for the full text.
    - **gate_b**:
      - the items done, with their commits;
      - `git diff --stat origin/<base>...HEAD`, file by file;
      - the verification commands and their results;
-     - the screenshot paths, with captions;
+     - the screenshot paths, with captions, each beside the mockup screen it matches when there is one;
      - the assumptions and decisions;
      - the branch and the PR title it will open;
      - how many commits are unsigned, if any: they are signed right after approval, so the person should have their signing key unlocked when they approve.
@@ -42,7 +43,7 @@ At gate_a the issue is updated as in "After approval" below.
    At gate_b, when `config.commands.start` has commands, **Probar localmente** (or **Detener el stack**, while it is up) takes Ajustar's place: AskUserQuestion takes four options, and the person writes what to change in its free-text answer, which is Ajustar.
 4. **Apply the answer.**
    - **Aprobar**: `event gate.resolved {gate, outcome: "approved", by: "user"}`, then "After approval".
-   - **Ajustar** (or what the person wrote): apply the change and record each point as a `decision`, and `gate.resolved {gate, outcome: "changes", by: "user"}`. Ask again; the run stays in the gate until an approval. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`. At gate_b the equivalent is `implement`.
+   - **Ajustar** (or what the person wrote): apply the change and record each point as a `decision`, and `gate.resolved {gate, outcome: "changes", by: "user"}`. Ask again; the run stays in the gate until an approval. If the change reopens the scope, go back with `stage.entered {stage: "definition", reason}`; if it is about the mockup, go back with `stage.entered {stage: "mockup", reason}`. At gate_b the equivalent is `implement`.
    - **Ver completo**: show it and ask again.
    - **Probar localmente**: start the stack as `stages/servers.md` says (prepare once, then the servers, in the background). Then show, in the chat, where to try it: each server's URL (`config.commands.app_url` with its port), the login from `config.commands.login` with the project's demo credentials, and the acceptance scenarios to walk through. Ask again, with **Detener el stack** in place of Probar localmente; the stack stays up while the person tries it, and through **Ajustar** too, so the fix shows on the servers already running.
    - **Detener el stack**: stop it as `stages/servers.md` says, and ask again.
@@ -54,7 +55,7 @@ When the run's change is approved on the PR (`review: pr`), Aprobar PR is not as
 
 ## After approval
 
-The run keeps what each gate approved: `spec.md` for **Aprobar spec**; `spec.md`, `plan.md` and the committed code for **Aprobar PR**. If any of them changes afterwards, the run refuses to move on (or to open the PR) until you go back to the stage that redoes it (`definition` or `implement`) and ask the gate again. Going back before a gate reopens it.
+The run keeps what each gate approved: `spec.md` and the mockup for **Aprobar spec**; `spec.md`, `plan.md` and the committed code for **Aprobar PR**. If any of them changes afterwards, the run refuses to move on (or to open the PR) until you go back to the stage that redoes it (`definition` or `implement`) and ask the gate again. Going back before a gate reopens it.
 
 **At gate_a:**
 

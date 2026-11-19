@@ -45,7 +45,7 @@ test('a question still open is listed as waiting for the answer', async () => {
 
 test('gates say who resolved them and how', async () => {
   const lines = timeline(events([['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }]]), 'es')
-  expect(lines[0]?.text).toBe('3/8 Aprobar spec: aprobado (vos)')
+  expect(lines[0]?.text).toBe('4/9 Aprobar spec: aprobado (vos)')
 })
 
 test('the card and the file list the newest event first', async () => {
@@ -117,10 +117,10 @@ test('the summary starts with what is going on now, then the stages', async () =
   expect(block(view.pane.summary, 'ahora')).toEqual(['Ítem 6: Front: estado por mesa', '◉ revisor · 1m', 'Review item 6'])
   expect(block(view.pane.summary, 'etapas').find(line => line.startsWith('✓ Aprobar spec'))).toBe('✓ Aprobar spec        2m                2m')
   expect(view.pane.status).toEqual({ badge: '⟳ AGENTES TRABAJANDO', tone: 'claude', since: 'desde hace 1m' })
-  expect(view.pane.stage).toEqual({ icon: '✱', label: 'Implementación', position: '5/8' })
+  expect(view.pane.stage).toEqual({ icon: '✱', label: 'Implementación', position: '6/9' })
   expect(view.band.stageText).toBe('Implementación · ítem 6 de 6')
   expect(view.band.detail).toBe('Front: estado por mesa')
-  expect(view.header).toContain('5/8 Implementación · ítem 6 de 6')
+  expect(view.header).toContain('6/9 Implementación · ítem 6 de 6')
 })
 
 test('the items tab lists the plan with what is done, in progress, failing or pending', async () => {
@@ -159,6 +159,7 @@ test('the progress bar fills done stages, the current one by its items, and says
   expect(progress.segments.map(segment => `${segment.short}:${segment.state}:${segment.filled}${segment.empty}`)).toEqual([
     'Con:done:████',
     'Def:done:████',
+    'Mck:done:████',
     'Spc:done:████',
     'Pla:done:████',
     'Imp:current:██▌░',
@@ -166,7 +167,7 @@ test('the progress bar fills done stages, the current one by its items, and says
     'Rev:pending:░░░░',
     'PR:pending:░░░░',
   ])
-  expect(progress.percent).toBe(58)
+  expect(progress.percent).toBe(63)
   const finished = rebuild('r1', [...list, ...events([['run.finished', { outcome: 'done' }]]).map(e => ({ ...e, seq: 99 }))])
   expect(progressOf(finished).percent).toBe(100)
   expect(progressOf(finished).segments.every(segment => segment.state === 'done' && segment.filled === '████')).toBe(true)
@@ -410,6 +411,7 @@ test('going back to an earlier stage leaves the later ones to do again, on the b
     ['run.started', { title: 'Salones', mode: 'checkpoints' }],
     ['stage.entered', { stage: 'context' }],
     ['stage.entered', { stage: 'definition' }],
+    ['stage.entered', { stage: 'mockup' }],
     ['stage.entered', { stage: 'gate_a' }],
     ['question.answered', {}],
     ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'user' }],
@@ -420,7 +422,7 @@ test('going back to an earlier stage leaves the later ones to do again, on the b
     ['stage.entered', { stage: 'implement', reason: 'the review asked for changes' }],
   ])
   const run = rebuild('r1', list)
-  expect(progressOf(run).segments.map(segment => segment.state)).toEqual(['done', 'done', 'done', 'done', 'current', 'pending', 'pending', 'pending'])
+  expect(progressOf(run).segments.map(segment => segment.state)).toEqual(['done', 'done', 'done', 'done', 'done', 'current', 'pending', 'pending', 'pending'])
   const texts = block(buildView(run, 'running', list, 1_800_000_700).pane.summary, 'etapas')
   expect(texts.find(text => text.includes('Evidencia'))?.startsWith('↺ Evidencia')).toBe(true)
   expect(texts.find(text => text.includes('Plan'))?.startsWith('✓ Plan')).toBe(true)

@@ -8,6 +8,7 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
 2. **Implement.** Spawn `config.project_agents.implementer`, or `wololo:implementer`. Give it:
    - the item;
    - the paths to `spec.md` and `plan.md`;
+   - for an item that builds a screen, the path of the mockup file it follows: the screen matches it (layout, states, texts), with the project's real components;
    - the findings of the previous attempt, if any, and the minor findings carried to this item (step 4);
    - the work-tree preamble from SKILL.md, and the reminder that it does not commit.
 3. **Verify.** Call `mcp__wololo__tests {scope: "touched"}`. It returns:

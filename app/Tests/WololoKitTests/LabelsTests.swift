@@ -3,20 +3,20 @@ import XCTest
 
 final class LabelsTests: XCTestCase {
     func testStagesMatchTheMod() {
-        XCTAssertEqual(Stage.all.map(\.id), ["context", "definition", "gate_a", "plan", "implement", "evidence", "gate_b", "pr"])
+        XCTAssertEqual(Stage.all.map(\.id), ["context", "definition", "mockup", "gate_a", "plan", "implement", "evidence", "gate_b", "pr"])
         XCTAssertEqual(
             Stage.all.map { $0.label(.es) },
-            ["Contexto", "Definición", "Aprobar spec", "Plan", "Implementación", "Evidencia", "Aprobar PR", "PR"]
+            ["Contexto", "Definición", "Mockup", "Aprobar spec", "Plan", "Implementación", "Evidencia", "Aprobar PR", "PR"]
         )
         XCTAssertEqual(
             Stage.all.map { $0.label(.en) },
-            ["Context", "Definition", "Approve spec", "Plan", "Implementation", "Evidence", "Approve PR", "PR"]
+            ["Context", "Definition", "Mockup", "Approve spec", "Plan", "Implementation", "Evidence", "Approve PR", "PR"]
         )
         XCTAssertEqual(Stage.all.filter(\.isGate).map(\.id), ["gate_a", "gate_b"])
     }
 
     func testStageLookup() {
-        XCTAssertEqual(Stage.index(of: "implement"), 4)
+        XCTAssertEqual(Stage.index(of: "implement"), 5)
         XCTAssertNil(Stage.index(of: "later"))
         XCTAssertEqual(Stage.label(of: "gate_b", .es), "Aprobar PR")
         XCTAssertEqual(Stage.label(of: "later", .en), "later")

@@ -120,6 +120,13 @@ test('the final review is set, given arguments or turned off by flag for one run
   expect(withOverrides(configured, parseFlags(['--no-final-review']).overrides).review.final.skill).toBe('')
 })
 
+test('the mockup stage runs when the definition finds screens to decide, always or never', async () => {
+  expect(DEFAULT_CONFIG.mockup.when).toBe('auto')
+  expect(withOverrides(DEFAULT_CONFIG, parseFlags(['--mockup']).overrides).mockup.when).toBe('always')
+  expect(withOverrides(DEFAULT_CONFIG, parseFlags(['--no-mockup']).overrides).mockup.when).toBe('never')
+  expect(validate({ mockup: { when: 'sometimes' } })).toEqual(['mockup.when: must be one of auto, always, never'])
+})
+
 test('--node ties the run to the goal node Wololo Desk launched it from, and sets no config', async () => {
   const flags = parseFlags(['--node=g1/n1', '--full'])
   expect(flags.errors).toEqual([])

@@ -160,6 +160,8 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('⧗', `${es ? 'Adaptador' : 'Adapter'} ${str(d.point)}: ${es ? 'corre en segundo plano' : 'runs in the background'}`)
     case 'github.published':
       return one('✓', `GitHub ${str(d.kind)}${d.mode === 'summary' ? (es ? ' (resumen)' : ' (summary)') : ''}: ${str(d.url)}`)
+    case 'mockup.published':
+      return one('✓', `Mockup: ${str(d.url) || (Array.isArray(d.files) ? d.files.map(String).join(', ') : '')}`)
     case 'screenshot.saved':
       return one('·', `${es ? 'Captura' : 'Screenshot'}: ${str(d.caption)}`, false)
     case 'run.finished':

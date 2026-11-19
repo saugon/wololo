@@ -215,6 +215,27 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'mockup',
+    title: t('Mockup', 'Mockup'),
+    help: t('Un mockup de la UI para ajustar antes del plan', 'A UI mockup to adjust before the plan'),
+    fields: [
+      {
+        kind: 'radio',
+        path: 'mockup.when',
+        label: t('Cuándo', 'When'),
+        options: [
+          {
+            value: 'auto',
+            label: t('auto', 'auto'),
+            help: t('cuando la definición encuentra pantallas para decidir', 'when the definition finds screens to decide'),
+          },
+          { value: 'always', label: t('siempre', 'always'), help: t('siempre que el cambio tenga UI', 'whenever the change has UI') },
+          { value: 'never', label: t('nunca', 'never'), help: t('se saltea la etapa', 'the stage is skipped') },
+        ],
+      },
+    ],
+  },
+  {
     id: 'evidence',
     title: t('Screenshots', 'Screenshots'),
     help: t('Evidencia visual antes del PR', 'Visual evidence before the PR'),

@@ -4,7 +4,7 @@ A Claude Code plugin that takes an issue to a pull request, and always shows whi
 
 ## Highlights
 
-- 🧭 One command from issue to PR: context, spec, plan, implementation, screenshots, PR and CI.
+- 🧭 One command from issue to PR: context, spec, UI mockup, plan, implementation, screenshots, PR and CI.
 - ✋ You approve twice, the spec and the PR, or never, or at every doubt.
 - 🥊 Specs and plans are debated before any code is written, by Claude or an external model such as Codex.
 - 👀 A card above the prompt and a side pane say what the run is doing at every moment.
@@ -36,10 +36,10 @@ Then hand it an issue:
 /wololo #4312
 ```
 
-wololo reads the issue and the code, writes a spec and asks you to approve it. Then it plans, implements item by item with tests and review, takes screenshots, and asks you to approve the PR. It opens it, watches CI and fixes what fails.
+wololo reads the issue and the code, writes a spec, mocks up the screens to decide when there are, and asks you to approve them. Then it plans, implements item by item with tests and review, takes screenshots, and asks you to approve the PR. It opens it, watches CI and fixes what fails.
 
 ```
-context → definition → approve spec → plan → implement → evidence → approve PR → pr
+context → definition → mockup → approve spec → plan → implement → evidence → approve PR → pr
 ```
 
 ## Usage

@@ -79,6 +79,7 @@ export default {
         "adapter.started",
         "adapter.ran",
         "screenshot.saved",
+        "mockup.published",
         "usage",
         "time",
         "run.finished"

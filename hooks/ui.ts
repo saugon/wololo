@@ -57,6 +57,7 @@ export function modeLine(mode: string, lang: string): { icon: string; name: stri
 const SHORT: Record<string, Record<'es' | 'en', string>> = {
   context: { es: 'Con', en: 'Ctx' },
   definition: { es: 'Def', en: 'Def' },
+  mockup: { es: 'Mck', en: 'Mck' },
   gate_a: { es: 'Spc', en: 'Spc' },
   plan: { es: 'Pla', en: 'Pln' },
   implement: { es: 'Imp', en: 'Imp' },

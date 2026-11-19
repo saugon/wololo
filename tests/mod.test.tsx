@@ -220,7 +220,7 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   )
   expect(entered).toEqual({ ok: true, status: 'running', hint: expect.stringMatching(/^Read .*\/stages\/01-context\.md before working on this stage\.$/) })
   const got = parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result)
-  expect(got.header).toBe('[wololo #12 · 1/8 Contexto · ⟳ trabajando]')
+  expect(got.header).toBe('[wololo #12 · 1/9 Contexto · ⟳ trabajando]')
   const short = await $.ui.mount({
     plugin: 'wololo',
     surface: 'terminal',
@@ -257,7 +257,7 @@ test('start writes the run, the band shows it, questions are recorded, a push to
   expect((await probe.find({ type: 'Text', text: /Run iniciado/ }))?.text).toContain('▶ Run iniciado: Partial payments')
   expect(await probe.find(runFiles)).toBeUndefined()
   await probe.press({ key: 'detail' })
-  expect((await probe.find({ type: 'Text', text: /Etapa 1\/8 Contexto/ }))?.text).toContain('→ Etapa 1/8 Contexto')
+  expect((await probe.find({ type: 'Text', text: /Etapa 1\/9 Contexto/ }))?.text).toContain('→ Etapa 1/9 Contexto')
   await probe.press({ key: 'tab-detail' })
   expect((await probe.find(runFiles))?.text).toContain(`${DATA}/runs/`)
   await probe.press({ key: 'toggle' })
@@ -605,7 +605,7 @@ test('/wololo-status draws every active run as a card', async ($, on) => {
   })
   expect((await ui.find({ type: 'Text', text: /^shop · / }))?.text).toBe('shop · #12 Partial payments')
   expect((await ui.find({ type: 'Text', text: /TRABAJANDO/ }))?.text).toBe(' ⟳ TRABAJANDO ')
-  expect((await ui.find({ type: 'Text', text: /^1\/8/ }))?.text).toBe('1/8 Contexto')
+  expect((await ui.find({ type: 'Text', text: /^1\/9/ }))?.text).toBe('1/9 Contexto')
   expect((await ui.find({ type: 'Text', text: /Leyendo/ }))?.text).toBe('  → Leyendo cómo se cobra una mesa hoy')
   expect((await ui.find({ type: 'Text', text: /Último/ }))?.text).toMatch(/^  Último: · Supuesto: solo mesas · hace /)
   expect((await ui.find({ type: 'Text', text: new RegExp(String(started.run_id)) }))?.text).toBe(`  ${String(started.run_id)}`)
@@ -779,7 +779,7 @@ test('the expanded card draws its whole tab for the engine to scroll, with a way
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result)
   await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage: 'context' } } as never)
-  for (const stage of ['definition', 'gate_a']) await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)
+  for (const stage of ['definition', 'mockup', 'gate_a']) await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)
   const ui = await $.ui.mount({
     plugin: 'wololo',
     surface: 'terminal',
@@ -830,13 +830,13 @@ test('an approved gate is recorded with its snapshot when its data arrives froze
   host.git.set('rev-parse HEAD^{tree}', '7ree')
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   const runId = String(parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments' } as never)).result).run_id)
-  for (const stage of ['context', 'definition', 'gate_a']) parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)).result)
+  for (const stage of ['context', 'definition', 'mockup', 'gate_a']) parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'stage.entered', data: { stage } } as never)).result)
   await $.tool.call({ tool: 'AskUserQuestion', questions: [{ question: '¿Aprobás la spec?', header: 'Aprobar spec', options: [], multiSelect: false }] } as never)
   const data = Object.freeze({ gate: 'gate_a', outcome: 'approved', by: 'user' })
   parse((await $.tool.call({ tool: 'mcp__wololo__event', type: 'gate.resolved', data } as never)).result)
   await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)
   const resolved = eventLines(host, runId).find(line => line.type === 'gate.resolved')
-  expect(resolved?.data.snapshot).toEqual({ spec: null, plan: null, tree: '7ree' })
+  expect(resolved?.data.snapshot).toEqual({ spec: null, mockup: null, plan: null, tree: '7ree' })
 })
 
 test('a verified and a committed item keep their trees when their data arrives frozen', async ($, on) => {
@@ -2372,7 +2372,7 @@ test('with review.final set, the implement stage completes only after a passing 
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
   const event = async (type: string, data: Record<string, unknown>) => String((await $.tool.call({ tool: 'mcp__wololo__event', type, data } as never)).result)
   parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Pagos', mode: 'full' } as never)).result)
-  for (const stage of ['context', 'definition', 'gate_a', 'plan', 'implement']) expect(await event('stage.entered', { stage })).toContain('"ok": true')
+  for (const stage of ['context', 'definition', 'mockup', 'gate_a', 'plan', 'implement']) expect(await event('stage.entered', { stage })).toContain('"ok": true')
 
   expect(await event('stage.completed', { stage: 'implement' })).toContain('after the final review')
   expect(await event('final_review', { verdict: 'fail', findings: 2 })).toContain('"ok": true')

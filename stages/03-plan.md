@@ -4,7 +4,7 @@ Goal: `run_dir/plan.md`, small items, each with how it is verified.
 
 1. `event stage.entered {stage: "plan"}`. When `config.adapters.plan` exists, call `mcp__wololo__run_adapter {point: "plan"}` now: a refusal (the project's tool does not take the issue as it is) blocks the run before any plan is written.
 2. **Name the branch.** The name the run started with comes from the title, word for word. Now that the spec says what the change is, give it its name: `event branch.named {slug}`, with a slug of two to five words on what the change does, in the language and style of the repository's branches (`git branch -r --sort=-committerdate | head -20`), such as `ecommerce-offline-payments`. The mod renames the branch from `config.branch`, and `<branch>` is the new one from here on. It keeps the name once the branch is on origin.
-3. **Architects.** Give each one `spec.md`, `context.md` and its approach.
+3. **Architects.** Give each one `spec.md`, `context.md`, the mockup's files (`run_dir/mockup/`, when there are) and its approach. The items that build a screen say which mockup file they follow.
    - Low risk or `light`: one `wololo:architect`, pragmatic.
    - High or unknown risk: two in parallel, minimal and pragmatic.
    - `deep`: add a third, clean.

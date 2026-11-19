@@ -1581,11 +1581,36 @@ async function worktreeTree($: Engine, worktree: string, dir: string): Promise<s
 }
 
 // The hashes a gate approves: spec.md and plan.md in the run directory, and the worktree's committed tree.
+// The mockup as one hash of its files, names and contents, so a changed, added or removed file counts; null without one.
+async function mockupHash($: Engine, dir: string): Promise<string | null> {
+  const root = `${dir}/mockup`
+  if (!(await $.fs.exists(root).catch(() => false))) return null
+  const names = (await $.fs.list(root).catch(() => [])).map(entry => entry.name).sort()
+  const parts: string[] = []
+  for (const name of names) {
+    const content = await readText($, `${root}/${name}`)
+    if (content !== undefined) parts.push(`${name}\n${content}`)
+  }
+  if (parts.length === 0) return null
+  return fnv(parts.join('\n\u0000\n'))
+}
+
+// FNV-1a, 64 bits, as hex: enough to tell one mockup from another without a process.
+function fnv(text: string): string {
+  let hash = 0xcbf29ce484222325n
+  for (let i = 0; i < text.length; i++) {
+    hash ^= BigInt(text.charCodeAt(i))
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  return hash.toString(16).padStart(16, '0')
+}
+
 async function snapshot($: Engine, dir: string, worktree: string | null): Promise<Snapshot> {
   const hash = async (name: string) =>
     (await readText($, `${dir}/${name}`)) === undefined ? null : await git($, dir, ['hash-object', `${dir}/${name}`])
   return {
     spec: await hash('spec.md'),
+    mockup: await mockupHash($, dir),
     plan: await hash('plan.md'),
     tree: worktree ? await git($, worktree, ['rev-parse', 'HEAD^{tree}']) : null,
   }

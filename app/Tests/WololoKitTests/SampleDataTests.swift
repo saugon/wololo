@@ -93,7 +93,7 @@ final class SampleDataTests: XCTestCase {
         XCTAssertEqual(originLabel(busy), "acme/web #4312")
         XCTAssertEqual(effectiveStatus(busy, now: later).label(busy.lang), "Agentes trabajando")
         XCTAssertEqual(activityLine(busy, now: later, prefixed: false), "Implementando ítem 5: animación al soltar la tarjeta")
-        XCTAssertEqual(RunProgress(busy, now: later).metaText, "5/8 Implementación")
+        XCTAssertEqual(RunProgress(busy, now: later).metaText, "6/9 Implementación")
         XCTAssertNil(prLabel(busy))
         XCTAssertEqual(agentsLabel(busy, now: later), "2 agentes")
         XCTAssertEqual(shortAgo(busy.updatedAt, now: later, lang: busy.lang), "53s")

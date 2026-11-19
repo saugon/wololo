@@ -23,6 +23,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `tests.background` | long suites run in the background; the run shows "running tests" |
 | `commands.prepare`, `commands.start`, `commands.app_url`, `commands.login` | how to run the app, for the screenshots and for **Probar localmente** at Aprobar PR: what to run once per run before the first start (dependencies, the instance's database), and the servers; `{slot}` gives each parallel run its own ports |
 | `instance.read`, `instance.databases`, `instance.release` | when the project keeps its own registry of instances (one per worktree): the command that prints the work tree's instance number, which the run's slot then follows (so `{slot}` gives that instance's ports), that instance's databases (`{slot}`), shown in the summary with the connections open to each and the local Postgres' total against its `max_connections`, and the command that gives the instance back when the run finishes, once its servers are down |
+| `mockup.when` | the mockup stage: `auto` makes a UI mockup to adjust before the plan when the definition finds screens to decide, `always` whenever the change has UI, `never` skips it |
 | `spec.to_github` | `true` publishes a short version of the spec in the issue; `false` keeps it in the run's files only. An issue write you ask for yourself during the run still goes out |
 | `pr.*` | open a PR, as a draft, wait for CI, and the base branch |
 | `review.approval` | where the change is approved: `local`, at Aprobar PR in the session, or `pr`, on the PR once CI is green (Aprobar PR passes by itself). `--review-pr` / `--review-local` override it for one run |
@@ -51,6 +52,7 @@ Flags after `/wololo <issue>` change the config for that run only; the run keeps
 | `--base=<branch>` | `pr.base` |
 | `--no-pr`, `--draft`, `--ready`, `--no-wait-ci` | `pr.enabled`, `pr.draft`, `pr.wait_ci` |
 | `--no-screenshots` | `screenshots.enabled` |
+| `--mockup`, `--no-mockup` | `mockup.when`: `always` or `never` |
 | `--github-spec`, `--no-github-spec` | `spec.to_github` |
 | `--debate=`, `--critic=`, `--reviewer=` | `debate.depth`, `debate.critic`, `review.reviewer` |
 | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |

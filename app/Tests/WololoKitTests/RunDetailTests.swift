@@ -12,7 +12,7 @@ final class RunDetailTests: XCTestCase {
 
     func testScenario10CompletedStagesHaveDurations() throws {
         let run = try makeRun("r", status: "waiting_user", [
-            "stage": ["id": "gate_a", "index": 2, "total": 8, "since": now - 100],
+            "stage": ["id": "gate_a", "index": 3, "total": 9, "since": now - 100],
             "stages": stages([("context", now - 1000, now - 820), ("definition", now - 820, now - 100), ("gate_a", now - 100, nil)]),
             "gates": ["gate_a": ["requested_at": now - 100, "resolved_at": NSNull(), "outcome": NSNull(), "by": NSNull()]],
         ])
@@ -20,19 +20,20 @@ final class RunDetailTests: XCTestCase {
         let rows = stageRows(run, now: now)
 
         XCTAssertEqual(rows.map(\.id), Stage.all.map(\.id))
-        XCTAssertEqual(rows.map(\.state), [.done, .done, .current, .pending, .pending, .pending, .pending, .pending])
-        XCTAssertEqual(rows.map(\.durationText), ["3m", "12m", "1m", "", "", "", "", ""])
-        XCTAssertEqual(rows[2].note, "te espera")
-        XCTAssertEqual(rows[2].label, "Aprobar spec")
-        XCTAssertTrue(rows[2].isGate)
+        XCTAssertEqual(rows.map(\.state), [.done, .done, .done, .current, .pending, .pending, .pending, .pending, .pending])
+        XCTAssertEqual(rows.map(\.durationText), ["3m", "12m", "", "1m", "", "", "", "", ""])
+        XCTAssertEqual(rows[3].note, "te espera")
+        XCTAssertEqual(rows[3].label, "Aprobar spec")
+        XCTAssertTrue(rows[3].isGate)
         XCTAssertNil(rows[0].note)
-        XCTAssertNil(rows[6].note)
+        XCTAssertNil(rows[7].note)
+        XCTAssertNil(rows[2].elapsed, "the mockup stage, never entered")
     }
 
     func testGateOutcomesAndReenteredStages() throws {
         let run = try makeRun("r", [
             "lang": "en",
-            "stage": ["id": "pr", "index": 7, "total": 8, "since": now - 10],
+            "stage": ["id": "pr", "index": 8, "total": 9, "since": now - 10],
             "stages": stages([("plan", now - 900, now - 800), ("implement", now - 800, now - 500),
                               ("plan", now - 500, now - 440), ("implement", now - 440, now - 20), ("pr", now - 10, nil)]),
             "gates": [
@@ -43,19 +44,19 @@ final class RunDetailTests: XCTestCase {
 
         let rows = stageRows(run, now: now)
 
-        XCTAssertEqual(rows[3].elapsed, 160, "both visits to Plan")
-        XCTAssertEqual(rows[4].elapsed, 720)
-        XCTAssertEqual(rows[2].note, "approved by you")
-        XCTAssertEqual(rows[6].note, "passed on its own")
+        XCTAssertEqual(rows[4].elapsed, 160, "both visits to Plan")
+        XCTAssertEqual(rows[5].elapsed, 720)
+        XCTAssertEqual(rows[3].note, "approved by you")
+        XCTAssertEqual(rows[7].note, "passed on its own")
         XCTAssertNil(rows[0].elapsed, "done but never entered")
-        XCTAssertEqual(rows[7].state, .current)
-        XCTAssertEqual(rows[7].elapsed, 10)
+        XCTAssertEqual(rows[8].state, .current)
+        XCTAssertEqual(rows[8].elapsed, 10)
     }
 
     func testGateNotes() throws {
         func note(_ outcome: Any, by: Any = "user", lang: String = "es") throws -> String? {
             let run = try makeRun("r", ["lang": lang, "gates": ["gate_a": ["requested_at": 0, "outcome": outcome, "by": by]]])
-            return stageRows(run, now: now)[2].note
+            return stageRows(run, now: now)[3].note
         }
         XCTAssertEqual(try note("approved"), "aprobado por vos")
         XCTAssertEqual(try note("approved", by: "claude"), "pasó solo")

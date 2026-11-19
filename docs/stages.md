@@ -1,14 +1,15 @@
 # Stages
 
 ```
-context → definition → approve spec → plan → implement → evidence → approve PR → pr
+context → definition → mockup → approve spec → plan → implement → evidence → approve PR → pr
 ```
 
 | Stage | What happens |
 |---|---|
 | context | Reads the issue and explores the code with parallel explorers; estimates the risk. |
 | definition | Writes the spec (outcome, scope, non-goals, acceptance scenarios, assumptions) and debates it: self-critique for low risk, an adversarial critic (Claude or an external model such as Codex) for high risk. |
-| approve spec (`gate_a`) | You approve the spec. With `spec.to_github`, a short version goes into the issue body, or a summary when it is longer than GitHub accepts. |
+| mockup | When the change has screens to decide (`mockup.when`: `auto` by default, `always` or `never`), a mockup of them in the project's look, with its states and invented data, published as a private claude.ai Artifact you open in the browser. You adjust it until it is right; in `full` it is made without asking. Skipped with a note otherwise. |
+| approve spec (`gate_a`) | You approve the spec, and the mockup with it. With `spec.to_github`, a short version goes into the issue body, or a summary when it is longer than GitHub accepts. |
 | plan | Architects propose small, verifiable items; the plan is debated the same way. |
 | implement | Per item: implementer → the tests the run touched → reviewer → commit, with a log of every decision and correction. After the last item, the full suite (locally, or left to CI). |
 | evidence | Up to 5 screenshots of what changed. Starts the servers it needs on the run's own ports, and stops them afterwards. |

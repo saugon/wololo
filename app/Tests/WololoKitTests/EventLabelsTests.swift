@@ -17,6 +17,16 @@ final class EventLabelsTests: XCTestCase {
         XCTAssertFalse(isMinorEvent("review.waiting"))
     }
 
+    func testMockupNamesItsPageOrItsFiles() throws {
+        XCTAssertEqual(lines("mockup.published", ["url": .string("https://claude.ai/artifact/a"), "files": .array([.string("01-cart.html")])]),
+                       ["Mockup: https://claude.ai/artifact/a", "Mockup: https://claude.ai/artifact/a"])
+        XCTAssertEqual(lines("mockup.published", ["url": .null, "files": .array([.string("01-cart.html"), .string("02-pay.html")])])[0],
+                       "Mockup: 01-cart.html, 02-pay.html")
+        let run = try makeRun("m", ["mockup": ["url": "https://claude.ai/artifact/a", "files": ["01-cart.html"]]])
+        XCTAssertEqual(run.mockup?.link?.absoluteString, "https://claude.ai/artifact/a")
+        XCTAssertNil(try makeRun("l", ["mockup": ["url": NSNull(), "files": ["01-cart.html"]]]).mockup?.link)
+    }
+
     func testMainEventsInBothLanguages() {
         XCTAssertEqual(lines("run.started", ["mode": .string("checkpoints")]),
                        ["Arrancó el run · modo checkpoints", "Run started · checkpoints mode"])

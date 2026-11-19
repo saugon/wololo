@@ -25,6 +25,7 @@ public struct Stage: Equatable, Sendable {
     public static let all: [Stage] = [
         Stage(id: "context", isGate: false, es: "Contexto", en: "Context"),
         Stage(id: "definition", isGate: false, es: "Definición", en: "Definition"),
+        Stage(id: "mockup", isGate: false, es: "Mockup", en: "Mockup"),
         Stage(id: "gate_a", isGate: true, es: "Aprobar spec", en: "Approve spec"),
         Stage(id: "plan", isGate: false, es: "Plan", en: "Plan"),
         Stage(id: "implement", isGate: false, es: "Implementación", en: "Implementation"),

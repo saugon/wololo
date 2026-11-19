@@ -152,6 +152,9 @@ public func eventLine(_ event: RunEvent, lang: Lang) -> String {
         return "\(es ? "Adaptador" : "Adapter") \(s("point")): \(result)"
     case "adapter.started":
         return "\(es ? "Adaptador" : "Adapter") \(s("point")): \(es ? "corre en segundo plano" : "runs in the background")"
+    case "mockup.published":
+        let files = d["files"]?.array?.compactMap(\.string).joined(separator: ", ") ?? ""
+        return "Mockup: " + (s("url").isEmpty ? files : s("url"))
     case "screenshot.saved":
         return "\(es ? "Captura" : "Screenshot"): \(s("caption"))"
     case "usage":

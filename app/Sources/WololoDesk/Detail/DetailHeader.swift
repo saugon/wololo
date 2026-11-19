@@ -97,6 +97,12 @@ struct DetailHeader: View {
                     .help(run.project.worktree ?? run.project.path)
             }
             source
+            if let mockup = run.mockup?.link {
+                Link(destination: mockup) {
+                    Text("mockup").foregroundStyle(theme.accent)
+                }
+                .help(es ? "Abrir el mockup de la UI: \(mockup.absoluteString)" : "Open the UI mockup: \(mockup.absoluteString)")
+            }
             if !run.mode.isEmpty {
                 Text("\(es ? "modo" : "mode") \(run.mode)")
             }
