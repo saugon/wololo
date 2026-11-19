@@ -1112,10 +1112,10 @@ test('a run in review ends as done when its PR merges', async ($, on) => {
   const id = 'repo-4796-rev001'
   seedReview(host, id)
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"OPEN"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"OPEN"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).not.toContain('pr.merged')
-  host.answers.unshift({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  host.answers.unshift({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"MERGED"}', exit: 0 })
   await clock.advance(330_000)
   const lines = eventLines(host, id)
   expect(lines.map(line => line.type).slice(-2)).toEqual(['pr.merged', 'run.finished'])
@@ -1132,7 +1132,7 @@ test('a run finished by its PR merging stops its servers too', async ($, on) => 
   host.files.set(`${DATA}/runs/${id}/servers.json`, JSON.stringify([{ name: 'backend', pid: 4242, port: 4000 }]))
   host.ps.set('4242', '4240 make backend.run')
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"MERGED"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).toContain('run.finished')
   expect(host.killed).toEqual(['-TERM -4240'])
@@ -1150,7 +1150,7 @@ test('a run in review whose PR is closed without merging asks the person', async
   const id = 'repo-4796-rev002'
   seedReview(host, id)
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state$/, stdout: '{"state":"CLOSED"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"CLOSED"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).toContain('pr.closed')
   expect(submitted).toHaveLength(1)
@@ -1160,6 +1160,43 @@ test('a run in review whose PR is closed without merging asks the person', async
   // Asked once: the next check sees it closed already.
   await clock.advance(330_000)
   expect(submitted).toHaveLength(1)
+})
+
+test("new comments on the PR reach the session while CI still runs, once each", async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  const submitted: string[] = []
+  on('tool.call', () => ({ result: {} }))
+  on('prompt.submit', (_, e) => {
+    submitted.push(e.text)
+    return { text: e.text }
+  })
+  const id = 'repo-4796-com001'
+  seedReview(host, id)
+  const dir = `${DATA}/runs/${id}`
+  // CI still runs: the PR is open but the run is not in review yet.
+  host.files.set(`${dir}/events.jsonl`, (host.files.get(`${dir}/events.jsonl`) ?? '').replace(/.*"review.waiting".*\n/, ''))
+  host.files.set(`${dir}/run.json`, JSON.stringify({ id, status: 'running', outcome: null, owner: { session_id: 's1', cwd: REPO, heartbeat_at: 1_799_999_000 } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  host.answers.push({ match: /^gh api user/, stdout: 'me\n', exit: 0 })
+  host.answers.push({ match: /^gh api repos\/\{owner\}\/\{repo\}\/pulls\/4813\/comments/, stdout: 'chatgpt-codex-connector[bot]\t2026-11-19T10:10:01Z\n', exit: 0 })
+  const view = { state: 'OPEN', comments: [{ author: { login: 'me' }, createdAt: '2026-11-19T10:00:00Z' }], reviews: [{ author: { login: 'chatgpt-codex-connector' }, submittedAt: '2026-11-19T10:10:00Z', state: 'COMMENTED', body: 'P1' }] }
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: JSON.stringify(view), exit: 0 })
+  await clock.advance(330_000)
+  const commented = eventLines(host, id).filter(line => line.type === 'pr.commented')
+  expect(commented.map(line => line.data)).toEqual([{ count: 2, authors: ['chatgpt-codex-connector'], latest: '2026-11-19T10:10:01Z' }])
+  expect(submitted).toHaveLength(1)
+  expect(submitted[0]).toContain('PR #4813')
+  expect(submitted[0]).toContain('2 new comment(s)')
+  expect(submitted[0]).toContain('without waiting for CI')
+  // Seen: the next check says nothing until someone writes again.
+  await clock.advance(330_000)
+  expect(submitted).toHaveLength(1)
+  view.comments.push({ author: { login: 'ana' }, createdAt: '2026-11-19T11:00:00Z' })
+  host.answers.find(answer => answer.match.test('gh pr view 4813 --json state,comments,reviews'))!.stdout = JSON.stringify(view)
+  await clock.advance(330_000)
+  expect(submitted).toHaveLength(2)
+  expect(submitted[1]).toContain('1 new comment(s) posted after 2026-11-19T10:10:01Z, by ana')
 })
 
 test('a session takes the run from the instance that owned it, and the permission it left waiting goes after the last seq on disk', async ($, on) => {

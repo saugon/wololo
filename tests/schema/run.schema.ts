@@ -98,6 +98,22 @@ export default {
       "type": "object",
       "description": "Config paths the run's launch flags set, over the project's config."
     },
+    "node": {
+      "type": "object",
+      "description": "The goal node Wololo Desk launched the run from (--node). Missing when the run was started by hand.",
+      "required": [
+        "goal",
+        "id"
+      ],
+      "properties": {
+        "goal": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      }
+    },
     "adapter_vars": {
       "type": "object",
       "description": "Values the run's adapters captured, for the commands of later steps.",
@@ -813,6 +829,30 @@ export default {
           "type": "string"
         },
         "since": {
+          "type": "number"
+        }
+      }
+    },
+    "pr_comments": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The PR's comments the run was last told about: up to which one (GitHub's ISO time), how many and by whom, and when.",
+      "properties": {
+        "seen": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "authors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "at": {
           "type": "number"
         }
       }

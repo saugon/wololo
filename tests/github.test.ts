@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { decide, ghArgs, isWololoRepo, urlIn, wololoMention } from '../hooks/github'
+import { decide, ghArgs, isWololoRepo, prComments, urlIn, wololoMention } from '../hooks/github'
 
 test('a text that fits goes whole', async () => {
   expect(decide(1_000, null, 65_000)).toEqual({ send: 'full', length: 1_000 })
@@ -40,4 +40,26 @@ test('isWololoRepo is true only for wololo\'s own repository', () => {
   expect(isWololoRepo('wololo')).toBe(true)
   expect(isWololoRepo('lambdaclass__vertex')).toBe(false)
   expect(isWololoRepo('acme__wololo-fork')).toBe(false)
+})
+
+test("the PR's comments, reviews that say something and line comments count, the gh login's own do not", async () => {
+  const view = {
+    comments: [
+      { author: { login: 'ana' }, createdAt: '2026-11-19T10:00:00Z' },
+      { author: { login: 'me' }, createdAt: '2026-11-19T10:05:00Z' },
+    ],
+    reviews: [
+      { author: { login: 'chatgpt-codex-connector' }, submittedAt: '2026-11-19T10:10:00Z', state: 'COMMENTED', body: 'Two issues' },
+      { author: { login: 'luis' }, submittedAt: '2026-11-19T10:11:00Z', state: 'COMMENTED', body: '' },
+      { author: { login: 'luis' }, submittedAt: '2026-11-19T10:12:00Z', state: 'CHANGES_REQUESTED', body: '' },
+    ],
+  }
+  const lines = 'chatgpt-codex-connector[bot]\t2026-11-19T10:10:01Z\nme\t2026-11-19T10:20:00Z\nnot a line\n'
+  expect(prComments(view, lines, 'me')).toEqual([
+    { author: 'ana', at: '2026-11-19T10:00:00Z' },
+    { author: 'chatgpt-codex-connector', at: '2026-11-19T10:10:00Z' },
+    { author: 'luis', at: '2026-11-19T10:12:00Z' },
+    { author: 'chatgpt-codex-connector', at: '2026-11-19T10:10:01Z' },
+  ])
+  expect(prComments('nope', '', null)).toEqual([])
 })

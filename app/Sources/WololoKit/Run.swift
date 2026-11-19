@@ -4,6 +4,8 @@ public struct Run: Equatable, Sendable {
     public var id: String
     public var title: String
     public var source: Source
+    /// The goal node Wololo Desk launched the run from (`--node`); nil for a run started by hand.
+    public var node: NodeLink?
     public var project: Project
     public var mode: String
     public var risk: String
@@ -39,7 +41,7 @@ public struct Run: Equatable, Sendable {
 
 extension Run: Decodable {
     private enum Keys: String, CodingKey {
-        case id, title, source, project, mode, risk, lang, stage, stages, gates, status, waiting, blocked, doing,
+        case id, title, source, node, project, mode, risk, lang, stage, stages, gates, status, waiting, blocked, doing,
             paused, agents, tasks, items, counts, pr, screenshots, owner, outcome, summary, usage, time
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -56,6 +58,7 @@ extension Run: Decodable {
         }
         title = c.value(.title, or: "")
         source = c.value(.source, or: Source())
+        node = c.optional(.node)
         project = c.value(.project, or: Project())
         mode = c.value(.mode, or: "")
         risk = c.value(.risk, or: "unknown")
@@ -87,6 +90,16 @@ extension Run: Decodable {
 }
 
 extension Run {
+    public struct NodeLink: Equatable, Hashable, Sendable, Decodable {
+        public var goal: String
+        public var id: String
+
+        public init(goal: String, id: String) {
+            self.goal = goal
+            self.id = id
+        }
+    }
+
     public struct Source: Equatable, Sendable, Decodable {
         public var kind = "text"
         public var ref = ""

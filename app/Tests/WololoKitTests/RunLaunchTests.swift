@@ -26,6 +26,14 @@ final class RunLaunchTests: XCTestCase {
         XCTAssertEqual(RunLaunch.command(for: node, projectRepo: "acme/shop"), "/wololo #131")
     }
 
+    func testWithAGoalTheCommandTiesTheRunToTheNode() {
+        let text = GoalNode(id: "n1", title: "Multiples imagenes")
+        XCTAssertEqual(RunLaunch.command(for: text, projectRepo: "acme/shop", goalID: "g1"),
+                       "/wololo Multiples imagenes --node=g1/n1")
+        let issue = GoalNode(id: "n2", issue: "#131")
+        XCTAssertEqual(RunLaunch.command(for: issue, projectRepo: "acme/shop", goalID: "g1"), "/wololo #131 --node=g1/n2")
+    }
+
     func testBareNumberWithoutARepoReadsAsANumber() {
         let node = GoalNode(id: "n1", issue: "7")
         XCTAssertEqual(RunLaunch.command(for: node, projectRepo: nil), "/wololo #7")

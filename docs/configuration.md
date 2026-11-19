@@ -55,6 +55,7 @@ Flags after `/wololo <issue>` change the config for that run only; the run keeps
 | `--debate=`, `--critic=`, `--reviewer=` | `debate.depth`, `debate.critic`, `review.reviewer` |
 | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |
 | `--suite=`, `--e2e=` | `tests.suite_runs`, `tests.e2e_runs` |
+| `--node=<goal>/<node>` | nothing: Wololo Desk adds it when it starts a run from a goal's node, so the node finds the run even without an issue |
 
 ```
 /wololo 4321 --full --review-pr --awake

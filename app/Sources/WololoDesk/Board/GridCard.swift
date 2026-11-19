@@ -57,6 +57,10 @@ struct GridCard: View {
             action: select
         )
         .accessibilityAction(named: "Ir a la terminal", goToTerminal)
+        // The card reads as one button to VoiceOver, so the PR is one of its actions.
+        .accessibilityAction(named: "Abrir el PR") {
+            if let url = prURL(run) { NSWorkspace.shared.open(url) }
+        }
     }
 
     private var border: Color {
@@ -103,11 +107,20 @@ struct GridCard: View {
             Spacer(minLength: 0)
             theme.cardDivider.frame(height: 1)
             HStack(spacing: 8) {
-                Text(gridOrigin(run))
-                    .font(theme.font(.mono, size: 12))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(run.project.branch ?? run.project.display)
+                if let pr = prLabel(run), let url = prURL(run) {
+                    Text(run.project.display)
+                        .font(theme.font(.mono, size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(run.project.branch ?? run.project.display)
+                    PRLink(text: pr, url: url, size: 12)
+                } else {
+                    Text(gridOrigin(run))
+                        .font(theme.font(.mono, size: 12))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(run.project.branch ?? run.project.display)
+                }
                 Spacer(minLength: 0)
                 if let agents = agentsLabel(run, now: now) {
                     Text(agents)
@@ -179,6 +192,24 @@ struct GridCard: View {
             ago(run.updatedAt, now: now, lang: run.lang),
         ]
         return parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+/// "PR #4873" as a link to the PR, in the accent color, like the widget's.
+struct PRLink: View {
+    let text: String
+    let url: URL
+    let size: CGFloat
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        Link(text, destination: url)
+            .font(theme.font(.mono, size: size, weight: .semibold))
+            .foregroundStyle(theme.accent)
+            .lineLimit(1)
+            .fixedSize()
+            .help("Abrir el PR en el navegador: \(url.absoluteString)")
     }
 }
 

@@ -25,7 +25,9 @@ final class AppState {
     var search = ""
     /// A project key, or nil for every project.
     var project: String?
-    var boardMode: BoardMode = .byStatus
+    var boardMode: BoardMode = .byStatus {
+        didSet { if boardMode != oldValue { planningPrefs.boardMode = boardMode } }
+    }
     /// The run whose detail the window shows instead of the board. Another run opens on its timeline.
     var selectedRunID: String? {
         didSet {
@@ -95,6 +97,7 @@ final class AppState {
         // A snapshot starts where `WOLOLO_DESK_OPEN` says, not where the person left the app.
         if persists {
             tab = planningPrefs.tab
+            boardMode = planningPrefs.boardMode
             selectedProjectID = planningPrefs.selectedProjectID
             selectedGoalID = planningPrefs.selectedGoalID
         }

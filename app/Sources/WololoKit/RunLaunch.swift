@@ -12,8 +12,15 @@ public enum RunLaunch {
     /// `/wololo #<n>` for an issue of the project's repo (or a bare number with no repo to tell it apart),
     /// `/wololo <issue url>` for another repo's, and `/wololo <title>. <description>` on one line for a node without
     /// an issue: only the parts written, and no period after a title that already ends one. Text in the issue field
-    /// that names no issue counts as no issue.
-    public static func command(for node: GoalNode, projectRepo: String?) -> String {
+    /// that names no issue counts as no issue. With `goalID` it ends in `--node=<goal>/<node>`, which the run keeps so
+    /// the node finds it even when it has no issue.
+    public static func command(for node: GoalNode, projectRepo: String?, goalID: String? = nil) -> String {
+        let base = baseCommand(for: node, projectRepo: projectRepo)
+        guard let goalID else { return base }
+        return "\(base) --node=\(goalID)/\(node.id)"
+    }
+
+    private static func baseCommand(for node: GoalNode, projectRepo: String?) -> String {
         if let ref = issue(of: node, projectRepo: projectRepo) {
             if let url = ref.url, !ref.isIn(repo: projectRepo) { return "/wololo \(url)" }
             return "/wololo #\(ref.number)"

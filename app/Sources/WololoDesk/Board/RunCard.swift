@@ -87,6 +87,10 @@ struct RunCard: View {
         )
         // The card reads as one button to VoiceOver, so the terminal is one of its actions.
         .accessibilityAction(named: "Ir a la terminal", goToTerminal)
+        // The card reads as one button to VoiceOver, so the PR is one of its actions.
+        .accessibilityAction(named: "Abrir el PR") {
+            if let url = prURL(run) { NSWorkspace.shared.open(url) }
+        }
     }
 
     /// The widget's terminal button: a click on it goes to the terminal, not to the detail.
@@ -177,7 +181,11 @@ struct RunCard: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let pr = prLabel(run) {
-                Text(pr).lineLimit(1).fixedSize()
+                if let url = prURL(run) {
+                    PRLink(text: pr, url: url, size: 13)
+                } else {
+                    Text(pr).lineLimit(1).fixedSize()
+                }
             }
         }
         let right = HStack(spacing: 8) {

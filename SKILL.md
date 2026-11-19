@@ -51,6 +51,7 @@ Take the text after `/wololo`:
    | `--debate=by_risk\|light\|deep`, `--critic=claude\|external`, `--reviewer=claude\|external\|both` | `debate.depth`, `debate.critic`, `review.reviewer` |
    | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |
    | `--suite=local\|ci`, `--e2e=local\|ci\|off` | `tests.suite_runs`, `tests.e2e_runs` |
+   | `--node=<goal>/<node>` | no config: Wololo Desk adds it when it launches the run from a goal's node, to tie the run to that node. Pass it as is |
 2. **Source.**
    - `#123`, `123` or a GitHub issue URL → `github_issue`.
    - The path of an existing file → `file`.

@@ -107,7 +107,7 @@ struct WidgetRow: View {
 
     /// "PR #4873" and where it lives, once the run opened one with a URL.
     private var prLink: (text: String, url: URL)? {
-        guard let pr = run.pr, let url = URL(string: pr.url), url.scheme?.hasPrefix("http") == true else { return nil }
+        guard let url = prURL(run) else { return nil }
         return (prChip(run)?.text ?? "PR", url)
     }
 

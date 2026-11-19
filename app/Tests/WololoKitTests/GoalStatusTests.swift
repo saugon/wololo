@@ -130,6 +130,27 @@ final class GoalStatusTests: XCTestCase {
         XCTAssertNil(RunIndex(runs: [text]).run(for: IssueRef(repo: shop, number: 131)))
     }
 
+    func testNodeWithoutAnIssueFindsTheTextRunLaunchedFromIt() throws {
+        let text = try makeRun("t", ["source": ["kind": "text", "ref": "Multiples imagenes"],
+                                     "project": ["key": "acme__shop"], "node": ["goal": "g", "id": "a"],
+                                     "stage": ["id": "context", "index": 0, "total": 8, "since": 0]])
+        let other = try makeRun("o", ["source": ["kind": "text", "ref": "x"], "node": ["goal": "otro", "id": "a"]])
+        let result = status(goal([GoalNode(id: "a", title: "Multiples imagenes")]), [text, other])
+        XCTAssertEqual(result.status(of: "a")?.runID, "t")
+        XCTAssertEqual(result.status(of: "a")?.state, .doing(stage: "context"))
+        XCTAssertEqual(result.status(of: "a")?.action, .viewRun(id: "t"))
+    }
+
+    func testNewerOfTheLaunchedRunAndTheIssueRunWins() throws {
+        let launched = try makeRun("l", ["source": ["kind": "text", "ref": "x"], "node": ["goal": "g", "id": "a"],
+                                         "created_at": fixtureNow - 100])
+        let old = try issueRun("old", ref: "131", status: "failed", createdAt: fixtureNow - 9000)
+        let node = GoalNode(id: "a", issue: "131")
+        XCTAssertEqual(status(goal([node]), [launched, old]).status(of: "a")?.runID, "l")
+        let newer = try issueRun("new", ref: "131", createdAt: fixtureNow - 10)
+        XCTAssertEqual(status(goal([node]), [launched, newer]).status(of: "a")?.runID, "new")
+    }
+
     func testHashRefMatchesBareNumber() throws {
         let run = try issueRun("r", ref: "#131")
         let s = status(goal([GoalNode(id: "a", issue: "131")]), [run])

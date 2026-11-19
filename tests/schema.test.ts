@@ -95,6 +95,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
       mode: 'checkpoints',
       review: 'pr',
       overrides: { 'gates.plan': 'skip' },
+      node: { goal: 'g1', id: 'n1' },
       risk: 'low',
       lang: 'en',
       slot: 1,
@@ -160,6 +161,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['ci.updated', { state: 'failing' }],
   ['pr.ready', {}],
   ['review.waiting', {}],
+  ['pr.commented', { count: 2, authors: ['codex', 'ana'], latest: '2026-11-19T12:00:00Z' }],
   ['pr.closed', {}],
   ['pr.merged', {}],
   ['github.published', { kind: 'pr_create', url: 'https://github.com/acme/shop/pull/7' }],
@@ -186,6 +188,7 @@ const RUN_FIELDS = {
   adapter_job: true,
   review: true,
   overrides: true,
+  node: true,
   risk: true,
   lang: true,
   slot: true,
@@ -220,6 +223,7 @@ const RUN_FIELDS = {
   pause_requested_at: true,
   paused: true,
   pr_review: true,
+  pr_comments: true,
 } satisfies Record<keyof Run, true>
 
 const STATUSES = {

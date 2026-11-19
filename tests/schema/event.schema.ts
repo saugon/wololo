@@ -72,6 +72,7 @@ export default {
         "review.waiting",
         "pr.merged",
         "pr.closed",
+        "pr.commented",
         "signing.done",
         "signing.deferred",
         "github.published",

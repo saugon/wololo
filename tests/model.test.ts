@@ -23,6 +23,13 @@ test('run.started and stage.entered build the snapshot', async () => {
   expect(run.last_seq).toBe(2)
 })
 
+test('run.started keeps the goal node the run was launched from, and only a whole one', async () => {
+  const start = (node: unknown) => events(['run.started', { title: 'x', source: { kind: 'text', ref: 'x', url: null }, node }, 100])
+  expect(rebuild('r1', start({ goal: 'g1', id: 'n1' })).node).toEqual({ goal: 'g1', id: 'n1' })
+  expect(rebuild('r1', start({ goal: 'g1' })).node).toBeUndefined()
+  expect(rebuild('r1', started).node).toBeUndefined()
+})
+
 test('entering the next stage closes the previous one', async () => {
   const run = rebuild('r1', [...started, ...events(['stage.entered', { stage: 'definition' }, 200]).map(e => ({ ...e, seq: 3 }))])
   expect(run.stages.find(s => s.id === 'context')?.finished_at).toBe(200)

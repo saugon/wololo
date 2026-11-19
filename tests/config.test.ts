@@ -120,6 +120,15 @@ test('the final review is set, given arguments or turned off by flag for one run
   expect(withOverrides(configured, parseFlags(['--no-final-review']).overrides).review.final.skill).toBe('')
 })
 
+test('--node ties the run to the goal node Wololo Desk launched it from, and sets no config', async () => {
+  const flags = parseFlags(['--node=g1/n1', '--full'])
+  expect(flags.errors).toEqual([])
+  expect(flags.node).toEqual({ goal: 'g1', id: 'n1' })
+  expect(flags.overrides).toEqual({})
+  expect(parseFlags(['--node=g1']).errors).toEqual(['--node needs a goal and a node: --node=<goal>/<node>'])
+  expect(parseFlags(['--node=']).errors.length).toBe(1)
+})
+
 test("the help says, next to each launch flag, what the project's config does without it", async () => {
   const { config } = resolve({}, { autonomy: 'full', keep_awake: true, spec: { to_github: false }, pr: { base: 'develop' } })
   const text = helpText('es', config)

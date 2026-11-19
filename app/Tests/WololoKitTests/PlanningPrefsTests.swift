@@ -48,6 +48,18 @@ final class PlanningPrefsTests: XCTestCase {
         XCTAssertNotNil(prefs.viewport(forGoal: "g2"))
     }
 
+    func testRemembersTheBoardView() throws {
+        let prefs = PlanningPrefs(defaults: defaults, persists: true)
+        XCTAssertEqual(prefs.boardMode, .byStatus)
+        prefs.boardMode = .grid
+        let next = PlanningPrefs(defaults: try XCTUnwrap(UserDefaults(suiteName: suiteName)), persists: true)
+        XCTAssertEqual(next.boardMode, .grid)
+        defaults.set("kanban", forKey: PlanningPrefs.Key.boardMode)
+        XCTAssertEqual(next.boardMode, .byStatus)
+        PlanningPrefs(defaults: defaults, persists: false).boardMode = .byStage
+        XCTAssertEqual(defaults.string(forKey: PlanningPrefs.Key.boardMode), "kanban")
+    }
+
     func testDoesNotWriteViewportsThatAreNotFinite() {
         let prefs = PlanningPrefs(defaults: defaults, persists: true)
         let saved = Viewport(offset: CanvasPoint(x: 10, y: 20), zoom: 1)

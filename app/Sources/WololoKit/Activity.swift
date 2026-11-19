@@ -137,6 +137,12 @@ public func prLabel(_ run: Run) -> String? {
     return prNumber(pr).map { "PR #\($0)" } ?? "PR"
 }
 
+/// The PR's page, once the run opened one with a web URL; nil otherwise, so the label shows without a link.
+public func prURL(_ run: Run) -> URL? {
+    guard let pr = run.pr, let url = URL(string: pr.url), url.scheme?.hasPrefix("http") == true else { return nil }
+    return url
+}
+
 /// The PR's state in words: `draft`, `merged` and `closed` as the mod sets them, and any other state (`ready`) as
 /// ready, as before the mod knew merges. `short` is the chip's "listo", where "PR #12 listo" already says what is.
 public func prStateLabel(_ state: String, lang: Lang, short: Bool = false) -> String {

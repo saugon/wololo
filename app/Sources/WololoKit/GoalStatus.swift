@@ -104,10 +104,17 @@ public struct RunIndex: Equatable, Sendable {
     }
 
     private var runs: [Key: Run] = [:]
+    private var byNode: [Run.NodeLink: Run] = [:]
 
-    /// Keeps, for each issue, the run created last: an issue retried after a failure shows the retry, not the
-    /// failure. Only `github_issue` runs count; a text or file run can't be tied to an issue.
+    /// Keeps, for each issue and for each goal node, the run created last: an issue retried after a failure shows
+    /// the retry, not the failure. Only `github_issue` runs count for an issue; any run Wololo Desk launched from a
+    /// node (`--node`) counts for that node, which is how a node without an issue finds its text run.
     public init(runs: [Run]) {
+        for run in runs {
+            guard let node = run.node else { continue }
+            if let current = byNode[node], !Self.isNewer(run, than: current) { continue }
+            byNode[node] = run
+        }
         for run in runs where run.source.kind == "github_issue" {
             guard let issue = runIssue(run), let repo = issue.repo else { continue }
             let key = Key(repo: repo.lowercased(), number: issue.number)
@@ -120,6 +127,11 @@ public struct RunIndex: Equatable, Sendable {
     public func run(for issue: IssueRef) -> Run? {
         guard let repo = issue.repo else { return nil }
         return runs[Key(repo: repo.lowercased(), number: issue.number)]
+    }
+
+    /// The latest run launched from node `node` of goal `goal`.
+    public func run(goal: String, node: String) -> Run? {
+        byNode[Run.NodeLink(goal: goal, id: node)]
     }
 
     private static func isNewer(_ run: Run, than other: Run) -> Bool {
@@ -258,7 +270,7 @@ extension Goal {
     public func status(defaultRepo: String?, runs: RunIndex, now: TimeInterval) -> GoalStatus {
         var base: [String: NodeStatus] = [:]
         for node in steps {
-            base[node.id] = Self.baseStatus(of: node, defaultRepo: defaultRepo, runs: runs, now: now)
+            base[node.id] = Self.baseStatus(of: node, goalID: id, defaultRepo: defaultRepo, runs: runs, now: now)
         }
         let doneIDs = Set(base.filter { $0.value.state.isDone }.map(\.key))
 
@@ -293,10 +305,15 @@ extension Goal {
     }
 
     /// The spec 17 table, rule by rule in its order, with the manual state on top. The run's PR and CI stay
-    /// in the status whatever wins, so the meta line keeps showing them.
-    static func baseStatus(of node: GoalNode, defaultRepo: String?, runs: RunIndex, now: TimeInterval) -> NodeStatus {
+    /// in the status whatever wins, so the meta line keeps showing them. The node's run is the newer of the one
+    /// launched from it and the one working its issue.
+    static func baseStatus(of node: GoalNode, goalID: String, defaultRepo: String?, runs: RunIndex,
+                           now: TimeInterval) -> NodeStatus {
         let issue = node.issue.flatMap { IssueRef.parse($0, defaultRepo: defaultRepo) }
-        guard let run = issue.flatMap(runs.run(for:)) else {
+        let launched = runs.run(goal: goalID, node: node.id)
+        let worked = issue.flatMap(runs.run(for:))
+        let latest = [launched, worked].compactMap { $0 }.max { $0.createdAt < $1.createdAt }
+        guard let run = latest else {
             return NodeStatus(state: manualState(node.manualState, run: nil), isManual: node.manualState != nil,
                               issue: issue)
         }

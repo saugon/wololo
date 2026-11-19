@@ -287,13 +287,21 @@ const VALUED: Record<string, string> = {
 const MODES: Record<string, Mode> = { '--full': 'full', '--checkpoints': 'checkpoints', '--guided': 'guided' }
 const REVIEWS: Record<string, 'local' | 'pr'> = { '--review-pr': 'pr', '--review-local': 'local' }
 
-export const LAUNCH_FLAGS = [...Object.keys(MODES), ...Object.keys(REVIEWS), ...Object.keys(SWITCHES), ...Object.keys(VALUED).map(flag => `${flag}=`)]
+export const LAUNCH_FLAGS = [...Object.keys(MODES), ...Object.keys(REVIEWS), ...Object.keys(SWITCHES), ...Object.keys(VALUED).map(flag => `${flag}=`), '--node=']
 
-export function parseFlags(flags: readonly string[]): { mode?: Mode; review?: 'local' | 'pr'; overrides: Overrides; errors: string[] } {
-  const out: { mode?: Mode; review?: 'local' | 'pr'; overrides: Overrides; errors: string[] } = { overrides: {}, errors: [] }
+export type NodeLink = { goal: string; id: string }
+type ParsedFlags = { mode?: Mode; review?: 'local' | 'pr'; node?: NodeLink; overrides: Overrides; errors: string[] }
+
+export function parseFlags(flags: readonly string[]): ParsedFlags {
+  const out: ParsedFlags = { overrides: {}, errors: [] }
   for (const flag of flags) {
     const [name = '', value] = flag.split(/=(.*)/s)
-    if (MODES[flag]) out.mode = MODES[flag]
+    // --node=<goal>/<node>: the goal node Wololo Desk launched the run from. It ties the run to it, and changes no config.
+    if (name === '--node') {
+      const match = /^([^/\s]+)\/([^/\s]+)$/.exec(value ?? '')
+      if (match) out.node = { goal: match[1]!, id: match[2]! }
+      else out.errors.push('--node needs a goal and a node: --node=<goal>/<node>')
+    } else if (MODES[flag]) out.mode = MODES[flag]
     else if (REVIEWS[flag]) out.review = REVIEWS[flag]
     else if (SWITCHES[flag]) Object.assign(out.overrides, SWITCHES[flag])
     else if (VALUED[name] && value) out.overrides[VALUED[name]] = value

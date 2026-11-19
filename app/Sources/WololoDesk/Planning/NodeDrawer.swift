@@ -437,7 +437,8 @@ private struct ActionButton: View {
 @MainActor
 enum NodeRun {
     static func command(for node: GoalNode, goal: Goal, state: AppState) -> String {
-        RunLaunch.command(for: node, projectRepo: state.project(id: goal.projectID).flatMap(defaultRepo(for:)))
+        RunLaunch.command(for: node, projectRepo: state.project(id: goal.projectID).flatMap(defaultRepo(for:)),
+                          goalID: goal.id)
     }
 
     static func folder(for node: GoalNode, goal: Goal, state: AppState) -> LaunchFolder {

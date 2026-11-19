@@ -95,6 +95,7 @@ export const EVENT_TYPES = [
   'review.waiting',
   'pr.merged',
   'pr.closed',
+  'pr.commented',
   'signing.deferred',
   'signing.done',
   'github.published',
@@ -280,6 +281,8 @@ export type Run = {
   review?: 'local' | 'pr'
   // Config paths this run's launch flags set, over the project's config.
   overrides?: Record<string, unknown>
+  // The goal node Wololo Desk launched the run from (--node), so a run without an issue still finds its node.
+  node?: { goal: string; id: string }
   risk: Risk
   lang: Lang
   slot: number
@@ -356,6 +359,8 @@ export type Run = {
   paused?: { note: string; since: number } | null
   // Since when the PR waits on its reviewers: the run stays open until it merges or the person ends it.
   pr_review?: { since: number } | null
+  // The PR's comments the run was last told about: up to which one (GitHub's time, ISO), how many and by whom.
+  pr_comments?: { seen: string; count: number; authors: string[]; at: number } | null
 }
 
 export type Live = {
@@ -464,6 +469,8 @@ export function apply(run: Run, ev: RunEvent): Run {
       r.mode = (d.mode as Mode) ?? r.mode
       if (d.review === 'pr' || d.review === 'local') r.review = d.review
       if (d.overrides && typeof d.overrides === 'object' && Object.keys(d.overrides).length > 0) r.overrides = d.overrides as Record<string, unknown>
+      const node = d.node as { goal?: unknown; id?: unknown } | undefined
+      if (node && typeof node.goal === 'string' && node.goal && typeof node.id === 'string' && node.id) r.node = { goal: node.goal, id: node.id }
       r.risk = (d.risk as Risk) ?? r.risk
       r.lang = (d.lang as Lang) ?? r.lang
       r.slot = num(d.slot)
@@ -781,6 +788,16 @@ export function apply(run: Run, ev: RunEvent): Run {
       }
       break
     }
+    case 'pr.commented':
+      if (typeof d.latest === 'string' && d.latest) {
+        r.pr_comments = {
+          seen: d.latest,
+          count: num(d.count),
+          authors: Array.isArray(d.authors) ? d.authors.filter((a): a is string => typeof a === 'string') : [],
+          at: ev.ts,
+        }
+      }
+      break
     case 'screenshot.saved':
       r.screenshots.push({ file: str(d.file), caption: str(d.caption) })
       break
@@ -1218,6 +1235,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'final_review',
   'pr.opened',
   'pr.ready',
+  'pr.commented',
   'ci.updated',
   'run.finished',
   'stalled',
@@ -1246,6 +1264,8 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `CI: ${String(d.state)}`
         case 'pr.opened':
           return `PR: ${String(d.url)}`
+        case 'pr.commented':
+          return `PR: ${String(d.count)} comentario(s) nuevo(s) de ${Array.isArray(d.authors) ? d.authors.join(', ') : '?'}`
         case 'base.changed':
           return `Base: ${String(d.from ?? '?')} → ${String(d.to)}`
         case 'github.published':

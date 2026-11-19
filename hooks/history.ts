@@ -150,6 +150,10 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('✓', `PR ${es ? 'abierto' : 'opened'}: ${str(d.url)}`)
     case 'pr.ready':
       return one('✓', es ? 'PR listo para revisión' : 'PR ready for review')
+    case 'pr.commented': {
+      const by = Array.isArray(d.authors) ? d.authors.map(String).join(', ') : ''
+      return one('·', es ? `Comentarios nuevos en el PR: ${str(d.count)}${by ? ` de ${by}` : ''}` : `New comments on the PR: ${str(d.count)}${by ? ` by ${by}` : ''}`)
+    }
     case 'adapter.ran':
       return one(d.ok === false ? '✗' : '✓', `${es ? 'Adaptador' : 'Adapter'} ${str(d.point)}: ${str(d.state) || str(d.message) || (d.ok === false ? 'error' : 'ok')}`)
     case 'adapter.started':

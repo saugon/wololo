@@ -72,3 +72,32 @@ export function isWololoRepo(projectKey: string): boolean {
 export function urlIn(text: string): string | null {
   return /https:\/\/github\.com\/\S+\/(?:issues|pull)\/\d+(?:#\S+)?/.exec(text)?.[0] ?? null
 }
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+export type PrComment = { author: string; at: string }
+
+// The PR's comments, reviews with a word or a verdict, and the comments on its lines, from whoever is not the gh login.
+export function prComments(view: unknown, lines: string, viewer: string | null): PrComment[] {
+  const out: PrComment[] = []
+  // GitHub names a bot `codex[bot]` on a line comment and `codex` elsewhere: one name for both.
+  const name = (login: string) => login.replace(/\[bot\]$/, '')
+  const login = (author: unknown) => (isObject(author) && typeof author.login === 'string' ? name(author.login) : '')
+  if (isObject(view)) {
+    for (const c of Array.isArray(view.comments) ? view.comments : []) {
+      if (isObject(c) && typeof c.createdAt === 'string') out.push({ author: login(c.author), at: c.createdAt })
+    }
+    for (const r of Array.isArray(view.reviews) ? view.reviews : []) {
+      if (!isObject(r) || typeof r.submittedAt !== 'string') continue
+      const said = typeof r.body === 'string' && r.body.trim() !== ''
+      if (said || r.state === 'CHANGES_REQUESTED') out.push({ author: login(r.author), at: r.submittedAt })
+    }
+  }
+  for (const line of lines.split('\n')) {
+    const [author = '', at = ''] = line.split('\t')
+    if (author && /^\d{4}-\d\d-\d\dT/.test(at)) out.push({ author: name(author), at })
+  }
+  return out.filter(c => c.author && c.author !== (viewer && name(viewer)))
+}

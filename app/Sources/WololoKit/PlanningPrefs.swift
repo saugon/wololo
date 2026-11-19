@@ -6,12 +6,13 @@ public enum PlanningTab: String, Equatable, Sendable, CaseIterable {
     case planning
 }
 
-/// Where the person left the planning view, kept in `UserDefaults` across launches: the tab, the chosen project and
-/// goal, and how far each goal's canvas was zoomed and panned. Reads tolerate anything another version (or a hand
+/// Where the person left the window, kept in `UserDefaults` across launches: the tab, how the board groups its runs,
+/// the chosen project and goal, and how far each goal's canvas was zoomed and panned. Reads tolerate anything another version (or a hand
 /// edit) left under these keys; with `persists: false` (snapshots) nothing is written.
 public struct PlanningPrefs {
     public enum Key {
         public static let tab = "planning.tab"
+        public static let boardMode = "board.mode"
         public static let projectID = "planning.selectedProjectID"
         public static let goalID = "planning.selectedGoalID"
         /// A dictionary from goal id to the JSON of its `Viewport`.
@@ -30,6 +31,12 @@ public struct PlanningPrefs {
     public var tab: PlanningTab {
         get { (defaults.object(forKey: Key.tab) as? String).flatMap(PlanningTab.init(rawValue:)) ?? .operation }
         nonmutating set { write(newValue.rawValue, forKey: Key.tab) }
+    }
+
+    /// Por estado unless another view was saved.
+    public var boardMode: BoardMode {
+        get { (defaults.object(forKey: Key.boardMode) as? String).flatMap(BoardMode.init(rawValue:)) ?? .byStatus }
+        nonmutating set { write(newValue.rawValue, forKey: Key.boardMode) }
     }
 
     public var selectedProjectID: String? {

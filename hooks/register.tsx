@@ -57,7 +57,7 @@ import {
   liveTasks,
 } from './model'
 import { connections, maxConnections } from './postgres'
-import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, urlIn, wololoMention } from './github'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, prComments, urlIn, wololoMention } from './github'
 import {
   type PolicyContext,
   commandRules,
@@ -1405,6 +1405,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
     mode,
     review,
     overrides: flags.overrides,
+    ...(flags.node ? { node: flags.node } : {}),
     risk,
     lang: config.languages.chat,
     slot,
@@ -1850,23 +1851,29 @@ async function finishedJob($: Engine, job: AdapterJob): Promise<Ran | null> {
 // cancel it, reopened takes it back to review. Only the session that holds the run asks; a closed session leaves it in
 // review until /wololo resume.
 async function checkPr($: Engine) {
-  if (!run || run.outcome || !run.pr_review || !run.pr?.number || run.status !== 'in_review') return
+  if (!run || run.outcome || !run.pr?.number || run.paused) return
+  const inReview = !!run.pr_review && run.status === 'in_review'
+  const isOpen = run.pr.state === 'draft' || run.pr.state === 'ready'
+  if (!inReview && !isOpen) return
   const now = await nowSeconds($)
   if (prCheckedAt === 0) prCheckedAt = now
   if (now - prCheckedAt < PR_CHECK_SECONDS) return
   prCheckedAt = now
   const n = run.pr.number
   const ran = await $.process
-    .run(['gh', 'pr', 'view', String(n), '--json', 'state'], { cwd: workdir(), timeoutMs: 30_000 })
+    .run(['gh', 'pr', 'view', String(n), '--json', 'state,comments,reviews'], { cwd: workdir(), timeoutMs: 30_000 })
     .catch(() => undefined)
   if (!ran || ran.exitCode !== 0 || !run || run.outcome) return
   let state = ''
+  let parsed: unknown
   try {
-    const parsed: unknown = JSON.parse(ran.stdout)
+    parsed = JSON.parse(ran.stdout)
     state = isObject(parsed) && typeof parsed.state === 'string' ? parsed.state : ''
   } catch {
     return
   }
+  if (state === 'OPEN' && isOpen) await checkPrComments($, n, parsed)
+  if (!inReview || !run || run.outcome) return
   const es = run.lang === 'es'
   if (state === 'MERGED') {
     await emit($, 'pr.merged', {})
@@ -1887,6 +1894,44 @@ async function checkPr($: Engine) {
   void $.prompt
     .submit({
       text: `wololo: PR #${n} of run ${run.id} was closed without merging. Ask the person with AskUserQuestion (header "PR cerrado") whether to cancel the run, and record run.finished {outcome: "cancelled", summary} with ${TOOL_PREFIX}event if they say so; otherwise the run stays in review.`,
+    })
+    .catch(() => undefined)
+}
+
+// Who the gh login is, so the run's own replies on its PR are not taken for comments to answer. Asked once per session.
+let ghLogin: string | null | undefined
+
+async function viewerLogin($: Engine): Promise<string | null> {
+  if (ghLogin !== undefined) return ghLogin
+  const ran = await $.process.run(['gh', 'api', 'user', '--jq', '.login'], { cwd: workdir(), timeoutMs: 30_000 }).catch(() => undefined)
+  const login = ran && ran.exitCode === 0 ? ran.stdout.trim() : ''
+  ghLogin = /^[\w.-]+(\[bot\])?$/.test(login) ? login : null
+  return ghLogin
+}
+
+// New comments on the run's PR go to the session as soon as they are seen, while CI runs too: the run answers them
+// as stages/06-pr.md says. They are recorded only once the session can take them, so a busy turn gets them later.
+async function checkPrComments($: Engine, n: number, view: unknown) {
+  if (!run) return
+  const inline = await $.process
+    .run(['gh', 'api', `repos/{owner}/{repo}/pulls/${n}/comments`, '--paginate', '--jq', '.[] | [.user.login, .created_at] | @tsv'], {
+      cwd: workdir(),
+      timeoutMs: 30_000,
+    })
+    .catch(() => undefined)
+  const viewer = await viewerLogin($)
+  if (!run) return
+  const seen = run.pr_comments?.seen ?? ''
+  const fresh = prComments(view, inline && inline.exitCode === 0 ? inline.stdout : '', viewer).filter(c => c.at > seen)
+  if (fresh.length === 0) return
+  if (live.isTurnRunning || live.question || live.permission || !(await isOwner($))) return
+  const latest = fresh.map(c => c.at).sort().at(-1) ?? ''
+  const authors = [...new Set(fresh.map(c => c.author))]
+  if (!(await emit($, 'pr.commented', { count: fresh.length, authors, latest }))) return
+  const since = seen ? ` posted after ${seen}` : ''
+  void $.prompt
+    .submit({
+      text: `wololo: PR #${n} of run ${run.id} has ${fresh.length} new comment(s)${since}, by ${authors.join(', ')}. Read them (\`gh pr view ${n} --comments\` and \`gh api repos/{owner}/{repo}/pulls/${n}/comments\`) and handle them as "Comments on the PR" in stages/06-pr.md says, without waiting for CI to finish.`,
     })
     .catch(() => undefined)
 }
