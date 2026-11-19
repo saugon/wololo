@@ -115,7 +115,7 @@ final class BoardTests: XCTestCase {
         XCTAssertEqual(ago(orphan.updatedAt, now: now, lang: orphan.lang), "hace 2m")
     }
 
-    func testGridShowsTheActiveRunsInTheWidgetsOrder() throws {
+    func testGridShowsTheActiveRunsInTheWidgetsOrderAndTheRecentlyFinishedUnder() throws {
         let runs = [
             try makeRun("works", status: "running", updatedAt: now - 60),
             try makeRun("asks", status: "waiting_user", updatedAt: now - 30),
@@ -124,8 +124,9 @@ final class BoardTests: XCTestCase {
         ]
         let board = Board(runs: runs, now: now, mode: .grid)
 
-        XCTAssertEqual(board.columns.count, 1)
+        XCTAssertEqual(board.columns.map(\.id), ["active", "finished"])
         XCTAssertEqual(board.columns[0].runs.map(\.id), ["asks", "works"])
+        XCTAssertEqual(board.columns[1].runs.map(\.id), ["fresh"], "a run finished in the last 24 h stays in sight")
         XCTAssertEqual(board.recentlyFinished.map(\.id), ["fresh"])
         XCTAssertEqual(board.onHold.map(\.id), ["paused"])
     }

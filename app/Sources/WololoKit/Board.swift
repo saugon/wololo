@@ -77,7 +77,8 @@ public struct Board: Equatable, Sendable {
     public let onHold: [Run]
     /// Finished runs older than the finished window, and cancelled ones at once, newest first. Kept in both modes.
     public let archive: [Run]
-    /// Runs finished in the last 24 h: the by-status board's last column, hidden by the other modes.
+    /// Runs finished in the last 24 h: the by-status board's last column and the grid's section under the active
+    /// runs; the by-stage board hides them.
     public let recentlyFinished: [Run]
 
     public var onHoldCount: Int { onHold.count }
@@ -108,9 +109,14 @@ public struct Board: Equatable, Sendable {
                 return BoardColumn(id: stage.id, es: stage.label(.es), en: stage.label(.en), runs: byStart(members))
             }
         case .grid:
-            // One column, in the widget's order: what waits on the person first, then what works, then what is in review.
+            // The active runs in the widget's order: what waits on the person first, then what works, then what is in
+            // review. Under them, the runs finished in the last 24 h, as the by-status board's last column.
             let active = runs.filter { ![.finished, .onHold].contains(StatusGroup($0, now: now)) }
-            columns = [BoardColumn(id: "active", es: "Activos", en: "Active", runs: widgetRuns(active, now: now))]
+            columns = [
+                BoardColumn(id: "active", es: "Activos", en: "Active", runs: widgetRuns(active, now: now)),
+                BoardColumn(id: StatusGroup.finished.rawValue, es: StatusGroup.finished.label(.es),
+                            en: StatusGroup.finished.label(.en), runs: recentlyFinished),
+            ]
         }
     }
 }

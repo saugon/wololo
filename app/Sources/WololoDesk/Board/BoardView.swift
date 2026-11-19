@@ -34,6 +34,7 @@ struct BoardView: View {
     /// The active runs as large cards, as many per row as fit at `GridCard.minWidth`.
     private var grid: some View {
         let runs = board.columns.first?.runs ?? []
+        let finished = board.columns.dropFirst().first?.runs ?? []
         return ScrollView(.vertical) {
             if runs.isEmpty {
                 Text(theme.spec.texts.empty)
@@ -47,18 +48,43 @@ struct BoardView: View {
                     )
                     .padding(Self.cardMargin)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)], spacing: 16) {
-                ForEach(runs, id: \.id) { run in
-                    GridCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
-                        goToTerminal(run)
-                    }
+            gridCards(runs)
+                .padding(.top, 20)
+                .padding(.bottom, finished.isEmpty ? 28 : 8)
+            if !finished.isEmpty {
+                let title = theme.spec.columnText(StatusGroup.finished.rawValue, fallback: StatusGroup.finished.label(.es)).title
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(theme.font(.display, size: 15, weight: .bold))
+                        .tracking(theme.tracking(.display, size: 15))
+                        .foregroundStyle(theme.columnTitle(.finished))
+                    Text("· \(finished.count)")
+                        .font(theme.font(.body, size: 15, weight: .bold).monospacedDigit())
+                        .foregroundStyle(theme.muted)
+                    Spacer(minLength: 0)
                 }
+                .padding(.horizontal, Self.cardMargin)
+                .padding(.top, 12)
+                .help("Terminados en las últimas 24 h")
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+                gridCards(finished)
+                    .padding(.top, 12)
+                    .padding(.bottom, 28)
             }
-            .padding(.horizontal, Self.cardMargin)
-            .padding(.top, 20)
-            .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func gridCards(_ runs: [Run]) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)], spacing: 16) {
+            ForEach(runs, id: \.id) { run in
+                GridCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
+                    goToTerminal(run)
+                }
+            }
+        }
+        .padding(.horizontal, Self.cardMargin)
     }
 
     private var columns: some View {
