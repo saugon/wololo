@@ -107,7 +107,7 @@ public struct RunIndex: Equatable, Sendable {
     private var byNode: [Run.NodeLink: Run] = [:]
 
     /// Keeps, for each issue and for each goal node, the run created last: an issue retried after a failure shows
-    /// the retry, not the failure. Only `github_issue` runs count for an issue; any run Wololo Desk launched from a
+    /// the retry, not the failure. Only `github_issue` runs count for an issue; any run Wololo launched from a
     /// node (`--node`) counts for that node, which is how a node without an issue finds its text run.
     public init(runs: [Run]) {
         for run in runs {

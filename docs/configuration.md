@@ -29,7 +29,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `review.approval` | where the change is approved: `local`, at Aprobar PR in the session, or `pr`, on the PR once CI is green (Aprobar PR passes by itself). `--review-pr` / `--review-local` override it for one run |
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
-| `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes |
+| `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes (`budgets.run_minutes: 0` is no limit) |
 | `mirror.list`, `mirror.run` | show in `/wololo status` the runs another tool drives without a session: the command that lists them (`data.runs`) and the one that says where one stands (`{run}`), both as the JSON protocol of [adapters](adapters.md) |
 | `adapters.<point>` | hand a point of the run (`definition`, `gate_a`, `plan`, `item`, `pr`, `poll`) to another tool; see [adapters](adapters.md) |
 | `keep_awake` | while a run is active, keep the machine from sleeping (`caffeinate`, macOS), in five-minute leases that lapse on their own when the run or the session ends; for a run left unattended in `full` |
@@ -53,11 +53,12 @@ Flags after `/wololo <issue>` change the config for that run only; the run keeps
 | `--no-pr`, `--draft`, `--ready`, `--no-wait-ci` | `pr.enabled`, `pr.draft`, `pr.wait_ci` |
 | `--no-screenshots` | `screenshots.enabled` |
 | `--mockup`, `--no-mockup` | `mockup.when`: `always` or `never` |
+| `--no-time-limit` | `budgets.run_minutes` to `0`: no limit on the run's minutes |
 | `--github-spec`, `--no-github-spec` | `spec.to_github` |
 | `--debate=`, `--critic=`, `--reviewer=` | `debate.depth`, `debate.critic`, `review.reviewer` |
 | `--final-review=<skill>`, `--final-review-args=<args>`, `--no-final-review` | `review.final.skill`, `review.final.args` |
 | `--suite=`, `--e2e=` | `tests.suite_runs`, `tests.e2e_runs` |
-| `--node=<goal>/<node>` | nothing: Wololo Desk adds it when it starts a run from a goal's node, so the node finds the run even without an issue |
+| `--node=<goal>/<node>` | nothing: Wololo adds it when it starts a run from a goal's node, so the node finds the run even without an issue |
 
 ```
 /wololo 4321 --full --review-pr --awake

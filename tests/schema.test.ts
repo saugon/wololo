@@ -161,6 +161,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['ci.updated', { state: 'failing' }],
   ['pr.ready', {}],
   ['review.waiting', {}],
+  ['pr.merge_state', { conflicts: true, queue: { position: 2, state: 'QUEUED' } }],
   ['pr.commented', { count: 2, authors: ['codex', 'ana'], latest: '2026-11-19T12:00:00Z' }],
   ['pr.closed', {}],
   ['pr.merged', {}],

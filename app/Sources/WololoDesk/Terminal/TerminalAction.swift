@@ -124,7 +124,7 @@ enum TerminalAction {
     }
 
     static func permissionText(_ terminal: String) -> String {
-        "Wololo Desk necesita permiso de Automatización para \(terminal): Ajustes del Sistema › Privacidad y seguridad › Automatización"
+        "Wololo necesita permiso de Automatización para \(terminal): Ajustes del Sistema › Privacidad y seguridad › Automatización"
     }
 
     /// The first time a terminal refuses, an alert explains it and offers the settings pane; returns false when it
@@ -134,9 +134,9 @@ enum TerminalAction {
         explained.insert(terminal)
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "Wololo Desk no puede traer \(terminal) al frente"
+        alert.messageText = "Wololo no puede traer \(terminal) al frente"
         alert.informativeText = """
-        \(permissionText(terminal)), y activá \(terminal) debajo de Wololo Desk.
+        \(permissionText(terminal)), y activá \(terminal) debajo de Wololo.
 
         Mientras tanto se abre una terminal nueva en la carpeta del run.
         """

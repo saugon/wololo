@@ -14,6 +14,7 @@ public func activityLine(_ run: Run, now: TimeInterval, prefixed: Bool = true) -
     // In review the plan is done, so the last item would be stale; the run waits on its reviewers.
     if status == .inReview {
         if let text = run.doing?.text, !text.isEmpty { return text }
+        if let badge = prMergeBadge(run) { return badge.title }
         return es ? "Esperando revisión del PR" : "Waiting for the PR's review"
     }
     // A bare dot in the widget does not tell a permission request, a block or a pause apart, so the line says it.
@@ -129,6 +130,36 @@ public func prChip(_ run: Run) -> MetaChip? {
     case nil: break
     }
     return MetaChip(text: text, title: title)
+}
+
+/// What stands between the PR and its merge, when the mod saw it: conflicts with its base, or its place in the merge
+/// queue. `text` is the card's short badge, `title` the sentence; `isProblem` paints it as an error.
+public struct MergeBadge: Equatable, Sendable {
+    public let text: String
+    public let title: String
+    public let isProblem: Bool
+}
+
+public func prMergeBadge(_ run: Run) -> MergeBadge? {
+    guard let pr = run.pr, pr.state != "merged", pr.state != "closed" else { return nil }
+    let es = run.lang == .es
+    if pr.conflicts == true {
+        return MergeBadge(text: es ? "conflictos" : "conflicts",
+                          title: es ? "Tiene conflictos con la base" : "Conflicts with its base", isProblem: true)
+    }
+    guard let queue = pr.queue else { return nil }
+    let at = queue.position.map { es ? " · \($0).º" : " · #\($0)" } ?? ""
+    let how: String
+    switch queue.state {
+    case "AWAITING_CHECKS": how = es ? ", esperando los checks" : ", awaiting checks"
+    case "UNMERGEABLE": how = es ? ", no se puede mergear" : ", cannot merge"
+    case "LOCKED": how = es ? ", bloqueada" : ", locked"
+    default: how = ""
+    }
+    let place = queue.position.map { es ? " (\($0).º)" : " (#\($0))" } ?? ""
+    return MergeBadge(text: (es ? "en cola" : "queued") + at,
+                      title: (es ? "En la merge queue" : "In the merge queue") + place + how,
+                      isProblem: queue.state == "UNMERGEABLE")
 }
 
 /// The card's "PR #120", or "PR" when its number is not known.

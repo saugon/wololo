@@ -4,7 +4,7 @@ public struct Run: Equatable, Sendable {
     public var id: String
     public var title: String
     public var source: Source
-    /// The goal node Wololo Desk launched the run from (`--node`); nil for a run started by hand.
+    /// The goal node Wololo launched the run from (`--node`); nil for a run started by hand.
     public var node: NodeLink?
     /// The UI mockup the mockup stage made, when it made one.
     public var mockup: Mockup?
@@ -371,6 +371,10 @@ extension Run {
         public var number: Int?
         public var state: String
         public var ci: String?
+        /// Whether it conflicts with its base; nil until the mod first looked.
+        public var conflicts: Bool?
+        /// Its place in the merge queue while it is in one.
+        public var queue: MergeQueue?
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: AnyKey.self)
@@ -378,6 +382,20 @@ extension Run {
             number = c.optional("number")
             state = c.value("state", or: "draft")
             ci = c.optional("ci")
+            conflicts = c.optional("conflicts")
+            queue = c.optional("queue")
+        }
+    }
+
+    public struct MergeQueue: Equatable, Sendable, Decodable {
+        public var position: Int?
+        /// GitHub's state: QUEUED, AWAITING_CHECKS, MERGEABLE, UNMERGEABLE, LOCKED.
+        public var state: String
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
+            position = c.optional("position")
+            state = c.value("state", or: "QUEUED")
         }
     }
 

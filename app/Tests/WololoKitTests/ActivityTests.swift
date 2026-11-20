@@ -243,7 +243,7 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(sourceLabel(try makeRun("r", ["source": ["kind": "github_issue", "ref": "#4312"]])), "#4312")
         XCTAssertEqual(sourceLabel(try makeRun("r", ["source": ["kind": "github_issue", "ref": "87"]])), "#87")
         XCTAssertEqual(sourceLabel(try makeRun("r", ["source": ["kind": "file", "ref": "docs/plan-reporte.md"]])), "plan-reporte.md")
-        XCTAssertEqual(sourceLabel(try makeRun("r", ["source": ["kind": "text", "ref": "Wololo Desk: una app"]])), "texto")
+        XCTAssertEqual(sourceLabel(try makeRun("r", ["source": ["kind": "text", "ref": "Wololo: una app"]])), "texto")
         XCTAssertEqual(sourceLabel(try makeRun("r", ["lang": "en", "source": ["kind": "text", "ref": ""]])), "text")
     }
 }

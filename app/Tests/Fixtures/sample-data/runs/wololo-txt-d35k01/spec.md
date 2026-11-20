@@ -1,4 +1,4 @@
-# Wololo Desk: app para ver el estado de los runs
+# Wololo: app para ver el estado de los runs
 
 ## Resultado
 Quien usa el tablero puede **wololo Desk: app para ver el estado de los runs** sin recargar la página.

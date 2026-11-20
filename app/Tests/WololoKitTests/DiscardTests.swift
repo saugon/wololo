@@ -87,12 +87,12 @@ final class DiscardTests: XCTestCase {
         XCTAssertEqual(event["type"] as? String, "run.finished")
         let data = try XCTUnwrap(event["data"] as? [String: Any])
         XCTAssertEqual(data["outcome"] as? String, "done")
-        XCTAssertEqual(data["summary"] as? String, "Marcado como terminado desde Wololo Desk.")
+        XCTAssertEqual(data["summary"] as? String, "Marcado como terminado desde Wololo.")
 
         let run = try Run.decode(from: Data(contentsOf: store.runFile("r1")))
         XCTAssertEqual(run.status, .done)
         XCTAssertEqual(run.outcome, "done")
-        XCTAssertEqual(run.summary, "Marcado como terminado desde Wololo Desk.")
+        XCTAssertEqual(run.summary, "Marcado como terminado desde Wololo.")
         XCTAssertEqual(try XCTUnwrap(run.finishedAt), now, accuracy: 0.001)
         XCTAssertNotNil(run.stages.first?.finishedAt)
         XCTAssertThrowsError(try RunDiscard.markDone(runDir: dir, now: now)) { error in

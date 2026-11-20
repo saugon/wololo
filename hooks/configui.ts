@@ -301,7 +301,7 @@ export const SECTIONS: Section[] = [
     fields: [
       { kind: 'number', path: 'budgets.design_reversals', label: t('Rediseños por ítem', 'Redesigns per item') },
       { kind: 'number', path: 'budgets.ci_fix_attempts', label: t('Arreglos de CI', 'CI fixes') },
-      { kind: 'number', path: 'budgets.run_minutes', label: t('Minutos por run', 'Minutes per run') },
+      { kind: 'number', path: 'budgets.run_minutes', label: t('Minutos por run', 'Minutes per run'), help: t('0 es sin límite', '0 is no limit') },
     ],
   },
 ]

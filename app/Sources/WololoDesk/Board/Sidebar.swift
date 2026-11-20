@@ -60,7 +60,7 @@ struct Sidebar: View {
                     .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
                     .frame(width: 22, height: 22)
             }
-            Text("Wololo Desk")
+            Text("Wololo")
                 .font(theme.font(.display, size: 17, weight: .bold))
                 .tracking(-0.17 + theme.tracking(.display, size: 17))
                 .foregroundStyle(theme.title)

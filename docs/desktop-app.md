@@ -1,20 +1,20 @@
-# Wololo Desk
+# Wololo
 
-**Wololo Desk** (`app/`) shows the runs of every terminal and project in one place:
+**Wololo** (`app/`) shows the runs of every terminal and project in one place:
 
 - **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
 - **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first. ⌘⇧L shows or hides it from any app.
-- **Window**: a sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card, with search.
+- **Window**: opens when the app starts. A sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card, with search.
 - **Detail**: a run's stages, what it is doing or waiting on, items, agents, PR and CI, timeline, documents, screenshots and cost. **Ir a la terminal** (also on each widget row) brings the iTerm2 or Ghostty tab of its session to the front, or opens one in its directory and copies `/wololo resume <run>`.
 
 It only reads the store, except **Descartar** in a run's detail: for a run no session holds anymore (paused or orphaned, no heartbeat for 90 s), it records `run.finished {outcome: cancelled}` and its snapshot, as the mod's cancel would, after a confirmation. The worktree, branch and files stay in place. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.
 
 ```sh
-make app       # app/scripts/build-app.sh: app/dist/Wololo Desk.app, signed ad hoc
+make app       # app/scripts/build-app.sh: app/dist/Wololo.app, signed ad hoc
 make install   # app/scripts/build-app.sh --install: and copies it to ~/Applications
 ```
 
-`--install` replaces an existing `~/Applications/Wololo Desk.app` only if it is a Wololo Desk build. The first **Ir a la terminal** asks for the Automation permission for each terminal; if it was denied, allow it in System Settings → Privacy & Security → Automation. Requires macOS 14 and Swift 5.9 or later.
+`--install` replaces an existing `~/Applications/Wololo.app` only if it is a Wololo build. The first **Ir a la terminal** asks for the Automation permission for each terminal; if it was denied, allow it in System Settings → Privacy & Security → Automation. Requires macOS 14 and Swift 5.9 or later.
 
 To develop:
 
@@ -25,13 +25,13 @@ WOLOLO_DATA_DIR=/tmp/wololo-sample .build/debug/WololoDesk
 WOLOLO_DATA_DIR=/tmp/wololo-sample WOLOLO_DESK_GOALS_DIR=/tmp/wololo-sample-goals .build/debug/WololoDesk
 ```
 
-The goals are kept in `~/Library/Application Support/Wololo Desk/Goals`, or in `WOLOLO_DESK_GOALS_DIR` when it is set. On the sample data (a data directory with the `.wololo-sample` marker) the sample goal is shown but nothing is written to your own goals, so edits are not kept; to try edits on it, point `WOLOLO_DESK_GOALS_DIR` at a throwaway folder, as in the last line.
+The goals are kept in `~/Library/Application Support/Wololo Desk/Goals` (the folder keeps the app's former name), or in `WOLOLO_DESK_GOALS_DIR` when it is set. On the sample data (a data directory with the `.wololo-sample` marker) the sample goal is shown but nothing is written to your own goals, so edits are not kept; to try edits on it, point `WOLOLO_DESK_GOALS_DIR` at a throwaway folder, as in the last line.
 
 To check the UI without screen recording, `WOLOLO_DESK_SNAPSHOT=<png>` draws what `WOLOLO_DESK_OPEN` asks for (`window`, `widget`, `settings`, `run:<id>[:timeline|documents|screenshots|cost]`, `planning`, `new-project` (Planificación with the "Nuevo proyecto" sheet) or `goal:<id>`, with `WOLOLO_DESK_NODE=<node id>` selecting a node on that goal) and quits, without writing settings or goals and without reading your goals (only those in `WOLOLO_DESK_GOALS_DIR`, if set, and the data directory's copy); `WOLOLO_DESK_SEARCH`, `WOLOLO_DESK_PROJECT` and `WOLOLO_DESK_COLUMNS` (`status`, `stage` or `grid`) set the board's filters, and `WOLOLO_DESK_THEME` and `WOLOLO_DESK_THEMES_DIR` the theme (see **Themes**). The sample runs' times are relative to when `sample-data.sh` ran, so run it again right before a snapshot.
 
 ## Themes
 
-A theme changes how Wololo Desk looks (colors, fonts, textures, frames, separators, icons, the shape of the progress bar) and the names of the columns and sidebar sections. It never changes the layout: positions, sizes and which sections exist stay the same in every theme. It is picked in **Ajustes → Apariencia → Tema**, applies at once to the window, the detail, the widget, Settings and the toasts, and is kept for the next launch; a saved theme that is gone or broken by then gives Actual.
+A theme changes how Wololo looks (colors, fonts, textures, frames, separators, icons, the shape of the progress bar) and the names of the columns and sidebar sections. It never changes the layout: positions, sizes and which sections exist stay the same in every theme. It is picked in **Ajustes → Apariencia → Tema**, applies at once to the window, the detail, the widget, Settings and the toasts, and is kept for the next launch; a saved theme that is gone or broken by then gives Actual.
 
 - **Actual**: the look from before themes, with system fonts, a continuous progress bar and round dots. The default.
 - **AoE**: the Age of Empires look: a dark texture, a double rod between the sidebar and the board, a braided band, Cinzel headings, a bar of 8 gold blocks, hoods and gems, and period names (Resisting, Converting, Idle, Unit ready; Buildings).

@@ -127,6 +127,8 @@ type Engine = EngineInterface
 
 const TOOL_PREFIX = 'mcp__wololo__'
 const PANE = 'wololo'
+// The panes paint nothing under their body, so the terminal's own background shows through instead of the surface's grey.
+const PANE_BACKGROUND = 'transparent'
 const TICK_MS = 1_000
 // keep_awake holds the machine up in five-minute leases, renewed every four while a run is active: the lease ends on its own when the run or
 // the session does.
@@ -747,7 +749,7 @@ async function openInitEarly($: Engine, args: string) {
     chosen: [],
     cursor: 0,
   }))
-  await $.ui.open({ id: CONFIG_PANE, title: 'wololo · init', holdToasts: true, rows: 32 }).catch(() => undefined)
+  await $.ui.open({ id: CONFIG_PANE, title: 'wololo · init', holdToasts: true, rows: 32, backgroundColor: PANE_BACKGROUND }).catch(() => undefined)
 }
 
 function initKey(question: InitQuestion, effective: unknown): string {
@@ -1420,7 +1422,7 @@ async function startRun($: Engine, input: Record<string, unknown>): Promise<stri
   run.last_user_at = ts
   await flush($)
   await writePointer($)
-  if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${run.id}` }).catch(() => undefined)
+  if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${run.id}`, backgroundColor: PANE_BACKGROUND }).catch(() => undefined)
 
   await exposeRunTools($)
   return ok({
@@ -1886,7 +1888,7 @@ async function checkPr($: Engine) {
   prCheckedAt = now
   const n = run.pr.number
   const ran = await $.process
-    .run(['gh', 'pr', 'view', String(n), '--json', 'state,comments,reviews'], { cwd: workdir(), timeoutMs: 30_000 })
+    .run(['gh', 'pr', 'view', String(n), '--json', 'state,comments,reviews,mergeable'], { cwd: workdir(), timeoutMs: 30_000 })
     .catch(() => undefined)
   if (!ran || ran.exitCode !== 0 || !run || run.outcome) return
   let state = ''
@@ -1897,6 +1899,7 @@ async function checkPr($: Engine) {
   } catch {
     return
   }
+  if (state === 'OPEN') await checkMergeState($, n, parsed)
   if (state === 'OPEN' && isOpen) await checkPrComments($, n, parsed)
   if (!inReview || !run || run.outcome) return
   const es = run.lang === 'es'
@@ -1921,6 +1924,43 @@ async function checkPr($: Engine) {
       text: `wololo: PR #${n} of run ${run.id} was closed without merging. Ask the person with AskUserQuestion (header "PR cerrado") whether to cancel the run, and record run.finished {outcome: "cancelled", summary} with ${TOOL_PREFIX}event if they say so; otherwise the run stays in review.`,
     })
     .catch(() => undefined)
+}
+
+// Whether the PR conflicts with its base (gh's mergeable; UNKNOWN while GitHub computes it keeps what was known) and where
+// it is in the merge queue, which only GraphQL tells. Recorded when either changes, so the card and the app show it.
+async function checkMergeState($: Engine, n: number, view: unknown) {
+  if (!run?.pr) return
+  const mergeable = isObject(view) && typeof view.mergeable === 'string' ? view.mergeable : ''
+  const conflicts = mergeable === 'CONFLICTING' ? true : mergeable === 'MERGEABLE' ? false : run.pr.conflicts
+  const repo = /github\.com\/([^/]+)\/([^/]+)\/pull\//.exec(run.pr.url)
+  let queue = run.pr.queue
+  if (repo) {
+    const query = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){mergeQueueEntry{position state}}}}'
+    const ran = await $.process
+      .run(['gh', 'api', 'graphql', '-f', `query=${query}`, '-f', `o=${repo[1]}`, '-f', `r=${repo[2]}`, '-F', `n=${n}`, '--jq', '.data.repository.pullRequest.mergeQueueEntry'], {
+        cwd: workdir(),
+        timeoutMs: 30_000,
+      })
+      .catch(() => undefined)
+    if (ran && ran.exitCode === 0) {
+      const text = ran.stdout.trim()
+      const entry = parseJson(text === '' ? 'null' : text).value
+      if (entry === null) queue = null
+      else if (isObject(entry) && typeof entry.state === 'string')
+        queue = { position: typeof entry.position === 'number' ? entry.position : null, state: entry.state }
+    }
+  }
+  if (!run?.pr) return
+  const was = run.pr
+  const sameQueue = (was.queue ?? null) === null ? queue == null : queue != null && was.queue?.position === queue.position && was.queue?.state === queue.state
+  if (conflicts === was.conflicts && sameQueue) return
+  if (conflicts === undefined && queue === undefined) return
+  await emit($, 'pr.merge_state', {
+    ...(conflicts !== undefined ? { conflicts } : {}),
+    ...(queue !== undefined ? { queue } : {}),
+    ...(was.conflicts === true ? { was_conflicting: true } : {}),
+    ...(was.queue ? { was_queued: true } : {}),
+  })
 }
 
 // Who the gh login is, so the run's own replies on its PR are not taken for comments to answer. Asked once per session.
@@ -2131,7 +2171,7 @@ async function togglePane($: Engine, input: Record<string, unknown>): Promise<st
     await $.ui.close({ id: PANE })
     return ok({ open: false })
   }
-  const opened = await $.ui.open({ id: PANE, title: run ? `wololo · ${run.id}` : 'wololo' })
+  const opened = await $.ui.open({ id: PANE, title: run ? `wololo · ${run.id}` : 'wololo', backgroundColor: PANE_BACKGROUND })
   return ok({ open: true, placed: opened })
 }
 
@@ -2636,7 +2676,7 @@ export const register: Register = (on, options) => {
           await settlePermission($, '', 'not_run')
           await inspectWorktree($)
           await refresh($)
-          if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}` }).catch(() => undefined)
+          if (config.view.pane === 'auto') void $.ui.open({ id: PANE, title: `wololo · ${loaded.id}`, backgroundColor: PANE_BACKGROUND }).catch(() => undefined)
         } else if (loaded?.outcome && loaded.owner.session_id === sessionId && (await read($, viewAtom))) {
           // The card of a run that finished stays up for the session, kept with the state across loads of the mod: drawn again here from
           // the run's events, so a reload shows what this load's code makes of it. The run itself stays closed.

@@ -345,7 +345,7 @@ final class LoginItem {
     private func read() {
         guard Self.isAvailable else {
             isEnabled = false
-            note = "Disponible al instalar Wololo Desk.app con app/scripts/build-app.sh."
+            note = "Disponible al instalar Wololo.app con app/scripts/build-app.sh."
             return
         }
         let status = SMAppService.mainApp.status

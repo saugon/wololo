@@ -12,13 +12,13 @@ test: ## Run the plugin's unit tests
 validate: ## Validate the plugin
 	claude plugin validate .
 
-app: ## Build Wololo Desk.app in app/dist
+app: ## Build Wololo.app in app/dist
 	app/scripts/build-app.sh
 
-install: ## Build Wololo Desk.app and copy it to ~/Applications
+install: ## Build Wololo.app and copy it to ~/Applications
 	app/scripts/build-app.sh --install
 
-app-test: ## Run Wololo Desk's tests
+app-test: ## Run Wololo's tests
 	cd app && swift test
 
 check: test validate app-test ## Run every test and validate

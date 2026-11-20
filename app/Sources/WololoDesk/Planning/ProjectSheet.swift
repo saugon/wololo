@@ -158,7 +158,7 @@ struct ProjectSheet: View {
             Text("Dónde se guardan sus objetivos")
                 .font(theme.font(.body, size: 12, weight: .semibold))
                 .foregroundStyle(theme.secondary)
-            (Text("En Wololo Desk (")
+            (Text("En Wololo (")
                 + Text(tilde(store.directory.path) + "/").font(theme.font(.mono, size: 11.5))
                 + Text("). Funciona sin el plugin."))
                 .font(theme.font(.body, size: 12))

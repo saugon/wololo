@@ -186,6 +186,7 @@ struct RunCard: View {
                 } else {
                     Text(pr).lineLimit(1).fixedSize()
                 }
+                if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 12) }
             }
         }
         let right = HStack(spacing: 8) {

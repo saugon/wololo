@@ -98,6 +98,7 @@ export const EVENT_TYPES = [
   'pr.merged',
   'pr.closed',
   'pr.commented',
+  'pr.merge_state',
   'signing.deferred',
   'signing.done',
   'github.published',
@@ -285,7 +286,7 @@ export type Run = {
   review?: 'local' | 'pr'
   // Config paths this run's launch flags set, over the project's config.
   overrides?: Record<string, unknown>
-  // The goal node Wololo Desk launched the run from (--node), so a run without an issue still finds its node.
+  // The goal node Wololo launched the run from (--node), so a run without an issue still finds its node.
   node?: { goal: string; id: string }
   risk: Risk
   lang: Lang
@@ -341,6 +342,10 @@ export type Run = {
     number: number | null
     state: 'draft' | 'ready' | 'merged' | 'closed'
     ci: 'pending' | 'passing' | 'failing' | null
+    // Whether it conflicts with its base, and its place in the merge queue (GitHub's state: QUEUED, AWAITING_CHECKS,
+    // MERGEABLE, UNMERGEABLE, LOCKED) while it is in one. Missing until the mod first looked.
+    conflicts?: boolean
+    queue?: { position: number | null; state: string } | null
   } | null
   screenshots: Array<{ file: string; caption: string }>
   // The UI mockup the mockup stage made: its files in run_dir/mockup, and its page on claude.ai when it was published there.
@@ -794,6 +799,15 @@ export function apply(run: Run, ev: RunEvent): Run {
       }
       break
     }
+    case 'pr.merge_state':
+      if (r.pr) {
+        if (typeof d.conflicts === 'boolean') r.pr.conflicts = d.conflicts
+        const q = d.queue as { position?: unknown; state?: unknown } | null | undefined
+        if (q === null) r.pr.queue = null
+        else if (q && typeof q.state === 'string')
+          r.pr.queue = { position: typeof q.position === 'number' ? q.position : null, state: q.state }
+      }
+      break
     case 'pr.commented':
       if (typeof d.latest === 'string' && d.latest) {
         r.pr_comments = {
@@ -1191,6 +1205,8 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number, withA
     case 'in_review': {
       const pr = run.pr?.number ? `PR #${run.pr.number}` : 'PR'
       const since = run.pr_review ? ` · ${ago(run.pr_review.since)}` : ''
+      if (run.pr?.conflicts) return es ? `${pr} tiene conflictos con la base${since}` : `${pr} conflicts with its base${since}`
+      if (run.pr?.queue) return `${pr} ${queueText(run.pr.queue, es ? 'es' : 'en')}${since}`
       return es
         ? `${pr} esperando review; termina al mergearse o con /wololo done${since}`
         : `${pr} waiting on review; ends when it merges or with /wololo done${since}`
@@ -1249,6 +1265,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'pr.opened',
   'pr.ready',
   'pr.commented',
+  'pr.merge_state',
   'mockup.published',
   'ci.updated',
   'run.finished',
@@ -1280,6 +1297,8 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `PR: ${String(d.url)}`
         case 'mockup.published':
           return `Mockup: ${String(d.url ?? (Array.isArray(d.files) ? d.files.join(', ') : ''))}`
+        case 'pr.merge_state':
+          return `PR: ${mergeStateText(d, 'es')}`
         case 'pr.commented':
           return `PR: ${String(d.count)} comentario(s) nuevo(s) de ${Array.isArray(d.authors) ? d.authors.join(', ') : '?'}`
         case 'base.changed':
@@ -1297,4 +1316,29 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
 
 export function nextSeq(run: Run): number {
   return run.last_seq + 1
+}
+
+// "en la merge queue (2.º)", or how it stands there when it is not just waiting its turn.
+export function queueText(queue: { position: number | null; state: string }, lang: Lang): string {
+  const es = lang === 'es'
+  const at = queue.position != null ? (es ? ` (${queue.position}.º)` : ` (#${queue.position})`) : ''
+  const how: Record<string, [string, string]> = {
+    AWAITING_CHECKS: ['esperando los checks', 'awaiting checks'],
+    UNMERGEABLE: ['no se puede mergear', 'cannot merge'],
+    LOCKED: ['bloqueada', 'locked'],
+  }
+  const extra = how[queue.state]
+  return `${es ? 'en la merge queue' : 'in the merge queue'}${at}${extra ? ` · ${es ? extra[0] : extra[1]}` : ''}`
+}
+
+// What a pr.merge_state event says: conflicts found or gone, and the merge queue entered or left.
+export function mergeStateText(d: Record<string, unknown>, lang: Lang): string {
+  const es = lang === 'es'
+  const parts: string[] = []
+  if (d.conflicts === true) parts.push(es ? 'tiene conflictos con la base' : 'conflicts with its base')
+  if (d.conflicts === false && d.was_conflicting === true) parts.push(es ? 'ya no tiene conflictos' : 'no longer conflicts')
+  const q = d.queue as { position?: unknown; state?: unknown } | null | undefined
+  if (q && typeof q.state === 'string') parts.push(queueText({ position: typeof q.position === 'number' ? q.position : null, state: q.state }, lang))
+  if (q === null && d.was_queued === true) parts.push(es ? 'salió de la merge queue' : 'left the merge queue')
+  return parts.join(' · ')
 }

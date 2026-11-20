@@ -1,15 +1,16 @@
 #!/bin/sh
-# Builds Wololo Desk in release, assembles app/dist/Wololo Desk.app and signs it ad hoc.
+# Builds Wololo in release, assembles app/dist/Wololo.app and signs it ad hoc.
 #
-#   app/scripts/build-app.sh             # leaves app/dist/Wololo Desk.app
+#   app/scripts/build-app.sh             # leaves app/dist/Wololo.app
 #   app/scripts/build-app.sh --install   # and copies it to ~/Applications
 #
-# --install replaces ~/Applications/Wololo Desk.app only when it is a Wololo Desk build
+# --install replaces ~/Applications/Wololo.app only when it is a Wololo build
 # (bundle id com.saugon.wololo-desk); anything else there is left alone and the script fails.
+# It also removes ~/Applications/Wololo Desk.app, the app's former name, when it is one.
 set -eu
 
 bundle_id="com.saugon.wololo-desk"
-app_name="Wololo Desk.app"
+app_name="Wololo.app"
 
 install=0
 case "$#:${1-}" in
@@ -61,9 +62,22 @@ dest="$dest_dir/$app_name"
 if [ -e "$dest" ]; then
   existing="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$dest/Contents/Info.plist" 2>/dev/null || true)"
   [ "$existing" = "$bundle_id" ] \
-    || fail "$dest exists and is not Wololo Desk (bundle id '${existing:-none}'): refusing to replace it"
+    || fail "$dest exists and is not Wololo (bundle id '${existing:-none}'): refusing to replace it"
   if pgrep -qf "$dest/Contents/MacOS/WololoDesk"; then
-    echo "  Wololo Desk is running from $dest: quit it and open it again to use the new build."
+    echo "  Wololo is running from $dest: quit it and open it again to use the new build."
+  fi
+fi
+
+# The app was called Wololo Desk: its old copy goes, so there is one app to open.
+old="$dest_dir/Wololo Desk.app"
+if [ -e "$old" ]; then
+  old_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$old/Contents/Info.plist" 2>/dev/null || true)"
+  if [ "$old_id" = "$bundle_id" ]; then
+    if pgrep -qf "$old/Contents/MacOS/WololoDesk"; then
+      echo "  The old Wololo Desk is running: quit it and open Wololo."
+    fi
+    echo "→ Removing $old (the app's former name)..."
+    rm -rf "$old"
   fi
 fi
 

@@ -154,18 +154,20 @@ struct GoalCanvas: View {
     /// by the viewport (`screen = canvas × zoom + offset`).
     private func nodes(_ goal: Goal, status: GoalStatus, repo: String?) -> some View {
         let target = dropTarget(goal)
+        // Drawn at the largest zoom and scaled down to the current one: scaling a view up blurs it, down keeps it sharp.
+        let k = Viewport.maxZoom
         return ZStack(alignment: .topLeading) {
             ForEach(goal.nodes) { node in
                 let nodeStatus = status.status(of: node.id)
                 NodeCard(node: node, status: nodeStatus, meta: nodeStatus?.metaLine(defaultRepo: repo) ?? "sin issue",
-                         isSelected: state.selectedNodeID == node.id, isDropTarget: target == node.id)
-                    .offset(x: node.position.x, y: node.position.y)
+                         isSelected: state.selectedNodeID == node.id, isDropTarget: target == node.id, scale: k)
+                    .offset(x: node.position.x * k, y: node.position.y * k)
             }
             FinalNodeCard(title: goal.title, isDone: status.status(of: Goal.finalID)?.state.isDone == true,
-                          isSelected: state.selectedNodeID == Goal.finalID, isDropTarget: target == Goal.finalID)
-                .offset(x: goal.finalPosition.x, y: goal.finalPosition.y)
+                          isSelected: state.selectedNodeID == Goal.finalID, isDropTarget: target == Goal.finalID, scale: k)
+                .offset(x: goal.finalPosition.x * k, y: goal.finalPosition.y * k)
         }
-        .scaleEffect(viewport.zoom, anchor: .topLeading)
+        .scaleEffect(viewport.zoom / k, anchor: .topLeading)
         .offset(x: viewport.offset.x, y: viewport.offset.y)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)

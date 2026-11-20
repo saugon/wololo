@@ -64,7 +64,8 @@ function overBudget(run: Run, type: string, data: Record<string, unknown>, budge
     if (failures > allowed('ci_fix_attempts')) return spent('ci_fix_attempts', failures - 1)
   }
   const forward = type === 'stage.entered' && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
-  if (forward || type === 'item.started') {
+  // budgets.run_minutes 0 (or --no-time-limit) is no limit on the run's minutes.
+  if ((forward || type === 'item.started') && budgets.run_minutes > 0) {
     const minutes = activeMinutes(run)
     if (minutes > allowed('run_minutes')) return spent('run_minutes', minutes)
   }

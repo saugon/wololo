@@ -1,4 +1,4 @@
-import { type Lang, type RunEvent, STAGES, type StageId, roleName } from './model'
+import { type Lang, type RunEvent, STAGES, type StageId, mergeStateText, roleName } from './model'
 
 export type Entry = { ts: number; icon: string; text: string; isMajor: boolean }
 
@@ -150,6 +150,10 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
       return one('✓', `PR ${es ? 'abierto' : 'opened'}: ${str(d.url)}`)
     case 'pr.ready':
       return one('✓', es ? 'PR listo para revisión' : 'PR ready for review')
+    case 'pr.merge_state': {
+      const text = mergeStateText(d, lang)
+      return text ? one(d.conflicts === true ? '✕' : '·', `PR ${text}`) : []
+    }
     case 'pr.commented': {
       const by = Array.isArray(d.authors) ? d.authors.map(String).join(', ') : ''
       return one('·', es ? `Comentarios nuevos en el PR: ${str(d.count)}${by ? ` de ${by}` : ''}` : `New comments on the PR: ${str(d.count)}${by ? ` by ${by}` : ''}`)

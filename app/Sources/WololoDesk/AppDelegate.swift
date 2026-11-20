@@ -283,7 +283,7 @@ extension AppState {
                                           persists: Bool) -> GoalStore {
         GoalStore(directory: directory, mirror: GoalStore.mirrorDirectory(dataDirectory: dataDirectory.url),
                   writes: GoalStore.writesGoals(persists: persists, dataDirectory: dataDirectory.url, options: options),
-                  log: { NSLog("Wololo Desk goals: %@", $0) })
+                  log: { NSLog("Wololo goals: %@", $0) })
     }
 }
 
@@ -336,9 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Snapshot.take(of: { [weak self] in self?.snapshotWindow() }, to: url, state: state)
             return
         }
-        if let target = options.open {
-            open(target)
-        }
+        // Opening the app opens its window, on whatever WOLOLO_DESK_OPEN asks for or else the board.
+        open(options.open ?? .window)
         if state.showsWidgetAtLaunch {
             state.setWidgetVisible(true)
         }

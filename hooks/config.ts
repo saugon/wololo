@@ -275,6 +275,7 @@ const SWITCHES: Record<string, Overrides> = {
   '--no-screenshots': { 'screenshots.enabled': false },
   '--mockup': { 'mockup.when': 'always' },
   '--no-mockup': { 'mockup.when': 'never' },
+  '--no-time-limit': { 'budgets.run_minutes': 0 },
   '--github-spec': { 'spec.to_github': true },
   '--no-github-spec': { 'spec.to_github': false },
   '--no-final-review': { 'review.final.skill': '' },
@@ -303,7 +304,7 @@ export function parseFlags(flags: readonly string[]): ParsedFlags {
   const out: ParsedFlags = { overrides: {}, errors: [] }
   for (const flag of flags) {
     const [name = '', value] = flag.split(/=(.*)/s)
-    // --node=<goal>/<node>: the goal node Wololo Desk launched the run from. It ties the run to it, and changes no config.
+    // --node=<goal>/<node>: the goal node Wololo launched the run from. It ties the run to it, and changes no config.
     if (name === '--node') {
       const match = /^([^/\s]+)\/([^/\s]+)$/.exec(value ?? '')
       if (match) out.node = { goal: match[1]!, id: match[2]! }

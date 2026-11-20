@@ -8,7 +8,8 @@ import WololoKit
 @MainActor
 @Observable
 final class ThemeStore {
-    /// `~/Library/Application Support/Wololo Desk/Themes`, where the person's own themes go.
+    /// `~/Library/Application Support/Wololo Desk/Themes`, where the person's own themes go. The folder keeps the app's
+    /// former name, so the themes made before it was renamed stay where they are.
     static let defaultUserDirectory: URL? = FileManager.default
         .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
         .appendingPathComponent("Wololo Desk/Themes", isDirectory: true)

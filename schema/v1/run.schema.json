@@ -100,7 +100,7 @@
     },
     "node": {
       "type": "object",
-      "description": "The goal node Wololo Desk launched the run from (--node). Missing when the run was started by hand.",
+      "description": "The goal node Wololo launched the run from (--node). Missing when the run was started by hand.",
       "required": [
         "goal",
         "id"
@@ -680,6 +680,28 @@
             "failing",
             null
           ]
+        },
+        "conflicts": {
+          "type": "boolean",
+          "description": "Whether the PR conflicts with its base. Missing until the mod first looked."
+        },
+        "queue": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Its place in the merge queue while it is in one, with GitHub's state (QUEUED, AWAITING_CHECKS, MERGEABLE, UNMERGEABLE, LOCKED).",
+          "properties": {
+            "position": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "state": {
+              "type": "string"
+            }
+          }
         }
       }
     },

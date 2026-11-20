@@ -55,6 +55,7 @@ struct WidgetRow: View {
                                 .fixedSize()
                                 .help("Abrir el PR en el navegador: \(pr.url.absoluteString)")
                         }
+                        if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 10.5) }
                         ProgressBarView(
                             progress: progress,
                             height: 3,

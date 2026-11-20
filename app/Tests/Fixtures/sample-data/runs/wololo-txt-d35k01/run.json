@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "wololo-txt-d35k01",
-  "title": "Wololo Desk: app para ver el estado de los runs",
+  "title": "Wololo: app para ver el estado de los runs",
   "source": {
     "kind": "text",
     "ref": "app para ver los runs",
@@ -52,7 +52,7 @@
   "status": "waiting_user",
   "waiting": {
     "on": "user",
-    "question": "¿Aprobás el spec de Wololo Desk?",
+    "question": "¿Aprobás el spec de Wololo?",
     "since": "@now-40"
   },
   "blocked": null,

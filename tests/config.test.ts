@@ -120,6 +120,11 @@ test('the final review is set, given arguments or turned off by flag for one run
   expect(withOverrides(configured, parseFlags(['--no-final-review']).overrides).review.final.skill).toBe('')
 })
 
+test('--no-time-limit lifts the limit on the run minutes for one run', async () => {
+  expect(withOverrides(DEFAULT_CONFIG, parseFlags(['--no-time-limit']).overrides).budgets.run_minutes).toBe(0)
+  expect(helpText('es', withOverrides(DEFAULT_CONFIG, parseFlags(['--no-time-limit']).overrides))).toContain('--no-time-limit: sin límite de minutos para el run')
+})
+
 test('the mockup stage runs when the definition finds screens to decide, always or never', async () => {
   expect(DEFAULT_CONFIG.mockup.when).toBe('auto')
   expect(withOverrides(DEFAULT_CONFIG, parseFlags(['--mockup']).overrides).mockup.when).toBe('always')
@@ -127,7 +132,7 @@ test('the mockup stage runs when the definition finds screens to decide, always 
   expect(validate({ mockup: { when: 'sometimes' } })).toEqual(['mockup.when: must be one of auto, always, never'])
 })
 
-test('--node ties the run to the goal node Wololo Desk launched it from, and sets no config', async () => {
+test('--node ties the run to the goal node Wololo launched it from, and sets no config', async () => {
   const flags = parseFlags(['--node=g1/n1', '--full'])
   expect(flags.errors).toEqual([])
   expect(flags.node).toEqual({ goal: 'g1', id: 'n1' })

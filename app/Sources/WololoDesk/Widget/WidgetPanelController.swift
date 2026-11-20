@@ -43,8 +43,8 @@ final class WidgetPanelController: NSWindowController, NSWindowDelegate {
         panel.isOpaque = false
         panel.hasShadow = true
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.title = "Wololo Desk: widget"
-        panel.setAccessibilityLabel("Widget de Wololo Desk")
+        panel.title = "Wololo: widget"
+        panel.setAccessibilityLabel("Widget de Wololo")
 
         super.init(window: panel)
         panel.delegate = self

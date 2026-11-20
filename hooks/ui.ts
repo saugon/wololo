@@ -33,6 +33,7 @@ import {
   shortRef,
   stageLabel,
   statusLine,
+  queueText,
   t,
   busyTasks,
 } from './model'
@@ -557,6 +558,8 @@ function detailBlocks(run: Run, now: number, runDir: string | undefined, events:
     const ci = run.pr.ci
     const line: Line = [span(run.pr.url, 'suggestion'), span(` · ${run.pr.state}`, 'text')]
     if (ci) line.push(span(` · CI ${ci}`, ci === 'passing' ? 'success' : ci === 'failing' ? 'error' : 'claude'))
+    if (run.pr.conflicts) line.push(span(es ? ' · conflictos con la base' : ' · conflicts with base', 'error'))
+    if (run.pr.queue) line.push(span(` · ${queueText(run.pr.queue, es ? 'es' : 'en')}`, run.pr.queue.state === 'UNMERGEABLE' ? 'error' : 'merged'))
     blocks.push({ label: 'pr', lines: [line] })
   }
   if (runDir) blocks.push({ label: es ? 'archivos' : 'files', lines: [[span(runDir, 'text')]] })

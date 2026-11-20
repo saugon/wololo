@@ -10,7 +10,7 @@ final class SearchTests: XCTestCase {
                 "project": ["key": "acme__billing", "branch": "wololo/export-csv"],
             ]),
             try makeRun("desk", [
-                "title": "Wololo Desk: app para ver el estado",
+                "title": "Wololo: app para ver el estado",
                 "source": ["kind": "text", "ref": "Una app de macOS"],
                 "project": ["key": "saugon__wololo", "branch": "wololo/txt-app-para-ver"],
             ]),

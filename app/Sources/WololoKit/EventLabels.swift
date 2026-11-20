@@ -135,6 +135,19 @@ public func eventLine(_ event: RunEvent, lang: Lang) -> String {
         return es ? "PR listo, en revisión" : "PR ready, in review"
     case "pr.merged":
         return es ? "PR mergeado" : "PR merged"
+    case "pr.merge_state":
+        var parts: [String] = []
+        if d["conflicts"]?.bool == true { parts.append(es ? "tiene conflictos con la base" : "conflicts with its base") }
+        if d["conflicts"]?.bool == false, d["was_conflicting"]?.bool == true {
+            parts.append(es ? "ya no tiene conflictos" : "no longer conflicts")
+        }
+        if case .object(let queue)? = d["queue"] {
+            let place = queue["position"]?.int.map { es ? " (\($0).º)" : " (#\($0))" } ?? ""
+            parts.append((es ? "en la merge queue" : "in the merge queue") + place)
+        } else if d["was_queued"]?.bool == true {
+            parts.append(es ? "salió de la merge queue" : "left the merge queue")
+        }
+        return "PR " + parts.joined(separator: " · ")
     case "pr.closed":
         return es ? "PR cerrado sin mergear" : "PR closed without merging"
     case "signing.deferred":

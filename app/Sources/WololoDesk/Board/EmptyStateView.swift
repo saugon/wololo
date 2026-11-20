@@ -28,8 +28,8 @@ struct EmptyStateView: View {
                     .tracking(theme.tracking(.display, size: 20))
                     .foregroundStyle(theme.text)
                 Text(isMissing
-                     ? "Wololo Desk lee los runs de wololo en esta carpeta, que todavía no existe:"
-                     : "Wololo Desk lee los runs de wololo en esta carpeta, que está vacía:")
+                     ? "La app lee los runs de wololo en esta carpeta, que todavía no existe:"
+                     : "La app lee los runs de wololo en esta carpeta, que está vacía:")
                     .font(theme.font(.body, size: 14))
                     .foregroundStyle(theme.secondary)
                     .fixedSize(horizontal: false, vertical: true)

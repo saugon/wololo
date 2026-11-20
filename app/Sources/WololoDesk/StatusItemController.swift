@@ -47,7 +47,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         if count != shownCount, let button = statusItem.button {
             shownCount = count
             button.attributedTitle = count > 0 ? Self.title(count) : NSAttributedString()
-            button.setAccessibilityLabel(count == 1 ? "Wololo Desk: 1 run te espera" : "Wololo Desk: \(count) runs te esperan")
+            button.setAccessibilityLabel(count == 1 ? "Wololo: 1 run te espera" : "Wololo: \(count) runs te esperan")
         }
         if header != shownHeader {
             shownHeader = header
@@ -60,7 +60,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func makeMenu() -> NSMenu {
-        let menu = NSMenu(title: "Wololo Desk")
+        let menu = NSMenu(title: "Wololo")
         menu.delegate = self
         menu.autoenablesItems = false
         headerItem.isEnabled = false
@@ -73,7 +73,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         menu.addItem(item("Abrir ventana", #selector(openWindow), key: "o"))
         menu.addItem(item("Ajustes…", #selector(openSettings), key: ","))
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Salir de Wololo Desk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Salir de Wololo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
         return menu
@@ -124,7 +124,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "Wololo Desk"
+        image.accessibilityDescription = "Wololo"
         return image
     }()
 }

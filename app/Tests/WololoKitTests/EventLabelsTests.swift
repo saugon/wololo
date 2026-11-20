@@ -17,6 +17,23 @@ final class EventLabelsTests: XCTestCase {
         XCTAssertFalse(isMinorEvent("review.waiting"))
     }
 
+    func testMergeStateSaysConflictsAndTheQueue() throws {
+        XCTAssertEqual(lines("pr.merge_state", ["conflicts": .bool(true)]), ["PR tiene conflictos con la base", "PR conflicts with its base"])
+        XCTAssertEqual(lines("pr.merge_state", ["conflicts": .bool(false), "was_conflicting": .bool(true),
+                                                 "queue": .object(["position": .number(2), "state": .string("QUEUED")])])[0],
+                       "PR ya no tiene conflictos · en la merge queue (2.º)")
+        XCTAssertEqual(lines("pr.merge_state", ["queue": .null, "was_queued": .bool(true)])[1], "PR left the merge queue")
+
+        let pr: [String: Any] = ["url": "https://github.com/acme/web/pull/7", "number": 7, "state": "ready"]
+        let conflicting = try makeRun("c", status: "in_review", ["pr": pr.merging(["conflicts": true]) { $1 }])
+        XCTAssertEqual(prMergeBadge(conflicting), MergeBadge(text: "conflictos", title: "Tiene conflictos con la base", isProblem: true))
+        XCTAssertEqual(activityLine(conflicting, now: fixtureNow), "Tiene conflictos con la base")
+        let queued = try makeRun("q", status: "in_review", ["pr": pr.merging(["conflicts": false, "queue": ["position": 3, "state": "AWAITING_CHECKS"]]) { $1 }])
+        XCTAssertEqual(prMergeBadge(queued), MergeBadge(text: "en cola · 3.º", title: "En la merge queue (3.º), esperando los checks", isProblem: false))
+        XCTAssertNil(prMergeBadge(try makeRun("m", ["pr": pr.merging(["state": "merged", "conflicts": true]) { $1 }])))
+        XCTAssertNil(prMergeBadge(try makeRun("n", ["pr": pr])))
+    }
+
     func testMockupNamesItsPageOrItsFiles() throws {
         XCTAssertEqual(lines("mockup.published", ["url": .string("https://claude.ai/artifact/a"), "files": .array([.string("01-cart.html")])]),
                        ["Mockup: https://claude.ai/artifact/a", "Mockup: https://claude.ai/artifact/a"])

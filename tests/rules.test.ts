@@ -226,6 +226,9 @@ test("a run that spent its minutes stops moving on until the person extends them
   long.time = { implement: { work: 200 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
   expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toMatch(/budgets\.run_minutes/)
   expect(checkEvent(long, 'stage.entered', { stage: 'evidence' }, budgets)).toMatch(/budgets\.run_minutes/)
+  // 0 minutes, as --no-time-limit sets, is no limit.
+  expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, { ...budgets, run_minutes: 0 })).toBe(null)
+  expect(checkEvent(long, 'stage.entered', { stage: 'evidence' }, { ...budgets, run_minutes: 0 })).toBe(null)
   // Waiting for the person does not count.
   long.time = { implement: { work: 100 * 60, agents: 50 * 60, tests: 0, you: 600 * 60, roles: {} } }
   expect(checkEvent(long, 'item.started', { n: 1, title: 'a' }, budgets)).toBe(null)

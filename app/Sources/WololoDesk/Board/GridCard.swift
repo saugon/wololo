@@ -121,6 +121,7 @@ struct GridCard: View {
                         .truncationMode(.middle)
                         .help(run.project.branch ?? run.project.display)
                 }
+                if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 11.5) }
                 Spacer(minLength: 0)
                 if let agents = agentsLabel(run, now: now) {
                     Text(agents)
@@ -192,6 +193,28 @@ struct GridCard: View {
             ago(run.updatedAt, now: now, lang: run.lang),
         ]
         return parts.compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+}
+
+/// "conflictos" in the failing color, or "en cola · 2" in the accent one, as a small capsule beside the PR.
+struct MergeBadgeView: View {
+    let badge: MergeBadge
+    let size: CGFloat
+
+    @Environment(\.theme) private var theme
+
+    var body: some View {
+        let color = badge.isProblem ? theme.ci(.failing) : theme.accent
+        Text(badge.text)
+            .font(theme.font(.body, size: size, weight: .semibold))
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.14), in: Capsule())
+            .help(badge.title)
+            .accessibilityLabel(badge.title)
     }
 }
 

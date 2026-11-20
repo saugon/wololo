@@ -20,18 +20,18 @@ enum MainMenu {
     static func make(openSettings: Selector, target: AnyObject) -> NSMenu {
         let main = NSMenu()
 
-        let app = NSMenu(title: "Wololo Desk")
-        app.addItem(withTitle: "Acerca de Wololo Desk", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let app = NSMenu(title: "Wololo")
+        app.addItem(withTitle: "Acerca de Wololo", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         app.addItem(.separator())
         let settings = app.addItem(withTitle: "Ajustes…", action: openSettings, keyEquivalent: ",")
         settings.target = target
         app.addItem(.separator())
-        app.addItem(withTitle: "Ocultar Wololo Desk", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        app.addItem(withTitle: "Ocultar Wololo", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         let others = app.addItem(withTitle: "Ocultar otros", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         others.keyEquivalentModifierMask = [.command, .option]
         app.addItem(.separator())
-        app.addItem(withTitle: "Salir de Wololo Desk", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        main.addItem(submenu: app, title: "Wololo Desk")
+        app.addItem(withTitle: "Salir de Wololo", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        main.addItem(submenu: app, title: "Wololo")
 
         let edit = NSMenu(title: "Edición")
         edit.addItem(withTitle: "Deshacer", action: Selector(("undo:")), keyEquivalent: "z")

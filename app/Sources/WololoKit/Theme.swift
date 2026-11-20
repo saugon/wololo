@@ -649,7 +649,7 @@ public struct ThemeSpec: Equatable, Sendable {
 }
 
 extension ThemeSpec {
-    /// The look of Wololo Desk before themes, value for value.
+    /// The look of Wololo before themes, value for value.
     public static let actual: ThemeSpec = {
         let blue = RGBA(hex: 0x5B9DFF)
         let gray = RGBA(hex: 0xA1A7B3)

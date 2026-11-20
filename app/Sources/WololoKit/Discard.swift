@@ -25,13 +25,13 @@ public enum RunDiscard {
 
     /// Cancels the run in `runDir`, read again from disk so a session that took it back in the meantime wins.
     public static func discard(runDir: URL, now: TimeInterval = Date().timeIntervalSince1970,
-                               summary: String = "Descartado desde Wololo Desk.") throws {
+                               summary: String = "Descartado desde Wololo.") throws {
         try finish(runDir: runDir, outcome: "cancelled", summary: summary, now: now, allowed: canDiscard)
     }
 
     /// Finishes the run in review in `runDir` as done, read again from disk like `discard`.
     public static func markDone(runDir: URL, now: TimeInterval = Date().timeIntervalSince1970,
-                                summary: String = "Marcado como terminado desde Wololo Desk.") throws {
+                                summary: String = "Marcado como terminado desde Wololo.") throws {
         try finish(runDir: runDir, outcome: "done", summary: summary, now: now, allowed: canMarkDone)
     }
 

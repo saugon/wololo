@@ -30,7 +30,8 @@ public struct GoalStore: Sendable {
         self.log = log
     }
 
-    /// `~/Library/Application Support/Wololo Desk/Goals`. It may not exist yet.
+    /// `~/Library/Application Support/Wololo Desk/Goals`. It may not exist yet. The folder keeps the app's former name,
+    /// so the goals made before it was renamed stay where they are.
     public static func defaultDirectory() -> URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")

@@ -1,6 +1,6 @@
 import { type TestBody, expect, mock, test } from 'claude-code/testing'
 
-import type { Run } from '../hooks/model'
+import { type Run, mergeStateText, statusDetail } from '../hooks/model'
 
 const HOME = '/home/t'
 const REPO = '/repo'
@@ -1112,10 +1112,10 @@ test('a run in review ends as done when its PR merges', async ($, on) => {
   const id = 'repo-4796-rev001'
   seedReview(host, id)
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"OPEN"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: '{"state":"OPEN"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).not.toContain('pr.merged')
-  host.answers.unshift({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  host.answers.unshift({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: '{"state":"MERGED"}', exit: 0 })
   await clock.advance(330_000)
   const lines = eventLines(host, id)
   expect(lines.map(line => line.type).slice(-2)).toEqual(['pr.merged', 'run.finished'])
@@ -1132,7 +1132,7 @@ test('a run finished by its PR merging stops its servers too', async ($, on) => 
   host.files.set(`${DATA}/runs/${id}/servers.json`, JSON.stringify([{ name: 'backend', pid: 4242, port: 4000 }]))
   host.ps.set('4242', '4240 make backend.run')
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"MERGED"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: '{"state":"MERGED"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).toContain('run.finished')
   expect(host.killed).toEqual(['-TERM -4240'])
@@ -1150,7 +1150,7 @@ test('a run in review whose PR is closed without merging asks the person', async
   const id = 'repo-4796-rev002'
   seedReview(host, id)
   await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
-  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: '{"state":"CLOSED"}', exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: '{"state":"CLOSED"}', exit: 0 })
   await clock.advance(330_000)
   expect(eventLines(host, id).map(line => line.type)).toContain('pr.closed')
   expect(submitted).toHaveLength(1)
@@ -1160,6 +1160,32 @@ test('a run in review whose PR is closed without merging asks the person', async
   // Asked once: the next check sees it closed already.
   await clock.advance(330_000)
   expect(submitted).toHaveLength(1)
+})
+
+test('a PR in review that conflicts or enters the merge queue says so, once per change', async ($, on) => {
+  const host = fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  const id = 'repo-4796-mrg001'
+  seedReview(host, id)
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const view = host.answers[host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: '{"state":"OPEN","mergeable":"CONFLICTING"}', exit: 0 }) - 1]!
+  const queue = host.answers[host.answers.push({ match: /^gh api graphql/, stdout: 'null\n', exit: 0 }) - 1]!
+  const get = async () => parse((await $.tool.call({ tool: 'mcp__wololo__get', scope: 'run' } as never)).result).run as Run
+  await clock.advance(330_000)
+  expect((await get()).pr?.conflicts).toBe(true)
+  expect(statusDetail(await get(), 'in_review', 1_800_001_000)).toContain('PR #4813 tiene conflictos con la base')
+  await clock.advance(330_000)
+  expect(eventLines(host, id).filter(line => line.type === 'pr.merge_state')).toHaveLength(1)
+  view.stdout = '{"state":"OPEN","mergeable":"MERGEABLE"}'
+  queue.stdout = '{"position":2,"state":"QUEUED"}\n'
+  await clock.advance(330_000)
+  const run = await get()
+  expect(run.pr?.conflicts).toBe(false)
+  expect(run.pr?.queue).toEqual({ position: 2, state: 'QUEUED' })
+  expect(statusDetail(run, 'in_review', 1_800_001_000)).toContain('PR #4813 en la merge queue (2.º)')
+  expect(eventLines(host, id).filter(line => line.type === 'pr.merge_state').at(-1)?.data).toEqual({ conflicts: false, queue: { position: 2, state: 'QUEUED' }, was_conflicting: true })
+  expect(mergeStateText({ conflicts: false, queue: { position: 2, state: 'QUEUED' }, was_conflicting: true }, 'es')).toBe('ya no tiene conflictos · en la merge queue (2.º)')
 })
 
 test("new comments on the PR reach the session while CI still runs, once each", async ($, on) => {
@@ -1181,7 +1207,7 @@ test("new comments on the PR reach the session while CI still runs, once each", 
   host.answers.push({ match: /^gh api user/, stdout: 'me\n', exit: 0 })
   host.answers.push({ match: /^gh api repos\/\{owner\}\/\{repo\}\/pulls\/4813\/comments/, stdout: 'chatgpt-codex-connector[bot]\t2026-11-19T10:10:01Z\n', exit: 0 })
   const view = { state: 'OPEN', comments: [{ author: { login: 'me' }, createdAt: '2026-11-19T10:00:00Z' }], reviews: [{ author: { login: 'chatgpt-codex-connector' }, submittedAt: '2026-11-19T10:10:00Z', state: 'COMMENTED', body: 'P1' }] }
-  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews$/, stdout: JSON.stringify(view), exit: 0 })
+  host.answers.push({ match: /^gh pr view 4813 --json state,comments,reviews,mergeable$/, stdout: JSON.stringify(view), exit: 0 })
   await clock.advance(330_000)
   const commented = eventLines(host, id).filter(line => line.type === 'pr.commented')
   expect(commented.map(line => line.data)).toEqual([{ count: 2, authors: ['chatgpt-codex-connector'], latest: '2026-11-19T10:10:01Z' }])
@@ -1193,7 +1219,7 @@ test("new comments on the PR reach the session while CI still runs, once each", 
   await clock.advance(330_000)
   expect(submitted).toHaveLength(1)
   view.comments.push({ author: { login: 'ana' }, createdAt: '2026-11-19T11:00:00Z' })
-  host.answers.find(answer => answer.match.test('gh pr view 4813 --json state,comments,reviews'))!.stdout = JSON.stringify(view)
+  host.answers.find(answer => answer.match.test('gh pr view 4813 --json state,comments,reviews,mergeable'))!.stdout = JSON.stringify(view)
   await clock.advance(330_000)
   expect(submitted).toHaveLength(2)
   expect(submitted[1]).toContain('1 new comment(s) posted after 2026-11-19T10:10:01Z, by ana')

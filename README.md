@@ -10,7 +10,7 @@ A Claude Code plugin that takes an issue to a pull request, and always shows whi
 - 👀 A card above the prompt and a side pane say what the run is doing at every moment.
 - 🌳 Each run works in its own worktree, branch and ports, so several run in parallel.
 - 🗂️ Nothing goes into your repository: config and runs live in `~/.claude/wololo`.
-- 🖥️ [Wololo Desk](docs/desktop-app.md), a macOS app with the runs of every terminal.
+- 🖥️ [Wololo](docs/desktop-app.md), a macOS app with the runs of every terminal.
 
 ## Installation
 
@@ -88,11 +88,11 @@ Change the settings:
 - [Configuration](docs/configuration.md): every setting and launch flag.
 - [Adapters](docs/adapters.md): hand parts of a run to your project's own tooling.
 - [The store](docs/store.md): the run files, for dashboards.
-- [Wololo Desk](docs/desktop-app.md): the desktop app and its themes.
+- [Wololo](docs/desktop-app.md): the desktop app and its themes.
 
 ## Development
 
 ```sh
-make check   # unit tests, plugin validation and Wololo Desk's tests
+make check   # unit tests, plugin validation and Wololo's tests
 make help    # every target
 ```
