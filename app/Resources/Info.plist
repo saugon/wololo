@@ -12,6 +12,8 @@
 	<string>com.saugon.wololo-desk</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleName</key>
 	<string>Wololo</string>
 	<key>CFBundlePackageType</key>

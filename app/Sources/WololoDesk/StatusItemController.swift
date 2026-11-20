@@ -102,29 +102,6 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         ])
     }
 
-    /// The board glyph of the mockup: three columns hanging from the top, each shorter than the last. A template
-    /// image, so the menu bar tints it.
-    private static let icon: NSImage = {
-        let side: CGFloat = 16
-        let image = NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
-            let scale = side / 24
-            let columns: [NSRect] = [
-                NSRect(x: 3, y: 4, width: 5, height: 16),
-                NSRect(x: 10, y: 4, width: 5, height: 10),
-                NSRect(x: 17, y: 4, width: 4, height: 7),
-            ]
-            NSColor.black.setStroke()
-            for column in columns {
-                let rect = NSRect(x: column.minX * scale, y: column.minY * scale,
-                                  width: column.width * scale, height: column.height * scale)
-                let path = NSBezierPath(roundedRect: rect, xRadius: 1.5 * scale, yRadius: 1.5 * scale)
-                path.lineWidth = 2 * scale
-                path.stroke()
-            }
-            return true
-        }
-        image.isTemplate = true
-        image.accessibilityDescription = "Wololo"
-        return image
-    }()
+    /// The app icon's crook, as a template image the menu bar tints.
+    private static let icon = CrookGlyph.image(side: 18)
 }

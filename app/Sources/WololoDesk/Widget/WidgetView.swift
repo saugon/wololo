@@ -72,10 +72,7 @@ struct WidgetView: View {
                 HoodIcon(color: theme.muted, face: theme.widget)
                     .frame(width: 18, height: 18)
             } else {
-                BoardGlyph()
-                    .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8 * 18 / 24, lineCap: .round, lineJoin: .round))
-                    .frame(width: 18, height: 18)
-                    .accessibilityHidden(true)
+                AppIconMark(side: 22)
             }
             Text("wololo")
                 .font(theme.font(.display, size: 13, weight: .bold))

@@ -56,9 +56,7 @@ struct Sidebar: View {
                 HoodIcon(color: theme.muted, face: theme.ground)
                     .frame(width: 24, height: 27)
             } else {
-                BoardGlyph()
-                    .stroke(theme.accent, style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round))
-                    .frame(width: 22, height: 22)
+                AppIconMark(side: 28)
             }
             Text("Wololo")
                 .font(theme.font(.display, size: 17, weight: .bold))
@@ -372,25 +370,16 @@ private struct SidebarRunRow: View {
     }
 }
 
-/// The app's board glyph: three columns hanging from the top, each shorter than the last (as the menu bar icon).
-struct BoardGlyph: Shape {
-    func path(in rect: CGRect) -> Path {
-        let scale = min(rect.width, rect.height) / 24
-        let columns = [
-            CGRect(x: 3, y: 4, width: 5, height: 16),
-            CGRect(x: 10, y: 4, width: 5, height: 10),
-            CGRect(x: 17, y: 4, width: 4, height: 7),
-        ]
-        var path = Path()
-        for column in columns {
-            let scaled = CGRect(
-                x: rect.minX + column.minX * scale,
-                y: rect.minY + column.minY * scale,
-                width: column.width * scale,
-                height: column.height * scale
-            )
-            path.addRoundedRect(in: scaled, cornerSize: CGSize(width: 1.5 * scale, height: 1.5 * scale))
-        }
-        return path
+/// The app's own icon, as the brand mark beside its name. Its artwork leaves a margin round the rounded square, so
+/// it is drawn a little larger than a glyph would be.
+struct AppIconMark: View {
+    let side: CGFloat
+
+    var body: some View {
+        Image(nsImage: NSApp.applicationIconImage)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: side, height: side)
+            .accessibilityHidden(true)
     }
 }

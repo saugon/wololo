@@ -16,10 +16,7 @@ struct EmptyStateView: View {
                 HoodIcon(color: theme.faint, face: theme.surface)
                     .frame(width: 40, height: 40)
             } else {
-                BoardGlyph()
-                    .stroke(theme.faint, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-                    .frame(width: 40, height: 40)
-                    .accessibilityHidden(true)
+                AppIconMark(side: 48)
             }
 
             VStack(alignment: .leading, spacing: 8) {
