@@ -60,6 +60,7 @@ struct MainView: View {
             BoardView(
                 board: board,
                 mode: state.boardMode,
+                gridColumns: state.gridColumns,
                 now: model.now,
                 selectedRunID: state.selectedRunID,
                 select: { id in state.selectedRunID = id },
@@ -88,7 +89,15 @@ struct MainView: View {
         }
         let controls = HStack(spacing: 14) {
             CountersBox(working: counters.working, waiting: counters.waiting)
-            ModePicker(mode: $state.boardMode)
+            if state.boardMode == .grid {
+                SegmentPicker(selection: $state.gridColumns,
+                              options: [(0, "Auto")] + (1...PlanningPrefs.maxGridColumns).map { ($0, "\($0)") },
+                              label: "Cards por fila")
+                    .help("Cards por fila")
+            }
+            SegmentPicker(selection: $state.boardMode,
+                          options: [(.byStatus, "Por estado"), (.byStage, "Por etapa"), (.grid, "Grilla")],
+                          label: "Agrupar columnas")
         }
         .fixedSize()
         return ViewThatFits(in: .horizontal) {
@@ -183,16 +192,19 @@ private struct CountersBox: View {
 }
 
 /// "Por estado" / "Por etapa" / "Grilla", as the mockup's segmented control.
-private struct ModePicker: View {
-    @Binding var mode: BoardMode
+/// Segments side by side, the chosen one filled: how the board groups its runs, and the grid's cards per row.
+private struct SegmentPicker<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(Value, String)]
+    let label: String
 
     @Environment(\.theme) private var theme
 
     var body: some View {
         HStack(spacing: 2) {
-            segment("Por estado", .byStatus)
-            segment("Por etapa", .byStage)
-            segment("Grilla", .grid)
+            ForEach(options, id: \.0) { value, title in
+                segment(title, value)
+            }
         }
         .padding(3)
         .themeFrame(theme, fill: theme.field) { picker in
@@ -201,18 +213,18 @@ private struct ModePicker: View {
                 .overlay(RoundedRectangle(cornerRadius: theme.r(8)).strokeBorder(theme.border, lineWidth: 1))
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Agrupar columnas")
+        .accessibilityLabel(label)
     }
 
-    private func segment(_ title: String, _ value: BoardMode) -> some View {
-        let isOn = mode == value
+    private func segment(_ title: String, _ value: Value) -> some View {
+        let isOn = selection == value
         return Button {
-            mode = value
+            selection = value
         } label: {
             Text(title)
                 .font(theme.font(.body, size: 13, weight: .medium))
                 .foregroundStyle(isOn ? theme.title : theme.muted)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, options.count > 3 ? 10 : 14)
                 .frame(minHeight: 34)
                 .background(isOn ? theme.track : .clear, in: RoundedRectangle(cornerRadius: theme.r(6)))
                 .contentShape(RoundedRectangle(cornerRadius: theme.r(6)))

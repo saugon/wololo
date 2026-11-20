@@ -28,6 +28,10 @@ final class AppState {
     var boardMode: BoardMode = .byStatus {
         didSet { if boardMode != oldValue { planningPrefs.boardMode = boardMode } }
     }
+    /// The grid's cards per row; 0 is as many as fit.
+    var gridColumns = 0 {
+        didSet { if gridColumns != oldValue { planningPrefs.gridColumns = gridColumns } }
+    }
     /// The run whose detail the window shows instead of the board. Another run opens on its timeline.
     var selectedRunID: String? {
         didSet {
@@ -98,6 +102,7 @@ final class AppState {
         if persists {
             tab = planningPrefs.tab
             boardMode = planningPrefs.boardMode
+            gridColumns = planningPrefs.gridColumns
             selectedProjectID = planningPrefs.selectedProjectID
             selectedGoalID = planningPrefs.selectedGoalID
         }

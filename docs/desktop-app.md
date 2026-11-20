@@ -4,7 +4,7 @@
 
 - **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
 - **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first. ⌘⇧L shows or hides it from any app.
-- **Window**: opens when the app starts. A sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card, with search.
+- **Window**: opens when the app starts. A sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card (as many per row as fit, or 1 to 6 chosen beside the view picker), with search.
 - **Detail**: a run's stages, what it is doing or waiting on, items, agents, PR and CI, timeline, documents, screenshots and cost. **Ir a la terminal** (also on each widget row) brings the iTerm2 or Ghostty tab of its session to the front, or opens one in its directory and copies `/wololo resume <run>`.
 
 It only reads the store, except **Descartar** in a run's detail: for a run no session holds anymore (paused or orphaned, no heartbeat for 90 s), it records `run.finished {outcome: cancelled}` and its snapshot, as the mod's cancel would, after a confirmation. The worktree, branch and files stay in place. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.

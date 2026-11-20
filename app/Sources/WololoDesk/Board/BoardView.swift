@@ -10,6 +10,8 @@ struct BoardView: View {
 
     let board: Board
     let mode: BoardMode
+    /// The grid's cards per row; 0 is as many as fit at `GridCard.minWidth`.
+    let gridColumns: Int
     let now: TimeInterval
     let selectedRunID: String?
     let select: (String) -> Void
@@ -31,7 +33,7 @@ struct BoardView: View {
         }
     }
 
-    /// The active runs as large cards, as many per row as fit at `GridCard.minWidth`.
+    /// The active runs as large cards, `gridColumns` per row or as many as fit at `GridCard.minWidth`.
     private var grid: some View {
         let runs = board.columns.first?.runs ?? []
         let finished = board.columns.dropFirst().first?.runs ?? []
@@ -77,7 +79,7 @@ struct BoardView: View {
     }
 
     private func gridCards(_ runs: [Run]) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)], spacing: 16) {
+        LazyVGrid(columns: gridItems, spacing: 16) {
             ForEach(runs, id: \.id) { run in
                 GridCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
                     goToTerminal(run)
@@ -85,6 +87,12 @@ struct BoardView: View {
             }
         }
         .padding(.horizontal, Self.cardMargin)
+    }
+
+    /// A chosen count shares the width among that many cards, narrower than `GridCard.minWidth` if the window is.
+    private var gridItems: [GridItem] {
+        guard gridColumns > 0 else { return [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)] }
+        return Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: gridColumns)
     }
 
     private var columns: some View {

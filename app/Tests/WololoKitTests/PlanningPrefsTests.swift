@@ -48,6 +48,19 @@ final class PlanningPrefsTests: XCTestCase {
         XCTAssertNotNil(prefs.viewport(forGoal: "g2"))
     }
 
+    func testRemembersTheGridColumns() throws {
+        let prefs = PlanningPrefs(defaults: defaults, persists: true)
+        XCTAssertEqual(prefs.gridColumns, 0)
+        prefs.gridColumns = 3
+        XCTAssertEqual(PlanningPrefs(defaults: try XCTUnwrap(UserDefaults(suiteName: suiteName)), persists: true).gridColumns, 3)
+        prefs.gridColumns = 0
+        XCTAssertNil(defaults.object(forKey: PlanningPrefs.Key.gridColumns))
+        defaults.set(40, forKey: PlanningPrefs.Key.gridColumns)
+        XCTAssertEqual(prefs.gridColumns, 0, "out of range is as many as fit")
+        defaults.set("tres", forKey: PlanningPrefs.Key.gridColumns)
+        XCTAssertEqual(prefs.gridColumns, 0)
+    }
+
     func testRemembersTheBoardView() throws {
         let prefs = PlanningPrefs(defaults: defaults, persists: true)
         XCTAssertEqual(prefs.boardMode, .byStatus)

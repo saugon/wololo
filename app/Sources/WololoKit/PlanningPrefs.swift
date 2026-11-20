@@ -13,6 +13,7 @@ public struct PlanningPrefs {
     public enum Key {
         public static let tab = "planning.tab"
         public static let boardMode = "board.mode"
+        public static let gridColumns = "board.gridColumns"
         public static let projectID = "planning.selectedProjectID"
         public static let goalID = "planning.selectedGoalID"
         /// A dictionary from goal id to the JSON of its `Viewport`.
@@ -38,6 +39,24 @@ public struct PlanningPrefs {
         get { (defaults.object(forKey: Key.boardMode) as? String).flatMap(BoardMode.init(rawValue:)) ?? .byStatus }
         nonmutating set { write(newValue.rawValue, forKey: Key.boardMode) }
     }
+
+    /// The grid's cards per row, from 1 to `maxGridColumns`; 0 (or anything else saved) is as many as fit.
+    public var gridColumns: Int {
+        get {
+            let value = defaults.object(forKey: Key.gridColumns) as? Int ?? 0
+            return (0...Self.maxGridColumns).contains(value) ? value : 0
+        }
+        nonmutating set {
+            guard persists else { return }
+            if newValue > 0, newValue <= Self.maxGridColumns {
+                defaults.set(newValue, forKey: Key.gridColumns)
+            } else {
+                defaults.removeObject(forKey: Key.gridColumns)
+            }
+        }
+    }
+
+    public static let maxGridColumns = 6
 
     public var selectedProjectID: String? {
         get { string(Key.projectID) }
