@@ -10,7 +10,7 @@ A Claude Code plugin that takes an issue to a pull request, and always shows whi
 - 👀 A card above the prompt and a side pane say what the run is doing at every moment.
 - 🌳 Each run works in its own worktree, branch and ports, so several run in parallel.
 - 🗂️ Nothing goes into your repository: config and runs live in `~/.claude/wololo`.
-- 🖥️ [Wololo](docs/desktop-app.md), a macOS app with the runs of every terminal.
+- 🖥️ [Wololo](docs/desktop-app.md), a macOS app with the runs of every terminal ([download](https://github.com/saugon/wololo/releases/latest)).
 
 ## Installation
 

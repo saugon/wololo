@@ -1,4 +1,4 @@
-.PHONY: help typecheck test validate app install app-test check
+.PHONY: help typecheck test validate app install release app-test check
 
 help: ## List the targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{ printf "  %-10s %s\n", $$1, $$2 }'
@@ -17,6 +17,9 @@ app: ## Build Wololo.app in app/dist
 
 install: ## Build Wololo.app and copy it to ~/Applications
 	app/scripts/build-app.sh --install
+
+release: ## Build Wololo.app universal and zip it in app/dist, for a GitHub release
+	app/scripts/build-app.sh --release
 
 app-test: ## Run Wololo's tests
 	cd app && swift test

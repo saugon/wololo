@@ -3,6 +3,7 @@
 #
 #   app/scripts/build-app.sh             # leaves app/dist/Wololo.app
 #   app/scripts/build-app.sh --install   # and copies it to ~/Applications
+#   app/scripts/build-app.sh --release   # universal (arm64 and x86_64), zipped as app/dist/Wololo-<version>.zip
 #
 # --install replaces ~/Applications/Wololo.app only when it is a Wololo build
 # (bundle id com.saugon.wololo-desk); anything else there is left alone and the script fails.
@@ -13,11 +14,13 @@ bundle_id="com.saugon.wololo-desk"
 app_name="Wololo.app"
 
 install=0
+release=0
 case "$#:${1-}" in
   0:) ;;
   1:--install) install=1 ;;
+  1:--release) release=1 ;;
   *)
-    echo "usage: $0 [--install]" >&2
+    echo "usage: $0 [--install | --release]" >&2
     exit 64
     ;;
 esac
@@ -29,9 +32,15 @@ fail() {
   exit 1
 }
 
+# A release runs on Apple silicon and on Intel; a local build is for this Mac alone.
+arch_flags=""
+[ "$release" -eq 1 ] && arch_flags="--arch arm64 --arch x86_64"
+
 echo "→ Building WololoDesk (release)..."
-swift build -c release --product WololoDesk || fail "swift build failed (needs Swift 5.9+ on macOS 14+)"
-bin_dir="$(swift build -c release --show-bin-path)"
+# shellcheck disable=SC2086
+swift build -c release $arch_flags --product WololoDesk || fail "swift build failed (needs Swift 5.9+ on macOS 14+)"
+# shellcheck disable=SC2086
+bin_dir="$(swift build -c release $arch_flags --show-bin-path)"
 bin="$bin_dir/WololoDesk"
 [ -x "$bin" ] || fail "no binary at $bin"
 # Fonts, licences and the built-in themes, which the app looks for in Contents/Resources.
@@ -45,6 +54,7 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/WololoDesk"
 ditto --norsrc --noextattr "$resources" "$app/Contents/Resources/WololoDesk_WololoDesk.bundle"
 cp Resources/Info.plist "$app/Contents/Info.plist"
+cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$app/Contents/PkgInfo"
 
 echo "→ Signing ad hoc..."
@@ -54,6 +64,15 @@ codesign --verify --strict "$app" || fail "signature verification failed for $ap
 
 built="$(pwd)/$app"
 echo "✓ $built"
+
+if [ "$release" -eq 1 ]; then
+  version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+  zip="dist/Wololo-$version.zip"
+  rm -f "$zip"
+  ditto -c -k --keepParent "$app" "$zip" || fail "cannot zip $app"
+  echo "✓ $(pwd)/$zip ($(lipo -archs "$app/Contents/MacOS/WololoDesk"))"
+  exit 0
+fi
 
 [ "$install" -eq 1 ] || exit 0
 

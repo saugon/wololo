@@ -9,10 +9,23 @@
 
 It only reads the store, except **Descartar** in a run's detail: for a run no session holds anymore (paused or orphaned, no heartbeat for 90 s), it records `run.finished {outcome: cancelled}` and its snapshot, as the mod's cancel would, after a confirmation. The worktree, branch and files stay in place. The data directory is `WOLOLO_DATA_DIR`, else the one set in its settings, else `~/.claude/wololo`.
 
+## Install
+
+Download `Wololo-<version>.zip` from the [releases](https://github.com/saugon/wololo/releases), unzip it and move `Wololo.app` to Applications. It runs on Apple silicon and Intel, on macOS 14 or later. It is signed ad hoc, not notarized, so macOS refuses to open it the first time ("damaged" or "unidentified developer"); take it out of quarantine once:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Wololo.app
+```
+
+Or build it from the repo:
+
 ```sh
 make app       # app/scripts/build-app.sh: app/dist/Wololo.app, signed ad hoc
 make install   # app/scripts/build-app.sh --install: and copies it to ~/Applications
+make release   # app/scripts/build-app.sh --release: universal, zipped as app/dist/Wololo-<version>.zip
 ```
+
+A release: raise `CFBundleShortVersionString` in `app/Resources/Info.plist`, `make release`, then `gh release create app-v<version> app/dist/Wololo-<version>.zip`.
 
 `--install` replaces an existing `~/Applications/Wololo.app` only if it is a Wololo build. The first **Ir a la terminal** asks for the Automation permission for each terminal; if it was denied, allow it in System Settings → Privacy & Security → Automation. Requires macOS 14 and Swift 5.9 or later.
 
