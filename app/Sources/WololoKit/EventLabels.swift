@@ -135,6 +135,9 @@ public func eventLine(_ event: RunEvent, lang: Lang) -> String {
         return es ? "PR listo, en revisión" : "PR ready, in review"
     case "pr.merged":
         return es ? "PR mergeado" : "PR merged"
+    case "pr.review_state":
+        guard case .object(let fields)? = d["review"] else { return es ? "PR: review actualizado" : "PR: review updated" }
+        return "PR: " + reviewBadge(Run.Review(json: fields), lang: es ? .es : .en).title
     case "pr.merge_state":
         var parts: [String] = []
         if d["conflicts"]?.bool == true { parts.append(es ? "tiene conflictos con la base" : "conflicts with its base") }

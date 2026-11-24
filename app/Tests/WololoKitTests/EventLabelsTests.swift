@@ -26,12 +26,52 @@ final class EventLabelsTests: XCTestCase {
 
         let pr: [String: Any] = ["url": "https://github.com/acme/web/pull/7", "number": 7, "state": "ready"]
         let conflicting = try makeRun("c", status: "in_review", ["pr": pr.merging(["conflicts": true]) { $1 }])
-        XCTAssertEqual(prMergeBadge(conflicting), MergeBadge(text: "conflictos", title: "Tiene conflictos con la base", isProblem: true))
+        XCTAssertEqual(prReviewBadge(conflicting), ReviewBadge(text: "conflictos", title: "Tiene conflictos con la base", ball: .claude, tone: .problem))
         XCTAssertEqual(activityLine(conflicting, now: fixtureNow), "Tiene conflictos con la base")
         let queued = try makeRun("q", status: "in_review", ["pr": pr.merging(["conflicts": false, "queue": ["position": 3, "state": "AWAITING_CHECKS"]]) { $1 }])
-        XCTAssertEqual(prMergeBadge(queued), MergeBadge(text: "en cola · 3.º", title: "En la merge queue (3.º), esperando los checks", isProblem: false))
-        XCTAssertNil(prMergeBadge(try makeRun("m", ["pr": pr.merging(["state": "merged", "conflicts": true]) { $1 }])))
-        XCTAssertNil(prMergeBadge(try makeRun("n", ["pr": pr])))
+        XCTAssertEqual(prReviewBadge(queued), ReviewBadge(text: "en cola · 3.º", title: "En la merge queue (3.º), esperando los checks", ball: .github, tone: .queued))
+        XCTAssertNil(prReviewBadge(try makeRun("m", ["pr": pr.merging(["state": "merged", "conflicts": true]) { $1 }])))
+        XCTAssertNil(prReviewBadge(try makeRun("n", ["pr": pr])))
+    }
+
+    func testReviewSaysTheOneThingBeforeTheMergeAndWhoMoves() throws {
+        let pr: [String: Any] = ["url": "https://github.com/acme/web/pull/7", "number": 7, "state": "ready", "conflicts": false]
+        let base: [String: Any] = ["decision": "review_required", "approved_by": [], "changes_by": [], "requested": ["ana", "leo", "mia"],
+                                   "unanswered": 0, "checks": "passing", "failing": 0, "behind": false]
+        func badge(_ review: [String: Any]) throws -> ReviewBadge? {
+            prReviewBadge(try makeRun("r", status: "in_review", ["pr": pr.merging(["review": base.merging(review) { $1 }]) { $1 }]))
+        }
+        XCTAssertEqual(try badge([:]), ReviewBadge(text: "esperando review", title: "Esperando review de @ana, @leo y 1 más", ball: .reviewer, tone: .idle))
+        XCTAssertEqual(try badge(["checks": "pending"])?.ball, .wait)
+        XCTAssertEqual(try badge(["checks": "pending", "unanswered": 2]), ReviewBadge(text: "2 sin responder", title: "2 comentarios sin responder", ball: .claude, tone: .attention))
+        XCTAssertEqual(try badge(["unanswered": 1, "decision": "changes_requested", "changes_by": ["ana"]])?.title, "Cambios pedidos por @ana")
+        XCTAssertEqual(try badge(["decision": "changes_requested", "checks": "failing", "failing": 3])?.text, "CI falla (3)")
+        XCTAssertEqual(try badge(["decision": "approved", "approved_by": ["ana"], "requested": []]),
+                       ReviewBadge(text: "listo", title: "Aprobado por @ana · listo para mergear", ball: .you, tone: .ready))
+        XCTAssertEqual(try badge(["decision": NSNull(), "requested": [], "behind": true])?.title, "Listo para mergear · atrasado con la base")
+
+        // Back at work on the review's changes, it says so rather than what GitHub still shows.
+        let working = try makeRun("w", status: "waiting_agents", ["pr": pr.merging(["review": base]) { $1 }, "pr_review": ["since": 1]])
+        XCTAssertEqual(prReviewBadge(working), ReviewBadge(text: "aplicando cambios", title: "Aplicando los cambios del review", ball: .claude, tone: .running))
+        let reworking = try makeRun("k", status: "stalled", ["pr": pr.merging(["review": base]) { $1 }, "rework": ["since": 2, "reason": "rename"]])
+        XCTAssertEqual(prReviewBadge(reworking)?.text, "aplicando cambios")
+
+        XCTAssertEqual(lines("pr.review_state", ["review": .object(["decision": .string("approved"), "approved_by": .array([.string("ana")]),
+                                                                    "checks": .string("passing")])]),
+                       ["PR: Aprobado por @ana · listo para mergear", "PR: Approved by @ana · ready to merge"])
+    }
+
+    func testTheReviewColumnPutsWhatWaitsOnThePersonFirst() throws {
+        func run(_ id: String, since: TimeInterval, _ review: [String: Any]?) throws -> Run {
+            var pr: [String: Any] = ["url": "", "number": 1, "state": "ready"]
+            if let review { pr["review"] = review }
+            return try makeRun(id, status: "in_review", ["pr": pr, "pr_review": ["since": since]])
+        }
+        let waiting = try run("a", since: 100, ["decision": "review_required", "requested": ["ana"]])
+        let ready = try run("b", since: 300, ["decision": "approved"])
+        let failing = try run("c", since: 200, ["checks": "failing", "requested": ["ana"]])
+        let unknown = try run("d", since: 50, nil)
+        XCTAssertEqual(byReview([waiting, ready, failing, unknown]).map(\.id), ["b", "c", "d", "a"])
     }
 
     func testMockupNamesItsPageOrItsFiles() throws {

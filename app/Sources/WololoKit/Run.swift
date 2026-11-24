@@ -21,6 +21,8 @@ public struct Run: Equatable, Sendable {
     public var doing: Doing?
     public var paused: Paused?
     public var prReview: PRReview?
+    /// Changes asked for on the open PR, being made back in implement and evidence; nil otherwise.
+    public var rework: PRReview?
     public var agents: [Agent]
     public var tasks: [TaskEntry]
     public var items: Items
@@ -50,6 +52,7 @@ extension Run: Decodable {
         case finishedAt = "finished_at"
         // Not `review`: that top-level key already says where the change is approved ("local" or "pr").
         case prReview = "pr_review"
+        case rework
     }
 
     public init(from decoder: Decoder) throws {
@@ -75,6 +78,7 @@ extension Run: Decodable {
         doing = c.optional(.doing)
         paused = c.optional(.paused)
         prReview = c.optional(.prReview)
+        rework = c.optional(.rework)
         agents = c.list(.agents)
         tasks = c.list(.tasks)
         items = c.value(.items, or: Items())
@@ -375,6 +379,8 @@ extension Run {
         public var conflicts: Bool?
         /// Its place in the merge queue while it is in one.
         public var queue: MergeQueue?
+        /// Where its review stands, as the mod last read it from GitHub; nil until it looked.
+        public var review: Review?
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: AnyKey.self)
@@ -384,6 +390,50 @@ extension Run {
             ci = c.optional("ci")
             conflicts = c.optional("conflicts")
             queue = c.optional("queue")
+            review = c.optional("review")
+        }
+    }
+
+    /// The review decision and who made it, the reviewers asked, how many conversations end on someone else's word,
+    /// the latest commit's checks and how many failed, and whether the base moved on.
+    public struct Review: Equatable, Sendable, Decodable {
+        /// `approved`, `changes_requested`, `review_required`, or nil when the repo asks for none.
+        public var decision: String?
+        public var approvedBy: [String]
+        public var changesBy: [String]
+        public var requested: [String]
+        public var unanswered: Int
+        /// `pending`, `passing`, `failing`, or nil when the commit has none.
+        public var checks: String?
+        public var failing: Int
+        public var behind: Bool
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: AnyKey.self)
+            decision = c.optional("decision")
+            approvedBy = c.value("approved_by", or: [])
+            changesBy = c.value("changes_by", or: [])
+            requested = c.value("requested", or: [])
+            unanswered = c.value("unanswered", or: 0)
+            checks = c.optional("checks")
+            failing = c.value("failing", or: 0)
+            behind = c.value("behind", or: false)
+        }
+
+        /// From a `pr.review_state` event's `review`.
+        public init(json f: [String: JSONValue]) {
+            let names = { (key: String) -> [String] in
+                if case .array(let items)? = f[key] { return items.compactMap(\.string) }
+                return []
+            }
+            decision = f["decision"]?.string
+            approvedBy = names("approved_by")
+            changesBy = names("changes_by")
+            requested = names("requested")
+            unanswered = f["unanswered"]?.int ?? 0
+            checks = f["checks"]?.string
+            failing = f["failing"]?.int ?? 0
+            behind = f["behind"]?.bool ?? false
         }
     }
 

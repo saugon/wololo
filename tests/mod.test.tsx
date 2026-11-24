@@ -1178,7 +1178,7 @@ test('a PR in review that conflicts or enters the merge queue says so, once per 
   await clock.advance(330_000)
   expect(eventLines(host, id).filter(line => line.type === 'pr.merge_state')).toHaveLength(1)
   view.stdout = '{"state":"OPEN","mergeable":"MERGEABLE"}'
-  queue.stdout = '{"position":2,"state":"QUEUED"}\n'
+  queue.stdout = '{"mergeQueueEntry":{"position":2,"state":"QUEUED"}}\n'
   await clock.advance(330_000)
   const run = await get()
   expect(run.pr?.conflicts).toBe(false)
@@ -1186,6 +1186,14 @@ test('a PR in review that conflicts or enters the merge queue says so, once per 
   expect(statusDetail(run, 'in_review', 1_800_001_000)).toContain('PR #4813 en la merge queue (2.º)')
   expect(eventLines(host, id).filter(line => line.type === 'pr.merge_state').at(-1)?.data).toEqual({ conflicts: false, queue: { position: 2, state: 'QUEUED' }, was_conflicting: true })
   expect(mergeStateText({ conflicts: false, queue: { position: 2, state: 'QUEUED' }, was_conflicting: true }, 'es')).toBe('ya no tiene conflictos · en la merge queue (2.º)')
+  // The review is read in the same query, and recorded when it changes.
+  queue.stdout = '{"mergeQueueEntry":null,"reviewDecision":"APPROVED","latestReviews":{"nodes":[{"state":"APPROVED","author":{"__typename":"User","login":"ana"}}]}}\n'
+  await clock.advance(330_000)
+  await clock.advance(330_000)
+  const reviewed = await get()
+  expect(reviewed.pr?.review?.approved_by).toEqual(['ana'])
+  expect(statusDetail(reviewed, 'in_review', 1_800_001_000)).toContain('PR #4813 aprobado por @ana · listo para mergear')
+  expect(eventLines(host, id).filter(line => line.type === 'pr.review_state').map(line => (line.data.review as { decision: unknown }).decision)).toEqual([null, 'approved'])
 })
 
 test("new comments on the PR reach the session while CI still runs, once each", async ($, on) => {

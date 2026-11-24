@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, sinceLastSeen, statusDetail, statusLine, awakeUntil } from '../hooks/model'
+import { type Live, type Run, type RunEvent, apply, deriveStatus, effectiveStatus, emptyRun, header, rebuild, reviewStatus, type PrReview, sinceLastSeen, statusDetail, statusLine, awakeUntil } from '../hooks/model'
 
 const IDLE: Live = { isTurnRunning: false, question: null, permission: null }
 
@@ -222,4 +222,23 @@ test('time while the machine slept is left out: a stretch counts only up to the 
   expect(awakeUntil(1_200, 37_000, 1_100)).toBe(1_200)
   // No tick yet (the mod just loaded): the whole stretch counts.
   expect(awakeUntil(1_000, 37_000, null)).toBe(37_000)
+})
+
+test('a PR in review says the one thing that stands before its merge, and who has to move', async () => {
+  const base: PrReview = { decision: 'review_required', approved_by: [], changes_by: [], requested: ['ana', 'leo', 'mia'], unanswered: 0, checks: 'passing', failing: 0, behind: false }
+  const status = (pr: Parameters<typeof reviewStatus>[0], lang: 'es' | 'en' = 'es') => {
+    const s = reviewStatus(pr, lang)
+    return s ? `${s.ball}: ${s.text}` : null
+  }
+  expect(status({})).toBeNull()
+  expect(status({ review: base })).toBe('reviewer: esperando review de @ana, @leo y 1 más')
+  expect(status({ review: { ...base, checks: 'pending' } })).toBe('wait: CI corriendo')
+  expect(status({ review: { ...base, checks: 'pending', unanswered: 2 } })).toBe('claude: 2 comentarios sin responder')
+  expect(status({ review: { ...base, unanswered: 1, decision: 'changes_requested', changes_by: ['ana'] } })).toBe('claude: cambios pedidos por @ana')
+  expect(status({ review: { ...base, decision: 'changes_requested', checks: 'failing', failing: 3 } })).toBe('claude: CI falla (3)')
+  expect(status({ review: { ...base, checks: 'failing' }, queue: { position: 1, state: 'QUEUED' } })).toBe('github: en la merge queue (1.º)')
+  expect(status({ review: base, conflicts: true, queue: { position: 1, state: 'QUEUED' } })).toBe('claude: tiene conflictos con la base')
+  expect(status({ review: { ...base, decision: 'approved', approved_by: ['ana'], requested: [] } })).toBe('you: aprobado por @ana · listo para mergear')
+  expect(status({ review: { ...base, decision: null, requested: [], behind: true } }, 'en')).toBe('you: ready to merge · behind its base')
+  expect(status({ review: { ...base, requested: [] } }, 'en')).toBe('reviewer: waiting on review')
 })

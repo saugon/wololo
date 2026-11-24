@@ -340,7 +340,7 @@ private struct SidebarRunRow: View {
         let status = effectiveStatus(run, now: now)
         Button(action: select) {
             NavRow(isSelected: isSelected) {
-                bullet(theme.dot(status))
+                bullet(theme.dot(status, of: run))
                 Text(run.displayTitle)
                     .font(theme.font(.body, size: 14))
                     .lineLimit(1)

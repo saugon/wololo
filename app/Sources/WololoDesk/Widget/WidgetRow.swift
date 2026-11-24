@@ -20,7 +20,7 @@ struct WidgetRow: View {
         HStack(alignment: .top, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 Circle()
-                    .fill(theme.dot(status))
+                    .fill(theme.dot(status, of: run))
                     .frame(width: 8, height: 8)
                     .padding(.top, 5)
                 VStack(alignment: .leading, spacing: 4) {
@@ -55,7 +55,7 @@ struct WidgetRow: View {
                                 .fixedSize()
                                 .help("Abrir el PR en el navegador: \(pr.url.absoluteString)")
                         }
-                        if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 10.5) }
+                        if let badge = prReviewBadge(run) { ReviewBadgeView(badge: badge, size: 10.5) }
                         ProgressBarView(
                             progress: progress,
                             height: 3,
@@ -68,7 +68,7 @@ struct WidgetRow: View {
                     if !activity.isEmpty {
                         Text(activity)
                             .font(theme.font(.body, size: 12))
-                            .foregroundStyle(theme.style(status).activity)
+                            .foregroundStyle(theme.style(status, of: run).activity)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }

@@ -27,6 +27,8 @@ public struct LaunchOptions: Equatable, Sendable {
     public var search: String?
     public var project: String?
     public var columns: BoardMode?
+    /// The grid's cards per row (`WOLOLO_DESK_GRID_COLUMNS`, 0 for as many as fit).
+    public var gridColumns: Int?
     public var snapshotURL: URL?
     /// A theme key to use for this launch only: the saved choice stays as it was.
     public var theme: String?
@@ -61,6 +63,8 @@ public struct LaunchOptions: Equatable, Sendable {
         case "grid": columns = .grid
         default: columns = nil
         }
+        gridColumns = Self.value(environment["WOLOLO_DESK_GRID_COLUMNS"]).flatMap(Int.init)
+            .flatMap { (0...PlanningPrefs.maxGridColumns).contains($0) ? $0 : nil }
         snapshotURL = Self.value(environment["WOLOLO_DESK_SNAPSHOT"]).map(Self.fileURL)
         theme = Self.value(environment["WOLOLO_DESK_THEME"])
         themesDirectory = Self.value(environment["WOLOLO_DESK_THEMES_DIR"]).map(Self.fileURL)

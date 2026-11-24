@@ -702,6 +702,58 @@ export default {
               "type": "string"
             }
           }
+        },
+        "review": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Where its review stands, from GitHub while it is open: the review decision and who approved or asked for changes, the reviewers asked, how many conversations end on someone else's word, the latest commit's checks and how many failed, and whether the base moved on.",
+          "properties": {
+            "decision": {
+              "enum": [
+                "approved",
+                "changes_requested",
+                "review_required",
+                null
+              ]
+            },
+            "approved_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "changes_by": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "requested": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "unanswered": {
+              "type": "integer"
+            },
+            "checks": {
+              "enum": [
+                "pending",
+                "passing",
+                "failing",
+                null
+              ]
+            },
+            "failing": {
+              "type": "integer"
+            },
+            "behind": {
+              "type": "boolean"
+            }
+          }
         }
       }
     },
@@ -919,6 +971,21 @@ export default {
       "properties": {
         "since": {
           "type": "number"
+        }
+      }
+    },
+    "rework": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Changes asked for once the PR is open, being made back in implement and evidence: Aprobar PR's approval stands for them, and entering pr again ends it. The reason is the one the run gave going back.",
+      "properties": {
+        "since": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
         }
       }
     }

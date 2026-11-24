@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { decide, ghArgs, isWololoRepo, prComments, urlIn, wololoMention } from '../hooks/github'
+import { decide, ghArgs, isWololoRepo, prComments, prState, urlIn, wololoMention } from '../hooks/github'
 
 test('a text that fits goes whole', async () => {
   expect(decide(1_000, null, 65_000)).toEqual({ send: 'full', length: 1_000 })
@@ -62,4 +62,55 @@ test("the PR's comments, reviews that say something and line comments count, the
     { author: 'chatgpt-codex-connector', at: '2026-11-19T10:10:01Z' },
   ])
   expect(prComments('nope', '', null)).toEqual([])
+})
+
+const user = (login: string) => ({ __typename: 'User', login })
+const bot = (login: string) => ({ __typename: 'Bot', login })
+
+test('the PR state reads the review, the reviewers, the checks and what is left unanswered', async () => {
+  const pr = {
+    mergeQueueEntry: null,
+    reviewDecision: 'CHANGES_REQUESTED',
+    mergeStateStatus: 'BEHIND',
+    reviewRequests: { nodes: [{ requestedReviewer: { __typename: 'User', login: 'leo' } }, { requestedReviewer: { __typename: 'Team', slug: 'web' } }] },
+    latestReviews: { nodes: [{ state: 'CHANGES_REQUESTED', author: user('ana') }, { state: 'APPROVED', author: user('mia') }, { state: 'APPROVED', author: bot('copilot') }] },
+    reviews: { nodes: [{ body: 'Mirá el nombre', createdAt: '2026-11-20T10:00:00Z', author: user('ana') }, { body: '', createdAt: '2026-11-20T12:00:00Z', author: user('mia') }] },
+    comments: { nodes: [{ createdAt: '2026-11-20T11:00:00Z', author: user('me') }, { createdAt: '2026-11-20T13:00:00Z', author: bot('vercel') }] },
+    reviewThreads: {
+      nodes: [
+        { isResolved: false, comments: { nodes: [{ author: user('ana') }] } },
+        { isResolved: false, comments: { nodes: [{ author: user('ana') }, { author: user('me') }] } },
+        { isResolved: true, comments: { nodes: [{ author: user('ana') }] } },
+        { isResolved: false, comments: { nodes: [{ author: user('ana') }, { author: user('me') }, { author: bot('coderabbit') }] } },
+      ],
+    },
+    commits: { nodes: [{ commit: { statusCheckRollup: { state: 'FAILURE', contexts: { nodes: [{ __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'FAILURE' }, { __typename: 'CheckRun', status: 'COMPLETED', conclusion: 'SUCCESS' }, { __typename: 'StatusContext', state: 'ERROR' }] } } } }] },
+  }
+  expect(prState(pr, 'me')).toEqual({
+    queue: null,
+    review: {
+      decision: 'changes_requested',
+      approved_by: ['mia'],
+      changes_by: ['ana'],
+      requested: ['leo', 'web'],
+      // Two open threads end on someone else's word, a reviewing bot's too; the conversation's last human word is the
+      // person's (the deploy bot's after it does not count).
+      unanswered: 2,
+      checks: 'failing',
+      failing: 2,
+      behind: true,
+    },
+  })
+  // Unknown who the person is, nothing is counted as unanswered.
+  expect(prState(pr, null)?.review.unanswered).toBe(0)
+})
+
+test('a PR with nothing to say reads as no review asked, no checks, and its queue as unknown', async () => {
+  expect(prState({}, 'me')).toEqual({
+    queue: undefined,
+    review: { decision: null, approved_by: [], changes_by: [], requested: [], unanswered: 0, checks: null, failing: 0, behind: false },
+  })
+  expect(prState({ mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }, commits: { nodes: [{ commit: { statusCheckRollup: { state: 'PENDING' } } }] } }, 'me')?.review.checks).toBe('pending')
+  expect(prState({ mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' } }, 'me')?.queue).toEqual({ position: 3, state: 'AWAITING_CHECKS' })
+  expect(prState(null, 'me')).toBeNull()
 })

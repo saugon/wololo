@@ -74,6 +74,7 @@ export default {
         "pr.closed",
         "pr.commented",
         "pr.merge_state",
+        "pr.review_state",
         "signing.done",
         "signing.deferred",
         "github.published",

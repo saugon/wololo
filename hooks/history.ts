@@ -1,4 +1,4 @@
-import { type Lang, type RunEvent, STAGES, type StageId, mergeStateText, roleName } from './model'
+import { type Lang, type RunEvent, STAGES, type StageId, isPrReview, mergeStateText, reviewStatus, roleName } from './model'
 
 export type Entry = { ts: number; icon: string; text: string; isMajor: boolean }
 
@@ -153,6 +153,10 @@ function describe(ev: RunEvent, lang: Lang): Entry[] {
     case 'pr.merge_state': {
       const text = mergeStateText(d, lang)
       return text ? one(d.conflicts === true ? '✕' : '·', `PR ${text}`) : []
+    }
+    case 'pr.review_state': {
+      const review = isPrReview(d.review) ? reviewStatus({ review: d.review }, lang) : null
+      return review ? one(review.tone === 'error' ? '✕' : review.ball === 'you' ? '✓' : '·', `PR ${review.text}`) : []
     }
     case 'pr.commented': {
       const by = Array.isArray(d.authors) ? d.authors.map(String).join(', ') : ''

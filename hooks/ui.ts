@@ -33,7 +33,7 @@ import {
   shortRef,
   stageLabel,
   statusLine,
-  queueText,
+  reviewStatus,
   t,
   busyTasks,
 } from './model'
@@ -124,9 +124,10 @@ export function progressOf(run: Run): Progress {
   return { segments, percent: run.outcome === 'done' ? 100 : Math.round((total / STAGES.length) * 100) }
 }
 
-export function toneOf(status: Status): Tone {
+// A PR in the merge queue paints its review in the success colour: it is on its way in, nobody has to do anything.
+export function toneOf(status: Status, run?: Pick<Run, 'pr'>): Tone {
   if (status === 'paused') return 'subtle'
-  if (status === 'in_review') return 'merged'
+  if (status === 'in_review') return run?.pr?.queue ? 'success' : 'merged'
   if (status === 'done') return 'success'
   if (status === 'failed' || status === 'blocked') return 'error'
   if (isWaitingOnPerson(status) || status === 'orphaned') return 'warning'
@@ -558,8 +559,8 @@ function detailBlocks(run: Run, now: number, runDir: string | undefined, events:
     const ci = run.pr.ci
     const line: Line = [span(run.pr.url, 'suggestion'), span(` · ${run.pr.state}`, 'text')]
     if (ci) line.push(span(` · CI ${ci}`, ci === 'passing' ? 'success' : ci === 'failing' ? 'error' : 'claude'))
-    if (run.pr.conflicts) line.push(span(es ? ' · conflictos con la base' : ' · conflicts with base', 'error'))
-    if (run.pr.queue) line.push(span(` · ${queueText(run.pr.queue, es ? 'es' : 'en')}`, run.pr.queue.state === 'UNMERGEABLE' ? 'error' : 'merged'))
+    const review = reviewStatus(run.pr, run.lang)
+    if (review) line.push(span(` · ${review.text}`, review.tone))
     blocks.push({ label: 'pr', lines: [line] })
   }
   if (runDir) blocks.push({ label: es ? 'archivos' : 'files', lines: [[span(runDir, 'text')]] })
@@ -592,7 +593,7 @@ export function buildView(
   worktree?: WorktreeInfo,
   homeDir?: string,
 ): ViewState {
-  const tone = toneOf(status)
+  const tone = toneOf(status, run)
   const lang = run.lang
   const es = lang === 'es'
   const agents = SHOWS_AGENTS.has(status) ? agentChips(run, now) : []
@@ -717,7 +718,7 @@ export function statusCards(runs: ReadonlyArray<{ run: Run; status: Status; last
       project: run.project.key.split('__').slice(-1)[0] ?? run.project.key,
       title: run.source.kind === 'github_issue' ? `${shortRef(run)} ${run.title}` : run.title,
       badge: badge(run.lang, status),
-      tone: toneOf(status),
+      tone: toneOf(status, run),
       stage: `${run.stage ? stageLabel(run) : es ? 'arrancando' : 'starting'}${items}`,
       current,
       doing: run.doing?.text ?? '',

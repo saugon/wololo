@@ -34,6 +34,16 @@ public struct Stage: Equatable, Sendable {
         Stage(id: "pr", isGate: false, es: "PR", en: "PR"),
     ]
 
+    /// Three letters, as the pane's stage chips: for a column too narrow for the whole word.
+    public func shortLabel(_ lang: Lang) -> String {
+        let short: [String: (es: String, en: String)] = [
+            "context": ("Con", "Ctx"), "definition": ("Def", "Def"), "mockup": ("Mck", "Mck"), "gate_a": ("Spc", "Spc"),
+            "plan": ("Pla", "Pln"), "implement": ("Imp", "Imp"), "evidence": ("Evi", "Evd"), "gate_b": ("Rev", "Rev"), "pr": ("PR", "PR"),
+        ]
+        guard let pair = short[id] else { return label(lang) }
+        return lang == .es ? pair.es : pair.en
+    }
+
     public static func index(of id: String) -> Int? {
         all.firstIndex { $0.id == id }
     }

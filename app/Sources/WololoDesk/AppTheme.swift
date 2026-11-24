@@ -67,6 +67,19 @@ struct AppTheme {
                            activity: Color(style.activity))
     }
 
+    /// A run's colours: its status's, except a PR in the merge queue, which is on its way in and takes a finished run's.
+    func style(_ status: RunStatus, of run: Run) -> StatusStyle {
+        style(isQueued(status, run) ? .done : status)
+    }
+
+    func dot(_ status: RunStatus, of run: Run) -> Color {
+        dot(isQueued(status, run) ? .done : status)
+    }
+
+    func isQueued(_ status: RunStatus, _ run: Run) -> Bool {
+        status == .inReview && run.pr?.queue != nil && run.pr?.queue?.state != "UNMERGEABLE"
+    }
+
     /// The small status dot of the sidebar and the archive.
     func dot(_ status: RunStatus) -> Color {
         Color(spec.style(status).color)

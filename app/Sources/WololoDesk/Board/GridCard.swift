@@ -5,11 +5,15 @@ import WololoKit
 /// is doing and, at the bottom, its origin and agents; on the right every stage, the ones done, the current one lit
 /// and the ones to come faint.
 struct GridCard: View {
-    static let minWidth: CGFloat = 400
+    /// The full card's width, with its stage column; `compactMinWidth` the one without it.
+    static let minWidth: CGFloat = 480
+    static let compactMinWidth: CGFloat = 300
     static let height: CGFloat = 262
 
     let run: Run
     let now: TimeInterval
+    /// The stage column narrow, three letters a stage: for a row of more cards than fit whole.
+    var isCompact = false
     let isSelected: Bool
     let select: () -> Void
     let goToTerminal: () -> Void
@@ -19,7 +23,7 @@ struct GridCard: View {
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
-        let style = theme.style(status)
+        let style = theme.style(status, of: run)
         HStack(spacing: 0) {
             summary(status, color: style.color, activityColor: style.activity)
                 .padding(.horizontal, 16)
@@ -28,11 +32,12 @@ struct GridCard: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             theme.cardDivider.frame(width: 1)
             stages(color: style.color)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, isCompact ? 10 : 14)
                 .padding(.vertical, 14)
-                .frame(width: 168, alignment: .topLeading)
+                .frame(width: isCompact ? 74 : 168, alignment: .topLeading)
                 .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: Self.height)
         .themeFrame(theme, fill: isHovered ? theme.surfaceHover : theme.surface) { card in
             card
@@ -106,31 +111,44 @@ struct GridCard: View {
             }
             Spacer(minLength: 0)
             theme.cardDivider.frame(height: 1)
-            HStack(spacing: 8) {
-                if let pr = prLabel(run), let url = prURL(run) {
+            // What does not fit goes, the agents first, then the project beside the PR: a footer wider than the card
+            // would push it over the next one.
+            ViewThatFits(in: .horizontal) {
+                footer(showsProject: true, showsAgents: true)
+                footer(showsProject: true, showsAgents: false)
+                footer(showsProject: false, showsAgents: false)
+            }
+            .foregroundStyle(theme.muted)
+        }
+    }
+
+    private func footer(showsProject: Bool, showsAgents: Bool) -> some View {
+        HStack(spacing: 8) {
+            if let pr = prLabel(run), let url = prURL(run) {
+                if showsProject {
                     Text(run.project.display)
                         .font(theme.font(.mono, size: 12))
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .help(run.project.branch ?? run.project.display)
-                    PRLink(text: pr, url: url, size: 12)
-                } else {
-                    Text(gridOrigin(run))
-                        .font(theme.font(.mono, size: 12))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        .frame(minWidth: 60, alignment: .leading)
                         .help(run.project.branch ?? run.project.display)
                 }
-                if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 11.5) }
-                Spacer(minLength: 0)
-                if let agents = agentsLabel(run, now: now) {
-                    Text(agents)
-                        .font(theme.font(.body, size: 12.5))
-                        .lineLimit(1)
-                        .fixedSize()
-                }
+                PRLink(text: pr, url: url, size: 12)
+            } else {
+                Text(gridOrigin(run))
+                    .font(theme.font(.mono, size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(run.project.branch ?? run.project.display)
             }
-            .foregroundStyle(theme.muted)
+            if let badge = prReviewBadge(run) { ReviewBadgeView(badge: badge, size: 11.5) }
+            Spacer(minLength: 0)
+            if showsAgents, let agents = agentsLabel(run, now: now) {
+                Text(agents)
+                    .font(theme.font(.body, size: 12.5))
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
     }
 
@@ -141,7 +159,7 @@ struct GridCard: View {
         let current = progress.stageNumber - 1
         let isDone = effectiveStatus(run, now: now) == .done
         return VStack(alignment: .leading, spacing: 9) {
-            Text("\(run.lang == .es ? "ETAPA" : "STAGE") \(progress.shortText)")
+            Text(isCompact ? progress.shortText : "\(run.lang == .es ? "ETAPA" : "STAGE") \(progress.shortText)")
                 .font(theme.font(.body, size: 11, weight: .semibold))
                 .tracking(0.8)
                 .foregroundStyle(theme.muted)
@@ -149,7 +167,7 @@ struct GridCard: View {
             ForEach(Array(Stage.all.enumerated()), id: \.element.id) { index, stage in
                 let isPast = index < current || isDone
                 let isCurrent = index == current && !isDone
-                HStack(spacing: 9) {
+                HStack(spacing: isCompact ? 6 : 9) {
                     ZStack {
                         if isCurrent {
                             Circle().fill(color.opacity(0.3)).frame(width: 13, height: 13)
@@ -159,7 +177,7 @@ struct GridCard: View {
                             .frame(width: 7, height: 7)
                     }
                     .frame(width: 13, height: 13)
-                    Text(stage.label(run.lang))
+                    Text(isCompact ? stage.shortLabel(run.lang) : stage.label(run.lang))
                         .font(theme.font(.body, size: 12.5, weight: isCurrent ? .bold : .regular))
                         .foregroundStyle(isCurrent ? theme.title : isPast ? theme.secondary : theme.faint)
                         .lineLimit(1)
@@ -196,15 +214,16 @@ struct GridCard: View {
     }
 }
 
-/// "conflictos" in the failing color, or "en cola · 2" in the accent one, as a small capsule beside the PR.
-struct MergeBadgeView: View {
-    let badge: MergeBadge
+/// Where the PR's review stands, as a small capsule beside it: "conflictos" or "CI falla" in the failing colour,
+/// "2 sin responder" in the waiting one, "listo" in the finished one, "en cola · 2" in the accent, the rest muted.
+struct ReviewBadgeView: View {
+    let badge: ReviewBadge
     let size: CGFloat
 
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let color = badge.isProblem ? theme.ci(.failing) : theme.accent
+        let color = self.color
         Text(badge.text)
             .font(theme.font(.body, size: size, weight: .semibold))
             .foregroundStyle(color)
@@ -215,6 +234,17 @@ struct MergeBadgeView: View {
             .background(color.opacity(0.14), in: Capsule())
             .help(badge.title)
             .accessibilityLabel(badge.title)
+    }
+
+    private var color: Color {
+        switch badge.tone {
+        case .problem: return theme.ci(.failing)
+        case .attention: return theme.style(.waitingUser).color
+        case .running: return theme.ci(.pending)
+        case .ready: return theme.style(.done).color
+        case .queued: return theme.accent
+        case .idle: return theme.muted
+        }
     }
 }
 

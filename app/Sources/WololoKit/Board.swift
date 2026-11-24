@@ -234,9 +234,16 @@ func byStart(_ runs: [Run]) -> [Run] {
     sorted(runs, newestFirst: false) { $0.createdAt }
 }
 
-/// The longest in review first: a queue waiting on merges.
+/// By who has to move, the person first, then Claude, the reviewers, CI and the merge queue; within each, the longest in
+/// review first. A card moves only when its review changes hands, which the mod sees every few minutes.
 func byReview(_ runs: [Run]) -> [Run] {
-    sorted(runs, newestFirst: false, by: reviewTime)
+    let ball = Dictionary(runs.map { ($0.id, prReviewBadge($0)?.ball ?? .reviewer) }, uniquingKeysWith: { first, _ in first })
+    return sorted(runs, newestFirst: false, by: reviewTime).enumerated()
+        .sorted { lhs, rhs in
+            let (a, b) = (ball[lhs.element.id] ?? .reviewer, ball[rhs.element.id] ?? .reviewer)
+            return a != b ? a < b : lhs.offset < rhs.offset
+        }
+        .map(\.element)
 }
 
 /// The last to finish first.

@@ -55,7 +55,7 @@ When the run's change is approved on the PR (`review: pr`), Aprobar PR is not as
 
 ## After approval
 
-The run keeps what each gate approved: `spec.md` and the mockup for **Aprobar spec**; `spec.md`, `plan.md` and the committed code for **Aprobar PR**. If any of them changes afterwards, the run refuses to move on (or to open the PR) until you go back to the stage that redoes it (`definition` or `implement`) and ask the gate again. Going back before a gate reopens it.
+The run keeps what each gate approved: `spec.md` and the mockup for **Aprobar spec**; `spec.md`, `plan.md` and the committed code for **Aprobar PR**. If any of them changes afterwards, the run refuses to move on (or to open the PR) until you go back to the stage that redoes it (`definition` or `implement`) and ask the gate again. Going back before a gate reopens it, except changes asked for once the PR is open: back to `implement` or `evidence` with the PR open, Aprobar PR's approval stands, and entering `pr` again goes on without asking it (`stages/06-pr.md`, **In review**).
 
 **At gate_a:**
 

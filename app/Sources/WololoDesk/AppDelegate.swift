@@ -130,6 +130,7 @@ final class AppState {
         if let search = options.search { self.search = search }
         if let project = options.project { self.project = project }
         if let columns = options.columns { boardMode = columns }
+        if let gridColumns = options.gridColumns { self.gridColumns = gridColumns }
     }
 
     /// Shows the run's detail on the Operación tab, on `tab` or else on its timeline.

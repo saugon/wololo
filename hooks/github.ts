@@ -1,3 +1,5 @@
+import type { PrReview } from './model'
+
 export const GITHUB_BODY_LIMIT = 65_000
 
 export type PublishKind = 'issue_body' | 'issue_comment' | 'issue_create' | 'pr_create' | 'pr_body' | 'pr_comment' | 'pr_ready'
@@ -100,4 +102,94 @@ export function prComments(view: unknown, lines: string, viewer: string | null):
     if (author && /^\d{4}-\d\d-\d\dT/.test(at)) out.push({ author: name(author), at })
   }
   return out.filter(c => c.author && c.author !== (viewer && name(viewer)))
+}
+
+// One query for what the PR card shows: its merge queue entry and where its review stands.
+export const PR_STATE_QUERY = `query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
+mergeQueueEntry{position state}
+reviewDecision mergeStateStatus
+reviewRequests(first:20){nodes{requestedReviewer{__typename ... on User{login} ... on Team{slug} ... on Bot{login}}}}
+latestReviews(first:30){nodes{state author{__typename login}}}
+reviews(last:30){nodes{body createdAt author{__typename login}}}
+comments(last:30){nodes{createdAt author{__typename login}}}
+reviewThreads(first:100){nodes{isResolved comments(last:20){nodes{author{__typename login}}}}}
+commits(last:1){nodes{commit{statusCheckRollup{state contexts(first:100){nodes{__typename ... on CheckRun{status conclusion} ... on StatusContext{state}}}}}}}
+}}}`
+
+type Author = { login: string; bot: boolean }
+
+function author(node: unknown): Author | null {
+  if (!isObject(node) || !isObject(node.author) || typeof node.author.login !== 'string') return null
+  const login = node.author.login
+  return { login, bot: node.author.__typename === 'Bot' || login.endsWith('[bot]') }
+}
+
+function nodes(value: unknown): unknown[] {
+  return isObject(value) && Array.isArray(value.nodes) ? value.nodes : []
+}
+
+const FAILED = new Set(['FAILURE', 'ERROR', 'TIMED_OUT', 'CANCELLED', 'ACTION_REQUIRED', 'STARTUP_FAILURE'])
+
+// The merge queue entry (null when out of it, undefined when the answer does not say) and the review, from
+// PR_STATE_QUERY's pullRequest. A conversation is unanswered when its last word is not `viewer`'s: an open review thread
+// whoever wrote last, reviewing bots such as Devin or Codex too; the PR's own comments and reviews with bots aside, which
+// there are mostly deploys and coverage. With no viewer known, none is counted. Null when `pr` is not a pull request.
+export function prState(pr: unknown, viewer: string | null): { queue: { position: number | null; state: string } | null | undefined; review: PrReview } | null {
+  if (!isObject(pr)) return null
+  const entry = pr.mergeQueueEntry
+  const queue =
+    entry === null
+      ? null
+      : isObject(entry) && typeof entry.state === 'string'
+        ? { position: typeof entry.position === 'number' ? entry.position : null, state: entry.state }
+        : undefined
+
+  const decision =
+    pr.reviewDecision === 'APPROVED' ? 'approved' : pr.reviewDecision === 'CHANGES_REQUESTED' ? 'changes_requested' : pr.reviewDecision === 'REVIEW_REQUIRED' ? 'review_required' : null
+  const latest = nodes(pr.latestReviews).filter(isObject)
+  const by = (state: string) =>
+    latest.filter(r => r.state === state).map(author).filter((a): a is Author => !!a && !a.bot).map(a => a.login)
+  const requested = nodes(pr.reviewRequests)
+    .map(n => (isObject(n) && isObject(n.requestedReviewer) ? n.requestedReviewer : null))
+    .map(r => (r && typeof r.login === 'string' ? r.login : r && typeof r.slug === 'string' ? r.slug : null))
+    .filter((n): n is string => !!n)
+
+  let unanswered = 0
+  if (viewer) {
+    const lastHuman = (list: unknown[]) => list.map(author).filter((a): a is Author => !!a && !a.bot).at(-1)
+    for (const thread of nodes(pr.reviewThreads)) {
+      if (!isObject(thread) || thread.isResolved === true) continue
+      const last = nodes(thread.comments).map(author).at(-1)
+      if (last && last.login !== viewer) unanswered++
+    }
+    // The PR's own conversation: its comments and the reviews that say something, in the order they were written.
+    const said = [
+      ...nodes(pr.comments).filter(isObject),
+      ...nodes(pr.reviews).filter(r => isObject(r) && typeof r.body === 'string' && r.body.trim() !== '').filter(isObject),
+    ].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
+    const last = lastHuman(said)
+    if (last && last.login !== viewer) unanswered++
+  }
+
+  const commit = nodes(pr.commits)[0]
+  const rollup = isObject(commit) && isObject(commit.commit) && isObject(commit.commit.statusCheckRollup) ? commit.commit.statusCheckRollup : null
+  const failing = rollup
+    ? nodes(rollup.contexts).filter(c => isObject(c) && (FAILED.has(String(c.conclusion)) || FAILED.has(String(c.__typename === 'StatusContext' ? c.state : '')))).length
+    : 0
+  const state = rollup ? String(rollup.state) : ''
+  const checks = !rollup ? null : state === 'SUCCESS' ? 'passing' : state === 'FAILURE' || state === 'ERROR' ? 'failing' : 'pending'
+
+  return {
+    queue,
+    review: {
+      decision,
+      approved_by: by('APPROVED'),
+      changes_by: by('CHANGES_REQUESTED'),
+      requested,
+      unanswered,
+      checks,
+      failing,
+      behind: pr.mergeStateStatus === 'BEHIND',
+    },
+  }
 }

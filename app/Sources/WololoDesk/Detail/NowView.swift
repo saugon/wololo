@@ -17,7 +17,7 @@ struct NowView: View {
             HStack(spacing: 10) {
                 CardTitle("Ahora")
                     .frame(maxWidth: .infinity, alignment: .leading)
-                StatusBadge(status: status, lang: run.lang)
+                StatusBadge(status: status, lang: run.lang, isQueued: theme.isQueued(status, run))
             }
             Text(activity.isEmpty ? "Sin actividad todavía." : activity)
                 .font(theme.font(.body, size: 16, weight: .medium))

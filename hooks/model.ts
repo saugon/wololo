@@ -99,6 +99,7 @@ export const EVENT_TYPES = [
   'pr.closed',
   'pr.commented',
   'pr.merge_state',
+  'pr.review_state',
   'signing.deferred',
   'signing.done',
   'github.published',
@@ -346,6 +347,8 @@ export type Run = {
     // MERGEABLE, UNMERGEABLE, LOCKED) while it is in one. Missing until the mod first looked.
     conflicts?: boolean
     queue?: { position: number | null; state: string } | null
+    // Where its review stands, from GitHub while it is open: missing until the mod first looked.
+    review?: PrReview | null
   } | null
   screenshots: Array<{ file: string; caption: string }>
   // The UI mockup the mockup stage made: its files in run_dir/mockup, and its page on claude.ai when it was published there.
@@ -370,6 +373,9 @@ export type Run = {
   paused?: { note: string; since: number } | null
   // Since when the PR waits on its reviewers: the run stays open until it merges or the person ends it.
   pr_review?: { since: number } | null
+  // Changes asked for once the PR is open (in review, or a comment while CI runs), being made back in implement and
+  // evidence: Aprobar PR's approval stands for them, and entering pr again ends it.
+  rework?: { since: number; reason: string } | null
   // The PR's comments the run was last told about: up to which one (GitHub's time, ISO), how many and by whom.
   pr_comments?: { seen: string; count: number; authors: string[]; at: number } | null
 }
@@ -451,6 +457,7 @@ export function emptyRun(id: string, ts: number): Run {
     pause_requested_at: null,
     paused: null,
     pr_review: null,
+    rework: null,
   }
 }
 
@@ -531,9 +538,16 @@ export function apply(run: Run, ev: RunEvent): Run {
       if (index < 0) break
       const open = r.stages.find(s => s.finished_at === null && s.id !== id)
       if (open) open.finished_at = ev.ts
-      // Going back to a stage before a gate reopens that gate: what it approved is being redone.
-      if (r.stage && index <= r.stage.index)
+      const isOpenPr = !!r.pr && r.pr.state !== 'merged' && r.pr.state !== 'closed'
+      if (r.stage && index <= r.stage.index && isOpenPr && (id === 'implement' || id === 'evidence')) {
+        // Changes on an open PR: Aprobar PR's approval stands for them, as it did before they went back.
+        r.rework = r.rework ?? { since: ev.ts, reason: typeof d.reason === 'string' ? d.reason : '' }
+      } else if (r.stage && index <= r.stage.index) {
+        // Going back to a stage before a gate reopens that gate: what it approved is being redone.
         for (const gate of STAGES.filter(stage => stage.isGate && stageIndex(stage.id) > index)) delete r.gates[gate.id]
+        r.rework = null
+      }
+      if (id === 'pr') r.rework = null
       r.stage = { id, index, total: STAGES.length, since: ev.ts }
       r.doing = null
       r.stages.push({ id, started_at: ev.ts, finished_at: null })
@@ -808,6 +822,9 @@ export function apply(run: Run, ev: RunEvent): Run {
           r.pr.queue = { position: typeof q.position === 'number' ? q.position : null, state: q.state }
       }
       break
+    case 'pr.review_state':
+      if (r.pr && isPrReview(d.review)) r.pr.review = d.review
+      break
     case 'pr.commented':
       if (typeof d.latest === 'string' && d.latest) {
         r.pr_comments = {
@@ -904,7 +921,7 @@ export function deriveStatus(run: Run, live: Live): Status {
   if (tasks.some(t => t.kind === 'tests')) return 'waiting_tests'
   if (tasks.length > 0 || liveAgents(run).length > 0) return 'waiting_agents'
   // Nothing of the run's own is going on while its PR waits on reviewers: in review, not stalled.
-  if (run.pr_review) return 'in_review'
+  if (run.pr_review && !run.rework) return 'in_review'
   return 'stalled'
 }
 
@@ -1205,8 +1222,8 @@ export function statusDetail(run: Run, status: Status, nowSeconds: number, withA
     case 'in_review': {
       const pr = run.pr?.number ? `PR #${run.pr.number}` : 'PR'
       const since = run.pr_review ? ` · ${ago(run.pr_review.since)}` : ''
-      if (run.pr?.conflicts) return es ? `${pr} tiene conflictos con la base${since}` : `${pr} conflicts with its base${since}`
-      if (run.pr?.queue) return `${pr} ${queueText(run.pr.queue, es ? 'es' : 'en')}${since}`
+      const review = run.pr ? reviewStatus(run.pr, es ? 'es' : 'en') : null
+      if (review) return `${pr} ${review.text}${since}`
       return es
         ? `${pr} esperando review; termina al mergearse o con /wololo done${since}`
         : `${pr} waiting on review; ends when it merges or with /wololo done${since}`
@@ -1266,6 +1283,7 @@ const DIGEST_TYPES: ReadonlySet<EventType> = new Set<EventType>([
   'pr.ready',
   'pr.commented',
   'pr.merge_state',
+  'pr.review_state',
   'mockup.published',
   'ci.updated',
   'run.finished',
@@ -1299,6 +1317,10 @@ export function sinceLastSeen(run: Run, events: readonly RunEvent[], sinceSecond
           return `Mockup: ${String(d.url ?? (Array.isArray(d.files) ? d.files.join(', ') : ''))}`
         case 'pr.merge_state':
           return `PR: ${mergeStateText(d, 'es')}`
+        case 'pr.review_state': {
+          const review = isPrReview(d.review) ? reviewStatus({ review: d.review }, 'es') : null
+          return review ? `PR: ${review.text}` : ''
+        }
         case 'pr.commented':
           return `PR: ${String(d.count)} comentario(s) nuevo(s) de ${Array.isArray(d.authors) ? d.authors.join(', ') : '?'}`
         case 'base.changed':
@@ -1341,4 +1363,78 @@ export function mergeStateText(d: Record<string, unknown>, lang: Lang): string {
   if (q && typeof q.state === 'string') parts.push(queueText({ position: typeof q.position === 'number' ? q.position : null, state: q.state }, lang))
   if (q === null && d.was_queued === true) parts.push(es ? 'salió de la merge queue' : 'left the merge queue')
   return parts.join(' · ')
+}
+
+// Where a PR's review stands, as the mod read it from GitHub. `unanswered` counts the conversations whose last word is
+// not the person's (their gh login, which the run also writes as): open review threads, and the PR's own comments and
+// reviews taken as one. `checks` is the latest commit's, `failing` how many of them failed; `behind` that the base moved on.
+export type PrReview = {
+  decision: 'approved' | 'changes_requested' | 'review_required' | null
+  approved_by: string[]
+  changes_by: string[]
+  requested: string[]
+  unanswered: number
+  checks: 'pending' | 'passing' | 'failing' | null
+  failing: number
+  behind: boolean
+}
+
+export function isPrReview(value: unknown): value is PrReview {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const v = value as Record<string, unknown>
+  const names = (x: unknown) => Array.isArray(x) && x.every(n => typeof n === 'string')
+  return (
+    (v.decision === null || ['approved', 'changes_requested', 'review_required'].includes(v.decision as string)) &&
+    names(v.approved_by) &&
+    names(v.changes_by) &&
+    names(v.requested) &&
+    typeof v.unanswered === 'number' &&
+    (v.checks === null || ['pending', 'passing', 'failing'].includes(v.checks as string)) &&
+    typeof v.failing === 'number' &&
+    typeof v.behind === 'boolean'
+  )
+}
+
+// Who has to move for the PR to merge: the person (approve or merge it), Claude (conflicts, a failing CI, changes asked,
+// comments to answer), a reviewer, GitHub (its merge queue), or nobody while CI runs.
+export type ReviewBall = 'you' | 'claude' | 'reviewer' | 'github' | 'wait'
+
+export type ReviewStatus = { key: string; text: string; ball: ReviewBall; tone: 'error' | 'warning' | 'claude' | 'success' | 'merged' | 'subtle' }
+
+function people(names: string[], lang: Lang): string {
+  const shown = names.slice(0, 2).map(n => `@${n}`)
+  const more = names.length - shown.length
+  return more > 0 ? `${shown.join(', ')} ${lang === 'es' ? `y ${more} más` : `and ${more} more`}` : shown.join(', ')
+}
+
+// The one thing that stands between a PR and its merge, first what blocks it: conflicts, the merge queue it is in, a
+// failing CI, changes asked, comments to answer, CI running, then ready to merge or waiting on its reviewers.
+// Null when the mod knows nothing of it yet.
+export function reviewStatus(pr: { conflicts?: boolean; queue?: { position: number | null; state: string } | null; review?: PrReview | null }, lang: Lang): ReviewStatus | null {
+  const es = lang === 'es'
+  const r = pr.review ?? null
+  if (pr.conflicts) return { key: 'conflicts', text: es ? 'tiene conflictos con la base' : 'conflicts with its base', ball: 'claude', tone: 'error' }
+  if (pr.queue) return { key: 'queue', text: queueText(pr.queue, lang), ball: 'github', tone: pr.queue.state === 'UNMERGEABLE' ? 'error' : 'merged' }
+  if (!r) return null
+  if (r.checks === 'failing') {
+    const n = r.failing > 0 ? ` (${r.failing})` : ''
+    return { key: 'ci_failing', text: es ? `CI falla${n}` : `CI failing${n}`, ball: 'claude', tone: 'error' }
+  }
+  if (r.decision === 'changes_requested') {
+    const by = r.changes_by.length > 0 ? ` ${es ? 'por' : 'by'} ${people(r.changes_by, lang)}` : ''
+    return { key: 'changes', text: es ? `cambios pedidos${by}` : `changes requested${by}`, ball: 'claude', tone: 'warning' }
+  }
+  if (r.unanswered > 0) {
+    const n = r.unanswered
+    return { key: 'unanswered', text: es ? `${n} ${n === 1 ? 'comentario' : 'comentarios'} sin responder` : `${n} unanswered ${n === 1 ? 'comment' : 'comments'}`, ball: 'claude', tone: 'warning' }
+  }
+  if (r.checks === 'pending') return { key: 'ci_pending', text: es ? 'CI corriendo' : 'CI running', ball: 'wait', tone: 'claude' }
+  const behind = r.behind ? (es ? ' · atrasado con la base' : ' · behind its base') : ''
+  if (r.decision === 'approved' || (r.decision === null && r.requested.length === 0)) {
+    const by = r.approved_by.length > 0 ? ` ${es ? 'por' : 'by'} ${people(r.approved_by, lang)}` : ''
+    const what = r.decision === 'approved' ? (es ? `aprobado${by} · listo para mergear` : `approved${by} · ready to merge`) : es ? 'listo para mergear' : 'ready to merge'
+    return { key: 'ready', text: what + behind, ball: 'you', tone: 'success' }
+  }
+  const who = r.requested.length > 0 ? ` ${es ? 'de' : 'from'} ${people(r.requested, lang)}` : ''
+  return { key: 'review', text: (es ? `esperando review${who}` : `waiting on review${who}`) + behind, ball: 'reviewer', tone: 'subtle' }
 }

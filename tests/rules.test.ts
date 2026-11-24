@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { type RunEvent, rebuild } from '../hooks/model'
+import { type RunEvent, deriveStatus, rebuild } from '../hooks/model'
 import { changedSinceApproval, checkEvent, stageForFile } from '../hooks/rules'
 
 function runAt(mode: string, extra: Array<[RunEvent['type'], Record<string, unknown>, number]> = []) {
@@ -382,4 +382,43 @@ test('a mockup changed after Aprobar spec goes back to the mockup stage, and an 
     /spec\.md and the mockup changed .* \{stage: "definition"/,
   )
   expect(changedSinceApproval(pastGateA(), 'stage.entered', { stage: 'implement' }, { spec: 'aaa', mockup: 'm9', plan: 'p1', tree: 't2' })).toBe(null)
+})
+
+test('changes asked for on an open PR go back to implement and out again under the approval the PR had', async () => {
+  const toPr: Array<[RunEvent['type'], Record<string, unknown>, number]> = [
+    ['stage.entered', { stage: 'definition' }, 3],
+    ['stage.entered', { stage: 'mockup' }, 4],
+    ['stage.entered', { stage: 'gate_a' }, 5],
+    ['gate.resolved', { gate: 'gate_a', outcome: 'approved', by: 'auto' }, 6],
+    ['stage.entered', { stage: 'plan' }, 7],
+    ['stage.entered', { stage: 'implement' }, 8],
+    ['stage.entered', { stage: 'evidence' }, 9],
+    ['stage.entered', { stage: 'gate_b' }, 10],
+    ['gate.resolved', { gate: 'gate_b', outcome: 'approved', by: 'auto', snapshot: { spec: 's', plan: 'p', tree: 't1' } }, 11],
+    ['stage.entered', { stage: 'pr' }, 12],
+    ['pr.opened', { url: 'https://github.com/a/b/pull/7', number: 7, draft: false }, 13],
+    ['review.waiting', {}, 14],
+  ]
+  const idle = { isTurnRunning: false, question: null, permission: null }
+  const inReview = runAt('full', toPr)
+  expect(deriveStatus(inReview, idle)).toBe('in_review')
+  expect(checkEvent(inReview, 'stage.entered', { stage: 'implement' })).toMatch(/needs data\.reason/)
+
+  const back = runAt('full', [...toPr, ['stage.entered', { stage: 'implement', reason: 'ana asked for a rename' }, 15]])
+  expect(back.rework).toEqual({ since: 15, reason: 'ana asked for a rename' })
+  expect(back.gates.gate_b?.resolved_at).not.toBeNull()
+  expect(deriveStatus(back, idle)).toBe('stalled')
+  // The code changed since Aprobar PR saw it, and the run goes on without asking it again.
+  expect(changedSinceApproval(back, 'stage.entered', { stage: 'evidence' }, { spec: 's', plan: 'p', tree: 't2' })).toBeNull()
+
+  const evidence = runAt('full', [...toPr, ['stage.entered', { stage: 'implement', reason: 'rename' }, 15], ['stage.entered', { stage: 'evidence' }, 16]])
+  expect(checkEvent(evidence, 'stage.entered', { stage: 'pr' })).toBeNull()
+  const again = runAt('full', [...toPr, ['stage.entered', { stage: 'implement', reason: 'rename' }, 15], ['stage.entered', { stage: 'evidence' }, 16], ['stage.entered', { stage: 'pr' }, 17]])
+  expect(again.rework).toBeNull()
+  expect(deriveStatus(again, idle)).toBe('in_review')
+
+  // Going back further, to the plan, redoes what Aprobar PR approved: it is asked again.
+  const replan = runAt('full', [...toPr, ['stage.entered', { stage: 'plan', reason: 'the approach is wrong' }, 15]])
+  expect(replan.rework).toBeNull()
+  expect(replan.gates.gate_b).toBeUndefined()
 })

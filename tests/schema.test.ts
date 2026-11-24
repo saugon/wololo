@@ -162,7 +162,9 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['pr.ready', {}],
   ['review.waiting', {}],
   ['pr.merge_state', { conflicts: true, queue: { position: 2, state: 'QUEUED' } }],
+  ['pr.review_state', { review: { decision: 'changes_requested', approved_by: ['mia'], changes_by: ['ana'], requested: ['leo'], unanswered: 2, checks: 'pending', failing: 0, behind: true } }],
   ['pr.commented', { count: 2, authors: ['codex', 'ana'], latest: '2026-11-19T12:00:00Z' }],
+  ['stage.entered', { stage: 'implement', reason: 'the review asked for a rename' }],
   ['pr.closed', {}],
   ['pr.merged', {}],
   ['github.published', { kind: 'pr_create', url: 'https://github.com/acme/shop/pull/7' }],
@@ -226,6 +228,7 @@ const RUN_FIELDS = {
   pause_requested_at: true,
   paused: true,
   pr_review: true,
+  rework: true,
   pr_comments: true,
 } satisfies Record<keyof Run, true>
 

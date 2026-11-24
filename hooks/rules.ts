@@ -238,6 +238,8 @@ export function changedSinceApproval(run: Run, type: string, data: Record<string
   const forward = type === 'stage.entered' && stageIndex(data.stage as StageId) > (run.stage?.index ?? -1)
   if (!forward && type !== 'pr.opened') return null
   for (const { gate, keys, back } of GUARDED) {
+    // Changes the review asked for on an open PR go out under the approval the PR already had.
+    if (gate === 'gate_b' && run.rework) continue
     const approved = run.gates[gate]?.snapshot
     if (!approved || run.gates[gate]?.resolved_at == null) continue
     // A key the approval did not record (a run from before it) is not checked.

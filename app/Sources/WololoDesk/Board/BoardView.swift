@@ -37,7 +37,14 @@ struct BoardView: View {
     private var grid: some View {
         let runs = board.columns.first?.runs ?? []
         let finished = board.columns.dropFirst().first?.runs ?? []
-        return ScrollView(.vertical) {
+        return GeometryReader { proxy in
+            gridScroll(runs: runs, finished: finished, layout: gridLayout(width: proxy.size.width))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func gridScroll(runs: [Run], finished: [Run], layout: GridLayout) -> some View {
+        ScrollView(.vertical) {
             if runs.isEmpty {
                 Text(theme.spec.texts.empty)
                     .font(theme.font(.body, size: 13))
@@ -50,7 +57,7 @@ struct BoardView: View {
                     )
                     .padding(Self.cardMargin)
             }
-            gridCards(runs)
+            gridCards(runs, layout: layout)
                 .padding(.top, 20)
                 .padding(.bottom, finished.isEmpty ? 28 : 8)
             if !finished.isEmpty {
@@ -70,7 +77,7 @@ struct BoardView: View {
                 .help("Terminados en las últimas 24 h")
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.isHeader)
-                gridCards(finished)
+                gridCards(finished, layout: layout)
                     .padding(.top, 12)
                     .padding(.bottom, 28)
             }
@@ -78,10 +85,10 @@ struct BoardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func gridCards(_ runs: [Run]) -> some View {
-        LazyVGrid(columns: gridItems, spacing: 16) {
+    private func gridCards(_ runs: [Run], layout: GridLayout) -> some View {
+        LazyVGrid(columns: layout.items, spacing: 16) {
             ForEach(runs, id: \.id) { run in
-                GridCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
+                GridCard(run: run, now: now, isCompact: layout.isCompact, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
                     goToTerminal(run)
                 }
             }
@@ -89,10 +96,25 @@ struct BoardView: View {
         .padding(.horizontal, Self.cardMargin)
     }
 
-    /// A chosen count shares the width among that many cards, narrower than `GridCard.minWidth` if the window is.
-    private var gridItems: [GridItem] {
-        guard gridColumns > 0 else { return [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: 16, alignment: .top)] }
-        return Array(repeating: GridItem(.flexible(), spacing: 16, alignment: .top), count: gridColumns)
+    struct GridLayout {
+        let items: [GridItem]
+        let isCompact: Bool
+    }
+
+    /// Auto puts as many full cards per row as fit. A chosen count shares the width among that many cards; when a full
+    /// card does not fit its share they go compact (without the stage column), and when not even a compact one does, the
+    /// row takes fewer: a card is never narrower than its content, which would spill over the next one.
+    private func gridLayout(width: CGFloat) -> GridLayout {
+        let spacing: CGFloat = 16
+        let room = max(0, width - 2 * Self.cardMargin)
+        guard gridColumns > 0 else {
+            return GridLayout(items: [GridItem(.adaptive(minimum: GridCard.minWidth), spacing: spacing, alignment: .top)], isCompact: false)
+        }
+        let share = { (n: Int) in (room - spacing * CGFloat(n - 1)) / CGFloat(n) }
+        var count = gridColumns
+        while count > 1 && share(count) < GridCard.compactMinWidth { count -= 1 }
+        let item = GridItem(.flexible(), spacing: spacing, alignment: .top)
+        return GridLayout(items: Array(repeating: item, count: count), isCompact: share(count) < GridCard.minWidth)
     }
 
     private var columns: some View {
@@ -290,7 +312,7 @@ private struct ArchiveRow: View {
         let status = effectiveStatus(run, now: now)
         HStack(spacing: 12) {
             Circle()
-                .fill(theme.dot(status))
+                .fill(theme.dot(status, of: run))
                 .frame(width: 8, height: 8)
             Text(run.displayTitle)
                 .font(theme.font(.body, size: 13))

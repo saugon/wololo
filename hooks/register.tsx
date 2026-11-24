@@ -55,9 +55,10 @@ import {
   ASLEEP_AFTER_SECONDS,
   awakeUntil,
   liveTasks,
+  type PrReview,
 } from './model'
 import { connections, maxConnections } from './postgres'
-import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, prComments, urlIn, wololoMention } from './github'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, PR_STATE_QUERY, prComments, prState, urlIn, wololoMention } from './github'
 import {
   type PolicyContext,
   commandRules,
@@ -1926,32 +1927,35 @@ async function checkPr($: Engine) {
     .catch(() => undefined)
 }
 
-// Whether the PR conflicts with its base (gh's mergeable; UNKNOWN while GitHub computes it keeps what was known) and where
-// it is in the merge queue, which only GraphQL tells. Recorded when either changes, so the card and the app show it.
+// Whether the PR conflicts with its base (gh's mergeable; UNKNOWN while GitHub computes it keeps what was known), where
+// it is in the merge queue and where its review stands, which only GraphQL tells. Each is recorded when it changes, so
+// the card and the app show it.
 async function checkMergeState($: Engine, n: number, view: unknown) {
   if (!run?.pr) return
   const mergeable = isObject(view) && typeof view.mergeable === 'string' ? view.mergeable : ''
   const conflicts = mergeable === 'CONFLICTING' ? true : mergeable === 'MERGEABLE' ? false : run.pr.conflicts
   const repo = /github\.com\/([^/]+)\/([^/]+)\/pull\//.exec(run.pr.url)
   let queue = run.pr.queue
+  let review: PrReview | undefined
   if (repo) {
-    const query = 'query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){mergeQueueEntry{position state}}}}'
     const ran = await $.process
-      .run(['gh', 'api', 'graphql', '-f', `query=${query}`, '-f', `o=${repo[1]}`, '-f', `r=${repo[2]}`, '-F', `n=${n}`, '--jq', '.data.repository.pullRequest.mergeQueueEntry'], {
+      .run(['gh', 'api', 'graphql', '-f', `query=${PR_STATE_QUERY}`, '-f', `o=${repo[1]}`, '-f', `r=${repo[2]}`, '-F', `n=${n}`, '--jq', '.data.repository.pullRequest'], {
         cwd: workdir(),
         timeoutMs: 30_000,
       })
       .catch(() => undefined)
     if (ran && ran.exitCode === 0) {
-      const text = ran.stdout.trim()
-      const entry = parseJson(text === '' ? 'null' : text).value
-      if (entry === null) queue = null
-      else if (isObject(entry) && typeof entry.state === 'string')
-        queue = { position: typeof entry.position === 'number' ? entry.position : null, state: entry.state }
+      const state = prState(parseJson(ran.stdout.trim() || 'null').value, await viewerLogin($))
+      if (state) {
+        if (state.queue !== undefined) queue = state.queue
+        review = state.review
+      }
     }
   }
   if (!run?.pr) return
   const was = run.pr
+  if (review && JSON.stringify(review) !== JSON.stringify(was.review ?? null)) await emit($, 'pr.review_state', { review })
+  if (!run?.pr) return
   const sameQueue = (was.queue ?? null) === null ? queue == null : queue != null && was.queue?.position === queue.position && was.queue?.state === queue.state
   if (conflicts === was.conflicts && sameQueue) return
   if (conflicts === undefined && queue === undefined) return

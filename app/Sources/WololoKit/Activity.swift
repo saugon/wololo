@@ -13,8 +13,9 @@ public func activityLine(_ run: Run, now: TimeInterval, prefixed: Bool = true) -
     let es = run.lang == .es
     // In review the plan is done, so the last item would be stale; the run waits on its reviewers.
     if status == .inReview {
+        // Where the review stands first: a note the run left while it answered comments can outlive them.
+        if let badge = prReviewBadge(run) { return badge.title }
         if let text = run.doing?.text, !text.isEmpty { return text }
-        if let badge = prMergeBadge(run) { return badge.title }
         return es ? "Esperando revisión del PR" : "Waiting for the PR's review"
     }
     // A bare dot in the widget does not tell a permission request, a block or a pause apart, so the line says it.
@@ -132,34 +133,103 @@ public func prChip(_ run: Run) -> MetaChip? {
     return MetaChip(text: text, title: title)
 }
 
-/// What stands between the PR and its merge, when the mod saw it: conflicts with its base, or its place in the merge
-/// queue. `text` is the card's short badge, `title` the sentence; `isProblem` paints it as an error.
-public struct MergeBadge: Equatable, Sendable {
-    public let text: String
-    public let title: String
-    public let isProblem: Bool
+/// Who has to move for the PR to merge: the person (approve or merge it), Claude (conflicts, a failing CI, changes
+/// asked, comments to answer), a reviewer, GitHub (its merge queue), or nobody while CI runs.
+public enum ReviewBall: Int, Equatable, Sendable, Comparable {
+    case you, claude, reviewer, wait, github
+
+    public static func < (lhs: ReviewBall, rhs: ReviewBall) -> Bool { lhs.rawValue < rhs.rawValue }
 }
 
-public func prMergeBadge(_ run: Run) -> MergeBadge? {
+/// How the badge is painted: a problem, something to do, CI running, ready, in the queue, or just waiting.
+public enum ReviewTone: Equatable, Sendable {
+    case problem, attention, running, ready, queued, idle
+}
+
+/// The one thing that stands between the PR and its merge, as the mod last saw it on GitHub. `text` is the card's
+/// short badge, `title` the sentence.
+public struct ReviewBadge: Equatable, Sendable {
+    public let text: String
+    public let title: String
+    public let ball: ReviewBall
+    public let tone: ReviewTone
+}
+
+/// Conflicts, the merge queue, a failing CI, changes asked, comments to answer, CI running, then ready to merge or
+/// waiting on reviewers: the first that holds, as the mod's `reviewStatus`. Nil for a merged or closed PR, or one the
+/// mod has not looked at yet.
+public func prReviewBadge(_ run: Run) -> ReviewBadge? {
     guard let pr = run.pr, pr.state != "merged", pr.state != "closed" else { return nil }
     let es = run.lang == .es
     if pr.conflicts == true {
-        return MergeBadge(text: es ? "conflictos" : "conflicts",
-                          title: es ? "Tiene conflictos con la base" : "Conflicts with its base", isProblem: true)
+        return ReviewBadge(text: es ? "conflictos" : "conflicts",
+                           title: es ? "Tiene conflictos con la base" : "Conflicts with its base", ball: .claude, tone: .problem)
     }
-    guard let queue = pr.queue else { return nil }
-    let at = queue.position.map { es ? " · \($0).º" : " · #\($0)" } ?? ""
-    let how: String
-    switch queue.state {
-    case "AWAITING_CHECKS": how = es ? ", esperando los checks" : ", awaiting checks"
-    case "UNMERGEABLE": how = es ? ", no se puede mergear" : ", cannot merge"
-    case "LOCKED": how = es ? ", bloqueada" : ", locked"
-    default: how = ""
+    if let queue = pr.queue {
+        let at = queue.position.map { es ? " · \($0).º" : " · #\($0)" } ?? ""
+        let how: String
+        switch queue.state {
+        case "AWAITING_CHECKS": how = es ? ", esperando los checks" : ", awaiting checks"
+        case "UNMERGEABLE": how = es ? ", no se puede mergear" : ", cannot merge"
+        case "LOCKED": how = es ? ", bloqueada" : ", locked"
+        default: how = ""
+        }
+        let place = queue.position.map { es ? " (\($0).º)" : " (#\($0))" } ?? ""
+        let stuck = queue.state == "UNMERGEABLE"
+        return ReviewBadge(text: (es ? "en cola" : "queued") + at,
+                           title: (es ? "En la merge queue" : "In the merge queue") + place + how,
+                           ball: stuck ? .claude : .github, tone: stuck ? .problem : .queued)
     }
-    let place = queue.position.map { es ? " (\($0).º)" : " (#\($0))" } ?? ""
-    return MergeBadge(text: (es ? "en cola" : "queued") + at,
-                      title: (es ? "En la merge queue" : "In the merge queue") + place + how,
-                      isProblem: queue.state == "UNMERGEABLE")
+    // Changes the review asked for, being made (back in implement, or before that in the PR stage): what GitHub says
+    // (waiting on review) is not what goes on.
+    if run.rework != nil || (run.prReview != nil && [.running, .waitingAgents, .waitingTests].contains(run.status)) {
+        return ReviewBadge(text: es ? "aplicando cambios" : "applying changes",
+                           title: es ? "Aplicando los cambios del review" : "Applying the review's changes", ball: .claude, tone: .running)
+    }
+    guard let review = pr.review else { return nil }
+    return reviewBadge(review, lang: run.lang)
+}
+
+/// What the review alone says, past conflicts and the merge queue: a failing CI, changes asked, comments to answer, CI
+/// running, ready to merge, or waiting on reviewers.
+public func reviewBadge(_ review: Run.Review, lang: Lang) -> ReviewBadge {
+    let es = lang == .es
+    func people(_ names: [String]) -> String {
+        let shown = names.prefix(2).map { "@\($0)" }.joined(separator: ", ")
+        let more = names.count - min(names.count, 2)
+        return more > 0 ? "\(shown) \(es ? "y \(more) más" : "and \(more) more")" : shown
+    }
+    if review.checks == "failing" {
+        let n = review.failing > 0 ? " (\(review.failing))" : ""
+        return ReviewBadge(text: (es ? "CI falla" : "CI failing") + n,
+                           title: (es ? "Fallan checks del CI" : "CI checks fail") + n, ball: .claude, tone: .problem)
+    }
+    if review.decision == "changes_requested" {
+        let by = review.changesBy.isEmpty ? "" : " \(es ? "por" : "by") \(people(review.changesBy))"
+        return ReviewBadge(text: es ? "cambios pedidos" : "changes requested",
+                           title: (es ? "Cambios pedidos" : "Changes requested") + by, ball: .claude, tone: .attention)
+    }
+    if review.unanswered > 0 {
+        let n = review.unanswered
+        let what = es ? "\(n) \(n == 1 ? "comentario" : "comentarios") sin responder" : "\(n) unanswered \(n == 1 ? "comment" : "comments")"
+        return ReviewBadge(text: es ? "\(n) sin responder" : "\(n) unanswered", title: what.prefix(1).uppercased() + what.dropFirst(),
+                           ball: .claude, tone: .attention)
+    }
+    if review.checks == "pending" {
+        return ReviewBadge(text: es ? "CI corriendo" : "CI running", title: es ? "El CI está corriendo" : "CI is running",
+                           ball: .wait, tone: .running)
+    }
+    let behind = review.behind ? (es ? " · atrasado con la base" : " · behind its base") : ""
+    if review.decision == "approved" || (review.decision == nil && review.requested.isEmpty) {
+        let by = review.approvedBy.isEmpty ? "" : " \(es ? "por" : "by") \(people(review.approvedBy))"
+        let title = review.decision == "approved"
+            ? (es ? "Aprobado\(by) · listo para mergear" : "Approved\(by) · ready to merge")
+            : (es ? "Listo para mergear" : "Ready to merge")
+        return ReviewBadge(text: es ? "listo" : "ready", title: title + behind, ball: .you, tone: .ready)
+    }
+    let from = review.requested.isEmpty ? "" : " \(es ? "de" : "from") \(people(review.requested))"
+    return ReviewBadge(text: es ? "esperando review" : "awaiting review",
+                       title: (es ? "Esperando review" : "Waiting on review") + from + behind, ball: .reviewer, tone: .idle)
 }
 
 /// The card's "PR #120", or "PR" when its number is not known.

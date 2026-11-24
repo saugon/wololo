@@ -15,7 +15,7 @@ struct RunCard: View {
 
     var body: some View {
         let status = effectiveStatus(run, now: now)
-        let style = theme.style(status)
+        let style = theme.style(status, of: run)
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .top, spacing: 8) {
@@ -186,7 +186,7 @@ struct RunCard: View {
                 } else {
                     Text(pr).lineLimit(1).fixedSize()
                 }
-                if let badge = prMergeBadge(run) { MergeBadgeView(badge: badge, size: 12) }
+                if let badge = prReviewBadge(run) { ReviewBadgeView(badge: badge, size: 12) }
             }
         }
         let right = HStack(spacing: 8) {
@@ -228,11 +228,13 @@ struct RunCard: View {
 struct StatusBadge: View {
     let status: RunStatus
     let lang: Lang
+    /// In the merge queue: the review's pill takes a finished run's colour.
+    var isQueued = false
 
     @Environment(\.theme) private var theme
 
     var body: some View {
-        let style = theme.style(status)
+        let style = theme.style(isQueued ? .done : status)
         Text(status.label(lang))
             .font(theme.font(.body, size: 11.5, weight: .semibold))
             .foregroundStyle(style.badgeText)
