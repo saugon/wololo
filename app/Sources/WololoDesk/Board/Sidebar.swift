@@ -376,10 +376,23 @@ struct AppIconMark: View {
     let side: CGFloat
 
     var body: some View {
-        Image(nsImage: NSApp.applicationIconImage)
+        Image(nsImage: Self.image(side: side))
             .resizable()
             .interpolation(.high)
             .frame(width: side, height: side)
             .accessibilityHidden(true)
+    }
+
+    /// The icon with one representation, big enough for a Retina screen: left whole, SwiftUI draws the one whose
+    /// point size is nearest (32 px for 28 pt) and scales it up, pixelated.
+    @MainActor
+    static func image(side: CGFloat) -> NSImage {
+        let icon = NSApp.applicationIconImage ?? NSImage()
+        let wanted = Int((side * 3).rounded(.up))
+        let reps = icon.representations.sorted { $0.pixelsWide < $1.pixelsWide }
+        guard let rep = reps.first(where: { $0.pixelsWide >= wanted }) ?? reps.last else { return icon }
+        let image = NSImage(size: NSSize(width: side, height: side))
+        image.addRepresentation(rep)
+        return image
     }
 }
