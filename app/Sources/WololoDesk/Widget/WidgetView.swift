@@ -33,7 +33,7 @@ struct WidgetView: View {
 
     var body: some View {
         let model = state.model
-        let runs = widgetRuns(model.runs, now: model.now)
+        let runs = widgetRows(model.runs, now: model.now)
         let last = lastFinished(model.runs, now: model.now)
         VStack(spacing: 0) {
             VStack(spacing: 0) {

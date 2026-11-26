@@ -140,6 +140,12 @@ public func widgetRuns(_ runs: [Run], now: TimeInterval) -> [Run] {
     return byWait(waiting) + byStart(others) + byReview(inReview)
 }
 
+/// The widget's rows: the active runs in its order, without the paused ones, which need no one until resumed (the
+/// window's board keeps them, under "En espera").
+public func widgetRows(_ runs: [Run], now: TimeInterval) -> [Run] {
+    widgetRuns(runs, now: now).filter { effectiveStatus($0, now: now) != .paused }
+}
+
 public func lastFinished(_ runs: [Run], now: TimeInterval) -> Run? {
     runs.filter { !isActive($0, now: now) }.max { finishedTime($0) < finishedTime($1) }
 }

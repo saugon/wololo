@@ -3,7 +3,7 @@
 **Wololo** (`app/`) shows the runs of every terminal and project in one place:
 
 - **Menu bar**: an icon with how many runs are waiting for you, and a menu to show the widget, open the window, the settings, or quit.
-- **Widget**: a floating panel over every space and full-screen app, with the active runs, those waiting for you first. ⌘⇧L shows or hides it from any app.
+- **Widget**: a floating panel over every space and full-screen app, with the active runs (not the paused ones), those waiting for you first. ⌘⇧L shows or hides it from any app.
 - **Window**: opens when the app starts. A sidebar by project and a board of cards by status or by stage, or a grid of the active runs with their stages beside each card (as many per row as fit, or 1 to 6 chosen beside the view picker), with search.
 - **Titles**: the pencil on a card (on hover) renames the run in the app: Return keeps it, Esc leaves it as it was, and the arrow beside the field goes back to the run's own title. The title is the app's alone, kept in its settings: the run, its session and its PR keep theirs.
 - **Review**: a run in review shows where its PR stands, in a capsule beside it (conflictos, en cola, CI falla, cambios pedidos, N sin responder, CI corriendo, listo, esperando review; the sentence on hover), and the review column puts first what waits on you, then what Claude has to fix, then what waits on others. A PR in the merge queue takes the finished colour.

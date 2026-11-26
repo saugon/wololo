@@ -46,6 +46,8 @@ final class BoardTests: XCTestCase {
 
         XCTAssertEqual(widgetRuns(runs, now: now).map(\.id), ["asks", "busy", "old"])
         XCTAssertEqual(menuBarCount(runs, now: now), 1)
+        let paused = try makeRun("paused", status: "paused", updatedAt: now - 20)
+        XCTAssertEqual(widgetRows(runs + [paused], now: now).map(\.id), ["asks", "busy", "old"])
         XCTAssertEqual(column(Board(runs: runs, now: now, mode: .byStatus), "waiting"), ["asks"])
         XCTAssertEqual(activityLine(runs[1], now: now), "¿Aprobás el spec?")
         XCTAssertEqual(RunProgress(runs[1], now: now).role, .waiting)
