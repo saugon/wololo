@@ -2,7 +2,7 @@ import type { PrReview } from './model'
 
 export const GITHUB_BODY_LIMIT = 65_000
 
-export type PublishKind = 'issue_body' | 'issue_comment' | 'issue_create' | 'pr_create' | 'pr_body' | 'pr_comment' | 'pr_ready'
+export type PublishKind = 'issue_body' | 'issue_comment' | 'issue_create' | 'pr_create' | 'pr_body' | 'pr_comment' | 'pr_reply' | 'pr_ready'
 
 // The writes spec.to_github governs: what the run puts on the issue.
 export function isIssueWrite(kind: PublishKind): boolean {
@@ -34,6 +34,8 @@ export type PublishTarget = {
   base?: string
   head?: string
   draft?: boolean
+  // pr_reply: the id of the line comment answered (GitHub's numeric id, as `gh api repos/{owner}/{repo}/pulls/<n>/comments` gives it).
+  commentId?: number
 }
 
 export function ghArgs(target: PublishTarget, file: string): string[] | string {
@@ -53,6 +55,10 @@ export function ghArgs(target: PublishTarget, file: string): string[] | string {
       return target.number ? ['pr', 'edit', String(target.number), '--body-file', file] : 'pr_body needs number.'
     case 'pr_comment':
       return target.number ? ['pr', 'comment', String(target.number), '--body-file', file] : 'pr_comment needs number.'
+    case 'pr_reply':
+      return target.number && target.commentId
+        ? ['api', '--method', 'POST', `repos/{owner}/{repo}/pulls/${target.number}/comments/${target.commentId}/replies`, '-F', `body=@${file}`, '--jq', '.html_url']
+        : 'pr_reply needs number and comment_id.'
     case 'pr_ready':
       return target.number ? ['pr', 'ready', String(target.number)] : 'pr_ready needs number.'
   }
@@ -102,6 +108,21 @@ export function prComments(view: unknown, lines: string, viewer: string | null):
     if (author && /^\d{4}-\d\d-\d\dT/.test(at)) out.push({ author: name(author), at })
   }
   return out.filter(c => c.author && c.author !== (viewer && name(viewer)))
+}
+
+// The review threads of a PR with the line comments in each, to find the thread a comment belongs to (resolveReviewThread
+// takes the thread's node id, and a run knows the comment's numeric one).
+export const REVIEW_THREADS_QUERY = `query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){
+reviewThreads(first:100){nodes{id isResolved comments(first:100){nodes{databaseId}}}}
+}}}`
+
+// The node id of the thread holding the comment `commentId`, from REVIEW_THREADS_QUERY's pullRequest, and whether it is already resolved.
+export function threadOf(pr: unknown, commentId: number): { id: string; isResolved: boolean } | null {
+  for (const thread of nodes(isObject(pr) ? pr.reviewThreads : undefined)) {
+    if (!isObject(thread) || typeof thread.id !== 'string') continue
+    if (nodes(thread.comments).some(c => isObject(c) && c.databaseId === commentId)) return { id: thread.id, isResolved: thread.isResolved === true }
+  }
+  return null
 }
 
 // One query for what the PR card shows: its merge queue entry and where its review stands.

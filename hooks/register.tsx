@@ -58,7 +58,7 @@ import {
   type PrReview,
 } from './model'
 import { connections, maxConnections } from './postgres'
-import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, PR_STATE_QUERY, prComments, prState, urlIn, wololoMention } from './github'
+import { GITHUB_BODY_LIMIT, type PublishKind, decide, ghArgs, isIssueWrite, isWololoRepo, PR_STATE_QUERY, prComments, prState, REVIEW_THREADS_QUERY, threadOf, urlIn, wololoMention } from './github'
 import {
   type PolicyContext,
   commandRules,
@@ -2306,14 +2306,19 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'publish',
     description:
-      'The only way a run writes to GitHub. pr_ready marks the run\'s draft pull request ready for review (number, or the run\'s PR; no body_file) and records pr.ready. The other kinds send body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true. Outside wololo\'s own repository it sends nothing whose title, head branch or text names wololo, unless person_asked is true.',
+      'The only way a run writes to GitHub. pr_ready marks the run\'s draft pull request ready for review (number, or the run\'s PR; no body_file) and records pr.ready. pr_reply answers a comment on a line of the pull request inside its thread (number, comment_id, body_file), and with resolve: true also marks that thread resolved. The other kinds send body_file as an issue body, an issue comment, a new issue, a new pull request, the body of an open pull request or a comment on it. When the text is longer than GitHub accepts, it sends nothing and asks for summary_file: then it publishes the summary and the full text stays in body_file. For issue writes it does nothing when the config says spec.to_github is false, and says so, unless person_asked is true. Outside wololo\'s own repository it sends nothing whose title, head branch or text names wololo, unless person_asked is true.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create', 'pr_body', 'pr_comment', 'pr_ready'] },
+        kind: { type: 'string', enum: ['issue_body', 'issue_comment', 'issue_create', 'pr_create', 'pr_body', 'pr_comment', 'pr_reply', 'pr_ready'] },
         body_file: { type: 'string' },
         summary_file: { type: 'string', description: 'A short version, for when body_file does not fit.' },
-        number: { type: 'number', description: 'Issue number for issue_body and issue_comment; pull request number for pr_body and pr_comment.' },
+        number: { type: 'number', description: 'Issue number for issue_body and issue_comment; pull request number for pr_body, pr_comment and pr_reply.' },
+        comment_id: {
+          type: 'number',
+          description: 'For pr_reply: the id of the line comment answered, as `gh api repos/{owner}/{repo}/pulls/<number>/comments` gives it (its `id`). Any comment of the thread will do.',
+        },
+        resolve: { type: 'boolean', description: 'For pr_reply: also mark the thread resolved.' },
         title: { type: 'string', description: 'For issue_create and pr_create.' },
         base: { type: 'string' },
         head: { type: 'string' },
@@ -2366,6 +2371,7 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
       base: typeof input.base === 'string' ? input.base : undefined,
       head: typeof input.head === 'string' ? input.head : undefined,
       draft: input.draft === true,
+      commentId: typeof input.comment_id === 'number' ? input.comment_id : undefined,
     },
     file,
   )
@@ -2380,7 +2386,28 @@ async function publish($: Engine, input: Record<string, unknown>): Promise<strin
   const runBase = (run.project.base ?? config.pr.base).replace(/^origin\//, '')
   if (prBase && prBase !== runBase) await emit($, 'base.changed', { from: runBase, to: prBase, reason: 'pr_create' })
   await emit($, 'github.published', { kind, mode: decision.send, url, file, length: body.length })
+  if (kind === 'pr_reply' && input.resolve === true) {
+    const resolved = await resolveThread($, Number(input.number), Number(input.comment_id))
+    return ok({ published: true, mode: decision.send, url, full_text: bodyFile, length: body.length, resolved })
+  }
   return ok({ published: true, mode: decision.send, url, full_text: bodyFile, length: body.length })
+}
+
+// Marks resolved the review thread that holds the line comment `commentId`: true once it is, or the reason it is not.
+async function resolveThread($: Engine, number: number, commentId: number): Promise<true | string> {
+  const repo = run?.pr ? /github\.com\/([^/]+)\/([^/]+)\/pull\//.exec(run.pr.url) : null
+  if (!repo) return 'the run has no PR on GitHub to find the thread in'
+  const gh = (args: string[]) =>
+    $.process
+      .run(['gh', ...args], { cwd: workdir(), timeoutMs: 30_000 })
+      .catch(error => ({ exitCode: 1, stdout: '', stderr: String(error), isStdoutTruncated: false, isStderrTruncated: false }))
+  const listed = await gh(['api', 'graphql', '-f', `query=${REVIEW_THREADS_QUERY}`, '-f', `o=${repo[1]}`, '-f', `r=${repo[2]}`, '-F', `n=${number}`, '--jq', '.data.repository.pullRequest'])
+  if (listed.exitCode !== 0) return `listing the threads failed: ${listed.stderr.trim().slice(-500)}`
+  const thread = threadOf(parseJson(listed.stdout.trim() || 'null').value, commentId)
+  if (!thread) return `no review thread of PR #${number} holds comment ${commentId}`
+  if (thread.isResolved) return true
+  const done = await gh(['api', 'graphql', '-f', 'query=mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{isResolved}}}', '-f', `t=${thread.id}`])
+  return done.exitCode === 0 ? true : `resolving the thread failed: ${done.stderr.trim().slice(-500)}`
 }
 
 // A draft PR made ready by the mod itself, so it does not hang on a permission prompt for `gh pr ready` the way a shell command can.

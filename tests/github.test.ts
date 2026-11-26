@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { decide, ghArgs, isWololoRepo, prComments, prState, urlIn, wololoMention } from '../hooks/github'
+import { decide, ghArgs, isWololoRepo, prComments, prState, threadOf, urlIn, wololoMention } from '../hooks/github'
 
 test('a text that fits goes whole', async () => {
   expect(decide(1_000, null, 65_000)).toEqual({ send: 'full', length: 1_000 })
@@ -19,6 +19,11 @@ test('gh arguments per kind, and their required fields', async () => {
   ])
   expect(ghArgs({ kind: 'issue_comment' }, '/r/c.md')).toBe('issue_comment needs number.')
   expect(ghArgs({ kind: 'pr_body', number: 4813 }, '/r/pr-body.md')).toEqual(['pr', 'edit', '4813', '--body-file', '/r/pr-body.md'])
+  // A comment on a line is answered in its thread, and the reply's link is what comes back.
+  expect(ghArgs({ kind: 'pr_reply', number: 5151, commentId: 2611 }, '/r/reply.md')).toEqual([
+    'api', '--method', 'POST', 'repos/{owner}/{repo}/pulls/5151/comments/2611/replies', '-F', 'body=@/r/reply.md', '--jq', '.html_url',
+  ])
+  expect(ghArgs({ kind: 'pr_reply', number: 5151 }, '/r/reply.md')).toBe('pr_reply needs number and comment_id.')
   expect(ghArgs({ kind: 'pr_comment', number: 4813 }, '/r/c.md')).toEqual(['pr', 'comment', '4813', '--body-file', '/r/c.md'])
   expect(ghArgs({ kind: 'pr_body' }, '/r/pr-body.md')).toBe('pr_body needs number.')
   expect(ghArgs({ kind: 'pr_ready', number: 4873 }, '')).toEqual(['pr', 'ready', '4873'])
@@ -113,4 +118,19 @@ test('a PR with nothing to say reads as no review asked, no checks, and its queu
   expect(prState({ mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' }, commits: { nodes: [{ commit: { statusCheckRollup: { state: 'PENDING' } } }] } }, 'me')?.review.checks).toBe('pending')
   expect(prState({ mergeQueueEntry: { position: 3, state: 'AWAITING_CHECKS' } }, 'me')?.queue).toEqual({ position: 3, state: 'AWAITING_CHECKS' })
   expect(prState(null, 'me')).toBeNull()
+})
+
+test('the thread a line comment is in is found by any of its comments', async () => {
+  const pr = {
+    reviewThreads: {
+      nodes: [
+        { id: 'T1', isResolved: false, comments: { nodes: [{ databaseId: 10 }, { databaseId: 11 }] } },
+        { id: 'T2', isResolved: true, comments: { nodes: [{ databaseId: 20 }] } },
+      ],
+    },
+  }
+  expect(threadOf(pr, 11)).toEqual({ id: 'T1', isResolved: false })
+  expect(threadOf(pr, 20)).toEqual({ id: 'T2', isResolved: true })
+  expect(threadOf(pr, 99)).toBeNull()
+  expect(threadOf(null, 10)).toBeNull()
 })
