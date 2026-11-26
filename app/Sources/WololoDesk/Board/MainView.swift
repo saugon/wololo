@@ -64,7 +64,8 @@ struct MainView: View {
                 now: model.now,
                 selectedRunID: state.selectedRunID,
                 select: { id in state.selectedRunID = id },
-                goToTerminal: { run in TerminalAction.go(to: run, now: model.now, state: state, origin: .window) }
+                goToTerminal: { run in TerminalAction.go(to: run, now: model.now, state: state, origin: .window) },
+                rename: { run, title in model.rename(run.id, to: title) }
             )
         }
     }

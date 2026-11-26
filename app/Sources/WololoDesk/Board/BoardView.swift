@@ -16,6 +16,7 @@ struct BoardView: View {
     let selectedRunID: String?
     let select: (String) -> Void
     let goToTerminal: (Run) -> Void
+    var rename: (Run, String?) -> Void = { _, _ in }
 
     @State private var isOnHoldOpen = false
     @State private var isArchiveOpen = false
@@ -88,9 +89,8 @@ struct BoardView: View {
     private func gridCards(_ runs: [Run], layout: GridLayout) -> some View {
         LazyVGrid(columns: layout.items, spacing: 16) {
             ForEach(runs, id: \.id) { run in
-                GridCard(run: run, now: now, isCompact: layout.isCompact, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
-                    goToTerminal(run)
-                }
+                GridCard(run: run, now: now, isCompact: layout.isCompact, isSelected: run.id == selectedRunID, select: { select(run.id) },
+                         goToTerminal: { goToTerminal(run) }, rename: { rename(run, $0) })
             }
         }
         .padding(.horizontal, Self.cardMargin)
@@ -182,9 +182,8 @@ struct BoardView: View {
                             )
                     }
                     ForEach(column.runs, id: \.id) { run in
-                        RunCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) }) {
-                            goToTerminal(run)
-                        }
+                        RunCard(run: run, now: now, isSelected: run.id == selectedRunID, select: { select(run.id) },
+                                goToTerminal: { goToTerminal(run) }, rename: { rename(run, $0) })
                             .frame(width: width - 2 * Self.cardMargin)
                     }
                 }

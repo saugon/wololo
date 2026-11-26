@@ -3,7 +3,7 @@ import Foundation
 public func matches(_ run: Run, query: String) -> Bool {
     let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
     if needle.isEmpty { return true }
-    let fields = [run.title, run.project.display, run.project.key, run.project.branch ?? "", run.source.ref, sourceLabel(run)]
+    let fields = [run.title, run.customTitle ?? "", run.project.display, run.project.key, run.project.branch ?? "", run.source.ref, sourceLabel(run)]
     return fields.contains { $0.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
 }
 

@@ -92,7 +92,7 @@ final class AppState {
         self.options = options
         themes = ThemeStore(options: options, defaults: defaults, persists: persists)
         let dataDirectory = DataDirectory.resolve(setting: defaults.string(forKey: SettingsKey.dataDirectory))
-        model = RunsModel(dataDirectory: dataDirectory)
+        model = RunsModel(dataDirectory: dataDirectory, titles: RunTitles(defaults: defaults, persists: persists))
         isWidgetVisible = false
         planningPrefs = PlanningPrefs(defaults: defaults, persists: persists)
         let goalsDirectory = GoalStore.directory(options: options, dataDirectory: dataDirectory.url)
@@ -152,7 +152,7 @@ final class AppState {
         let next = DataDirectory.resolve(setting: defaults.string(forKey: SettingsKey.dataDirectory))
         guard next != model.dataDirectory else { return }
         model.stop()
-        model = RunsModel(dataDirectory: next)
+        model = RunsModel(dataDirectory: next, titles: RunTitles(defaults: defaults, persists: persists))
         model.start()
         // Going to or from the sample data changes where the goals are read from, not only their copy.
         let goalsDirectory = GoalStore.directory(options: options, dataDirectory: next.url)

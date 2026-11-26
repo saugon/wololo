@@ -17,8 +17,11 @@ struct GridCard: View {
     let isSelected: Bool
     let select: () -> Void
     let goToTerminal: () -> Void
+    /// Gives the run a title of the person's; nil goes back to its own.
+    var rename: (String?) -> Void = { _ in }
 
     @State private var isHovered = false
+    @State private var isEditingTitle = false
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -59,6 +62,7 @@ struct GridCard: View {
             value: accessibilityValue(status),
             isSelected: isSelected,
             cornerRadius: theme.r(12),
+            isActive: !isEditingTitle,
             action: select
         )
         .accessibilityAction(named: "Ir a la terminal", goToTerminal)
@@ -93,12 +97,14 @@ struct GridCard: View {
                 Spacer(minLength: 0)
                 terminalButton
             }
-            Text(run.displayTitle)
-                .font(theme.font(.display, size: 18, weight: .bold))
-                .tracking(theme.tracking(.display, size: 18))
-                .foregroundStyle(theme.title)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            EditableTitle(run: run, isEditing: $isEditingTitle, font: theme.font(.display, size: 18, weight: .bold), rename: rename) {
+                Text(run.displayTitle)
+                    .font(theme.font(.display, size: 18, weight: .bold))
+                    .tracking(theme.tracking(.display, size: 18))
+                    .foregroundStyle(theme.title)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             let activity = activityLine(run, now: now, prefixed: false)
             if !activity.isEmpty {
                 Text(activity)

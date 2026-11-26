@@ -1,5 +1,8 @@
 import AppKit
+import os
 import WololoKit
+
+private let log = Logger(subsystem: "com.saugon.wololo-desk", category: "terminal")
 
 /// Brings to the front the terminal a session runs in: every running iTerm2 and Ghostty lists its sessions, and
 /// `matchPane` picks one, by the tty of the session's Claude Code process when it is found (`sessionTTY`), else by its
@@ -35,6 +38,7 @@ enum TerminalFocuser {
         let (result, app) = await withCheckedContinuation { continuation in
             queue.async {
                 let tty = sessionTTY(sessionID)
+                log.notice("focus session=\(sessionID, privacy: .public) cwd=\(cwd, privacy: .public) tty=\(tty.isEmpty ? "-" : tty, privacy: .public)")
                 continuation.resume(returning: search(cwd: cwd, projectPath: projectPath, tty: tty))
             }
         }
@@ -55,9 +59,12 @@ enum TerminalFocuser {
         }
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let notFound = denied.map { FocusResult.denied($0.rawValue) } ?? .notFound
+        log.notice("listed \(listings.map { "\($0.app.rawValue): \($0.panes.map(\.tty).joined(separator: ","))" }.joined(separator: "; "), privacy: .public)")
         guard let match = matchPane(cwd: cwd, projectPath: projectPath, home: home, tty: tty, in: listings) else {
+            log.notice("no pane matched")
             return (notFound, nil)
         }
+        log.notice("matched \(match.app.rawValue, privacy: .public) pane=\(match.pane.id, privacy: .public) tty=\(match.pane.tty, privacy: .public) exact=\(match.isExact)")
         // While a window comes to the front, Ghostty can list its windows half-updated and the script fails midway:
         // one more try, a moment later, before taking the session as not found and opening a terminal beside it.
         var outcome = run(focusScript(match), in: match.app)
@@ -65,6 +72,7 @@ enum TerminalFocuser {
             Thread.sleep(forTimeInterval: 0.3)
             outcome = run(focusScript(match), in: match.app)
         }
+        log.notice("focus script: \(String(describing: outcome), privacy: .public)")
         switch outcome {
         case .flag(true): return (.found, match.app)
         case .denied: return (.denied(match.app.rawValue), nil)
@@ -174,16 +182,21 @@ enum TerminalFocuser {
             """
         case .ghostty:
             // `activate window` brings that window to the front: the app's own `activate` brings back the window that
-            // was last active instead, whichever holds the terminal.
+            // was last active instead, whichever holds the terminal. The loop's `w` and `t` are by position ("window 4"),
+            // and bringing a window to the front reorders the windows, so they would name another one by the time the tab
+            // is selected: `contents of` turns them into references by id first.
             return """
             tell application "Ghostty"
                 repeat with w in windows
                     repeat with t in tabs of w
                         repeat with term in terminals of t
                             if ((id of term) as text) is \(id) then
-                                activate window w
-                                select tab t
-                                focus term
+                                set theWindow to contents of w
+                                set theTab to contents of t
+                                set theTerm to contents of term
+                                activate window theWindow
+                                select tab theTab
+                                focus theTerm
                                 return true
                             end if
                         end repeat
@@ -219,6 +232,7 @@ enum TerminalFocuser {
         var error: NSDictionary?
         let descriptor = script.executeAndReturnError(&error)
         if let error {
+            log.notice("applescript error \(error[NSAppleScript.errorNumber] as? Int ?? 0) \(error[NSAppleScript.errorMessage] as? String ?? "", privacy: .public)")
             switch error[NSAppleScript.errorNumber] as? Int ?? 0 {
             case -1743, -1744: return .denied
             case -600: return isRunning(app) ? .denied : .failed

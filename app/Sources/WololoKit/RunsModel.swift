@@ -15,6 +15,7 @@ public final class RunsModel {
     public let dataDirectory: DataDirectory
 
     @ObservationIgnored private let store: RunStore
+    @ObservationIgnored private let titles: RunTitles?
     @ObservationIgnored private let clock: () -> TimeInterval
     @ObservationIgnored private let refreshInterval: TimeInterval?
     @ObservationIgnored private let tickInterval: TimeInterval?
@@ -30,8 +31,10 @@ public final class RunsModel {
         clock: @escaping () -> TimeInterval = { Date().timeIntervalSince1970 },
         refreshInterval: TimeInterval? = 2,
         tickInterval: TimeInterval? = 1,
-        watch: Bool = true
+        watch: Bool = true,
+        titles: RunTitles? = nil
     ) {
+        self.titles = titles
         self.dataDirectory = dataDirectory
         self.clock = clock
         self.refreshInterval = refreshInterval
@@ -74,6 +77,13 @@ public final class RunsModel {
         publish()
     }
 
+    /// Gives the run a title of the person's in the app; nil or blank goes back to its own.
+    public func rename(_ id: String, to title: String?) {
+        guard let titles, let run = runs.first(where: { $0.id == id }) else { return }
+        titles.set(title, for: id, original: run.originalTitle)
+        publish()
+    }
+
     public func tick() {
         now = clock()
     }
@@ -81,7 +91,12 @@ public final class RunsModel {
     private func publish() {
         now = clock()
         if state != store.state { state = store.state }
-        let next = store.runs
+        let custom = titles?.all ?? [:]
+        let next = custom.isEmpty ? store.runs : store.runs.map { run in
+            var run = run
+            run.customTitle = custom[run.id]
+            return run
+        }
         if next != runs { runs = next }
         updateWatcher()
     }

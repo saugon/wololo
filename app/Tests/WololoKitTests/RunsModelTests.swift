@@ -7,6 +7,52 @@ final class RunsModelTests: XCTestCase {
         Board(runs: model.runs, now: model.now, mode: .byStatus).columns.first { $0.id == id }?.runs.map(\.id) ?? []
     }
 
+    func testATitleGivenInTheAppReplacesTheRunsOwnUntilItGoesBack() throws {
+        let fixture = try StoreFixture()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "wololo-titles-\(UUID().uuidString)"))
+        let model = RunsModel(dataDirectory: DataDirectory(url: fixture.root), refreshInterval: nil, tickInterval: nil, watch: false,
+                              titles: RunTitles(defaults: defaults, persists: true))
+        try fixture.write("live", status: "running", ["title": "Pagos parciales"])
+        model.reload()
+        XCTAssertEqual(model.runs[0].displayTitle, "Pagos parciales")
+
+        model.rename("live", to: "  Cobro en mesa  ")
+        XCTAssertEqual(model.runs[0].displayTitle, "Cobro en mesa")
+        XCTAssertEqual(model.runs[0].originalTitle, "Pagos parciales")
+        XCTAssertTrue(matches(model.runs[0], query: "mesa"))
+
+        // A rewrite of the snapshot keeps it, and so does a model started anew.
+        try fixture.write("live", status: "waiting_user", ["title": "Pagos parciales"])
+        model.refresh()
+        XCTAssertEqual(model.runs[0].displayTitle, "Cobro en mesa")
+        let again = RunsModel(dataDirectory: DataDirectory(url: fixture.root), refreshInterval: nil, tickInterval: nil, watch: false,
+                              titles: RunTitles(defaults: defaults, persists: true))
+        again.reload()
+        XCTAssertEqual(again.runs[0].displayTitle, "Cobro en mesa")
+
+        model.rename("live", to: nil)
+        XCTAssertEqual(model.runs[0].displayTitle, "Pagos parciales")
+        XCTAssertNil(defaults.object(forKey: RunTitles.key))
+
+        // The run's own title, or a blank one, is no title of the person's.
+        model.rename("live", to: "Pagos parciales")
+        XCTAssertNil(model.runs[0].customTitle)
+        model.rename("live", to: "   ")
+        XCTAssertNil(model.runs[0].customTitle)
+    }
+
+    func testASnapshotWritesNoTitle() throws {
+        let fixture = try StoreFixture()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "wololo-titles-\(UUID().uuidString)"))
+        let model = RunsModel(dataDirectory: DataDirectory(url: fixture.root), refreshInterval: nil, tickInterval: nil, watch: false,
+                              titles: RunTitles(defaults: defaults, persists: false))
+        try fixture.write("live", status: "running", ["title": "Pagos parciales"])
+        model.reload()
+        model.rename("live", to: "Otro")
+        XCTAssertEqual(model.runs[0].displayTitle, "Pagos parciales")
+        XCTAssertNil(defaults.object(forKey: RunTitles.key))
+    }
+
     func testRewrittenSnapshotMovesTheCardOnRefresh() throws {
         let fixture = try StoreFixture()
         let model = RunsModel(dataDirectory: DataDirectory(url: fixture.root), refreshInterval: nil, tickInterval: nil, watch: false)

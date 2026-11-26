@@ -3,6 +3,8 @@ import Foundation
 public struct Run: Equatable, Sendable {
     public var id: String
     public var title: String
+    /// The title the person gave the run in the app (RunTitles), which `displayTitle` shows in place of `title`.
+    public var customTitle: String? = nil
     public var source: Source
     /// The goal node Wololo launched the run from (`--node`); nil for a run started by hand.
     public var node: NodeLink?
@@ -557,4 +559,12 @@ extension KeyedDecodingContainer {
         let items = try? decodeIfPresent([Lossy<T>].self, forKey: key)
         return items?.compactMap(\.value) ?? []
     }
+}
+
+extension Run {
+    /// The title the person gave it, else its own, else the id while the run has none yet.
+    public var displayTitle: String { customTitle ?? (title.isEmpty ? id : title) }
+
+    /// The run's own title, or the id while it has none: what going back to it shows.
+    public var originalTitle: String { title.isEmpty ? id : title }
 }

@@ -9,8 +9,11 @@ struct RunCard: View {
     let isSelected: Bool
     let select: () -> Void
     let goToTerminal: () -> Void
+    /// Gives the run a title of the person's; nil goes back to its own.
+    var rename: (String?) -> Void = { _ in }
 
     @State private var isHovered = false
+    @State private var isEditingTitle = false
     @Environment(\.theme) private var theme
 
     var body: some View {
@@ -20,12 +23,14 @@ struct RunCard: View {
             VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .top, spacing: 8) {
                     statusIcon(status, color: style.color)
-                    Text(run.displayTitle)
-                        .font(theme.font(.body, size: 15, weight: .semibold))
-                        .foregroundStyle(theme.title)
-                        .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    EditableTitle(run: run, isEditing: $isEditingTitle, font: theme.font(.body, size: 15, weight: .semibold), rename: rename) {
+                        Text(run.displayTitle)
+                            .font(theme.font(.body, size: 15, weight: .semibold))
+                            .foregroundStyle(theme.title)
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     terminalButton
                 }
                 Text(originLabel(run))
@@ -83,6 +88,7 @@ struct RunCard: View {
             value: accessibilityValue(status),
             isSelected: isSelected,
             cornerRadius: theme.r(10),
+            isActive: !isEditingTitle,
             action: select
         )
         // The card reads as one button to VoiceOver, so the terminal is one of its actions.
@@ -253,6 +259,8 @@ private struct Selectable: ViewModifier {
     let value: String
     let isSelected: Bool
     let cornerRadius: CGFloat
+    /// False while a field inside the card takes the keys (its title being renamed): space and Return are the field's.
+    let isActive: Bool
     let action: () -> Void
 
     @FocusState private var isFocused: Bool
@@ -261,7 +269,7 @@ private struct Selectable: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contentShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .onTapGesture(perform: action)
+            .onTapGesture { if isActive { action() } }
             .focusable(interactions: .activate)
             .focused($isFocused)
             .focusEffectDisabled()
@@ -271,6 +279,7 @@ private struct Selectable: ViewModifier {
                     .opacity(isFocused ? 1 : 0)
             )
             .onKeyPress(keys: [.space, .return]) { _ in
+                guard isActive else { return .ignored }
                 action()
                 return .handled
             }
@@ -284,12 +293,8 @@ private struct Selectable: ViewModifier {
 }
 
 extension View {
-    func selectable(label: String, value: String, isSelected: Bool, cornerRadius: CGFloat, action: @escaping () -> Void) -> some View {
-        modifier(Selectable(label: label, value: value, isSelected: isSelected, cornerRadius: cornerRadius, action: action))
+    func selectable(label: String, value: String, isSelected: Bool, cornerRadius: CGFloat, isActive: Bool = true,
+                    action: @escaping () -> Void) -> some View {
+        modifier(Selectable(label: label, value: value, isSelected: isSelected, cornerRadius: cornerRadius, isActive: isActive, action: action))
     }
-}
-
-extension Run {
-    /// The title, or the id while the run has none yet.
-    var displayTitle: String { title.isEmpty ? id : title }
 }
