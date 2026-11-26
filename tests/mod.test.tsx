@@ -644,6 +644,36 @@ test('/wololo help lists every command and key as a card', async ($, on) => {
   expect(direct.text).toBe(help.text)
 })
 
+test("wololo's own tool calls are hidden from the transcript, but one that fails, the expanded view, and others' calls", async ($, on) => {
+  fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  on('command.register', (_, e) => ({ value: { command: e.name } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  const row = (tool: string, more: { isErrored?: boolean; isExpanded?: boolean } = {}) =>
+    $.ui.mount({
+      plugin: 'wololo',
+      surface: 'terminal',
+      component: 'ToolUse',
+      props: { tool_use_id: 't1', tool, input: {}, isRunning: false, isErrored: false, isInterrupted: false, output: { ok: true }, ...more },
+    })
+  const keeps = async (ui: Awaited<ReturnType<typeof row>>) => {
+    const kept = await ui.keepsBeneath()
+    await ui.unmount()
+    return kept
+  }
+  expect(await keeps(await row('mcp__wololo__event'))).toBe(false)
+  expect(await keeps(await row('mcp__wololo__event', { isErrored: true }))).toBe(true)
+  expect(await keeps(await row('mcp__wololo__event', { isExpanded: true }))).toBe(true)
+  expect(await keeps(await row('Bash'))).toBe(true)
+  const result = await $.ui.mount({
+    plugin: 'wololo',
+    surface: 'terminal',
+    component: 'ToolResult',
+    props: { tool_use_id: 't1', tool: 'mcp__wololo__get', output: { ok: true }, isErrored: false },
+  })
+  expect(await keeps(result)).toBe(false)
+})
+
 const CONFIG_PANE = {
   plugin: 'wololo',
   surface: 'terminal',

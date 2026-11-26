@@ -155,7 +155,8 @@ export type WorktreeInfo = {
   ahead: number | null
   behind: number | null
   dirty: number | null
-  ports: Array<{ name: string; port: number; listening: boolean | null }>
+  // url: where the server answers (config.commands.app_url with its port, or localhost), shown while it listens.
+  ports: Array<{ name: string; port: number; listening: boolean | null; url?: string }>
   // Whether the slot is the instance the project gave the work tree (config.instance.read).
   instance?: boolean
   // The instance the project's registry gives the work tree, when it has one; differs from the run's slot while instance.used holds another.
@@ -163,7 +164,7 @@ export type WorktreeInfo = {
   // The instance's databases with their open connections, and the local Postgres' total against its max_connections.
   databases?: { list: Array<{ name: string; connections: number }>; total: number | null; max: number | null } | null
   // Other ports served from inside the work tree: servers the run left up beside the configured ones.
-  others?: Array<{ name: string; port: number }>
+  others?: Array<{ name: string; port: number; url?: string }>
 }
 
 function home(path: string, homeDir: string | undefined): string {
@@ -171,6 +172,11 @@ function home(path: string, homeDir: string | undefined): string {
 }
 
 const span = (text: string, tone?: Span['tone'], bold?: boolean): Span => ({ text, ...(tone ? { tone } : {}), ...(bold ? { bold } : {}) })
+
+// A port that listens: its URL as a link when it has one, "en uso" when not.
+function inUse(url: string | undefined, es: boolean): Span[] {
+  return url ? [span('  '), { ...span(url, 'suggestion'), href: url }] : [span(es ? '  en uso' : '  in use', 'claude')]
+}
 
 // The git, ports and path rows, each fact under its own name: the branch, its base and how far the branch is from it, HEAD,
 // what is left uncommitted, the run's slot and ports, and the directory.
@@ -215,10 +221,10 @@ function placeBlocks(run: Run, info: WorktreeInfo | undefined, homeDir: string |
     const ports: Array<[string, Span[]]> = [[info.instance || run.instance_used ? (es ? 'instancia' : 'instance') : 'slot', slot]]
     for (const port of info.ports) {
       const state =
-        port.listening === null ? [] : port.listening ? [span(es ? '  en uso' : '  in use', 'claude')] : [span(es ? '  libre' : '  free', 'subtle')]
+        port.listening === null ? [] : port.listening ? inUse(port.url, es) : [span(es ? '  libre' : '  free', 'subtle')]
       ports.push([port.name, [span(String(port.port), 'text'), ...state]])
     }
-    for (const other of others) ports.push([other.name.length > 24 ? `${other.name.slice(0, 23)}…` : other.name, [span(String(other.port), 'text'), span(es ? '  en uso' : '  in use', 'claude')]])
+    for (const other of others) ports.push([other.name.length > 24 ? `${other.name.slice(0, 23)}…` : other.name, [span(String(other.port), 'text'), ...inUse(other.url, es)]])
     blocks.push({ label: es ? 'puertos' : 'ports', lines: named(ports) })
   }
   const databases = info?.databases

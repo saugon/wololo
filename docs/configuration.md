@@ -35,7 +35,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `keep_awake` | while a run is active, keep the machine from sleeping (`caffeinate`, macOS), in five-minute leases that lapse on their own when the run or the session ends; for a run left unattended in `full` |
 | `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
 | `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |
-| `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), which states notify |
+| `view.*` | header, band (a card above the prompt), pane, status line (off by default: the band says the same), `tool_calls` (wololo's own tool calls in the chat; off by default: hidden but for one that fails, and ctrl+o shows them all), which states notify |
 | `view.colors` | the card's colors per group of states (`working`, `waiting`, `blocked`, `done`): a theme key such as `claude` or `warning`, or a hex color. Changes show within 15 s |
 
 ## Launch flags

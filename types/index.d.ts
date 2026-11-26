@@ -3,7 +3,7 @@ export type Tone = 'text' | 'subtle' | 'claude' | 'warning' | 'error' | 'success
 export type Row = { text: string; tone: Tone }
 
 // A run of text in one style: a tone, or any theme color (a role's, a link's).
-export type Span = { text: string; tone?: Tone | (string & {}); bold?: boolean }
+export type Span = { text: string; tone?: Tone | (string & {}); bold?: boolean; href?: string }
 
 // One line of the pane, drawn left to right. A line of one span wraps, unless its block is a table; a longer one is cut at the edge.
 export type Line = Span[]

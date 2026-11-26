@@ -104,6 +104,8 @@ export type Config = {
     band: boolean
     pane: 'auto' | 'command' | 'off'
     statusline: boolean
+    // Whether wololo's own tool calls (event, get, ...) show in the transcript; hidden, an error still shows, and ctrl+o shows all.
+    tool_calls: boolean
     notify: string[]
     colors: { working: string; waiting: string; blocked: string; done: string }
   }
@@ -165,6 +167,7 @@ export const DEFAULT_CONFIG: Config = {
     band: true,
     pane: 'auto',
     statusline: false,
+    tool_calls: false,
     notify: ['waiting_user', 'waiting_permission', 'blocked', 'stalled', 'paused', 'done', 'failed'],
     colors: { working: 'claude', waiting: 'warning', blocked: 'error', done: 'success' },
   },

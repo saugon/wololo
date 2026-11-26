@@ -298,6 +298,10 @@
         "statusline": {
           "type": "boolean"
         },
+        "tool_calls": {
+          "type": "boolean",
+          "description": "Show wololo's own tool calls (event, get, ...) in the transcript. Off: hidden, except one that fails; ctrl+o shows them all."
+        },
         "notify": {
           "type": "array",
           "items": {

@@ -1159,6 +1159,12 @@ async function reconcileAgents($: Engine, ts: number) {
   }
 }
 
+// Where a configured server answers: config.commands.app_url with its port when the project gives one, localhost otherwise.
+function serverUrl(port: number): string {
+  const template = config.commands.app_url.includes('{port}') ? config.commands.app_url : ''
+  return template ? expand(template, { port, slot: run?.slot ?? '' }) : `http://localhost:${port}`
+}
+
 async function listening($: Engine, port: number): Promise<boolean | null> {
   const ran = await $.process.run(['lsof', '-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { timeoutMs: 5_000 }).catch(() => undefined)
   if (!ran) return null
@@ -1206,11 +1212,13 @@ async function inspectWorktree($: Engine) {
     ahead: Number.isFinite(ahead) ? (ahead as number) : null,
     behind: Number.isFinite(behind) ? (behind as number) : null,
     dirty: status === null ? null : status.split('\n').filter(Boolean).length,
-    ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port) }))),
+    ports: await Promise.all(started.map(async p => ({ ...p, listening: await listening($, p.port), url: serverUrl(p.port) }))),
     instance: instance !== null,
     registered: instance,
     databases: await instanceDatabases($, databaseNames(config, run.slot)),
-    others: (await worktreeListeners($, dir)).filter(seen => !started.some(p => p.port === seen.port)),
+    others: (await worktreeListeners($, dir))
+      .filter(seen => !started.some(p => p.port === seen.port))
+      .map(seen => ({ ...seen, url: `http://localhost:${seen.port}` })),
   }
 }
 
@@ -3899,6 +3907,22 @@ export const register: Register = (on, options) => {
       </Box>
     )
   })
+
+  // wololo's own calls (an event recorded, the run read) are bookkeeping the pane and the band already show: hidden unless
+  // view.tool_calls, one that fails still drawn, and ctrl+o draws them all.
+  const hidesCall = (props: { tool: string; isErrored: boolean; isExpanded?: boolean }) =>
+    !config.view.tool_calls && props.tool.startsWith(TOOL_PREFIX) && !props.isErrored && !props.isExpanded
+  on('ui.render', { component: 'ToolUse' }, async ($, e, next) => {
+    if (!hidesCall(e.props)) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'ToolResult' }, async ($, e, next) => {
+    if (!hidesCall(e.props)) return next(e)
+    const { Box } = $.ui.resolve(e)
+    return <Box />
+  }).catch(($, e, next) => next(e))
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (!config.view.header || !e.props.isFirstOfReply) return next(e)

@@ -358,6 +358,28 @@ test('the summary names the worktree, its branch against the base, its HEAD and 
   expect(summary.slice(-3).map(entry => entry.label)).toEqual(['git', 'puertos', 'ruta'])
 })
 
+test('a server that listens shows its URL as a link, in place of "en uso"', async () => {
+  const list = events([
+    ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 3, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/wt', branch: 'wololo/x', base: 'main' } }],
+  ])
+  const info = {
+    head: null,
+    subject: null,
+    ahead: null,
+    behind: null,
+    dirty: null,
+    ports: [
+      { name: 'web', port: 3030, listening: true, url: 'http://localhost:3030' },
+      { name: 'api', port: 4030, listening: false, url: 'http://localhost:4030' },
+    ],
+    others: [{ name: 'node', port: 3060, url: 'http://localhost:3060' }],
+  }
+  const summary = buildView(rebuild('r1', list), 'running', list, 1_800_000_200, undefined, undefined, info, '/home/t').pane.summary
+  expect(block(summary, 'puertos')).toEqual(['slot  3', 'web   3030  http://localhost:3030', 'api   4030  libre', 'node  3060  http://localhost:3060'])
+  const lines = summary.find(entry => entry.label === 'puertos')!.lines
+  expect(lines[1]!.at(-1)).toEqual({ text: 'http://localhost:3030', tone: 'suggestion', href: 'http://localhost:3030' })
+})
+
 test('with an instance the person asked for, the summary shows it beside the work tree\'s', async () => {
   const list = events([
     ['run.started', { title: 'Salones', mode: 'checkpoints', slot: 9, project: { key: 'acme__shop', path: '/home/t/shop', worktree: '/home/t/shop/wt', branch: 'wololo/x', base: 'main' } }],

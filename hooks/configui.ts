@@ -259,6 +259,7 @@ export const SECTIONS: Section[] = [
       { kind: 'check', path: 'view.band', label: t('Tarjeta arriba del prompt', 'Card above the prompt') },
       { kind: 'check', path: 'view.header', label: t('Encabezado en cada respuesta', 'Header on each reply') },
       { kind: 'check', path: 'view.statusline', label: t('Status line', 'Status line') },
+      { kind: 'check', path: 'view.tool_calls', label: t('Llamadas de wololo en el chat', "wololo's tool calls in the chat") },
       {
         kind: 'radio',
         path: 'view.pane',
