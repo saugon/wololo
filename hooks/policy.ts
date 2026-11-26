@@ -83,18 +83,29 @@ export function renamedBranch(branch: string | null, current: string | null, bra
 
 // What writes to GitHub: during a run that goes through the publish tool only, which checks the config and GitHub's limits.
 const GH_WRITES: readonly RegExp[] = [
-  /^gh\s+pr\s+(create|comment|edit|merge|close|reopen|review)\b/,
+  /^gh\s+pr\s+(create|comment|edit|merge|close|reopen|review|ready)\b/,
   /^gh\s+issue\s+(create|comment|edit|close|reopen|delete|transfer|lock|pin)\b/,
   /^gh\s+(release|label|repo)\s+(create|edit|delete|upload)\b/,
   /^gh\s+api\b.*\s(-X|--method)\s*(POST|PATCH|PUT|DELETE)\b/i,
   /^gh\s+api\b.*\s(-f|-F|--field|--raw-field|--input)\b/,
 ]
-const MCP_GITHUB_WRITE = /^mcp__github__(create|update|add|push|merge|fork|delete)/
+// What can stand before a command and still run it: a loop's or a condition's keyword, a group, an env assignment,
+// a wrapper. `for id in 1 2; do gh api -X POST …; done` has `do gh api -X POST …` as a segment.
+const COMMAND_PREFIX = /^(?:(?:do|then|else|elif|if|while|until|time|nohup|command|exec|env|sudo|xargs(?:\s+-\S+)*|!)\s+|[({]\s*|[A-Za-z_][A-Za-z0-9_]*=\S*\s+)/
+
+/** The command a segment runs, without what stands before it. */
+function bareCommand(segment: string): string {
+  let bare = segment
+  for (let next = bare.replace(COMMAND_PREFIX, ''); next !== bare; next = bare.replace(COMMAND_PREFIX, '')) bare = next
+  return bare
+}
+
+const MCP_GITHUB_WRITE =/^mcp__github__(create|update|add|push|merge|fork|delete)/
 
 export function githubWriteDenial(tool: string, input: Record<string, unknown>): string | null {
   const reason = 'wololo: during a run, GitHub writes go through its publish tool (mcp__wololo__publish), which keeps the config and GitHub limits; when the person asked for the write, pass person_asked: true.'
   if (MCP_GITHUB_WRITE.test(tool)) return reason
-  if (tool === 'Bash' && typeof input.command === 'string' && segments(input.command).some(segment => GH_WRITES.some(write => write.test(segment))))
+  if (tool === 'Bash' && typeof input.command === 'string' && segments(input.command).some(segment => GH_WRITES.some(write => write.test(bareCommand(segment)))))
     return reason
   return null
 }

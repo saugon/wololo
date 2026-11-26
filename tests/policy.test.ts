@@ -113,7 +113,7 @@ test('a push through another repository is never the run branch', async () => {
 })
 
 test('GitHub writes outside publish are denied during a run, reads are not', async () => {
-  for (const command of ['gh pr create --title x --body y', 'gh issue comment 12 --body x', 'gh pr merge 12', 'gh api -X POST repos/o/r/issues', 'gh api repos/o/r/labels -f name=x', 'git status && gh issue edit 3 --add-label x'])
+  for (const command of ['gh pr create --title x --body y', 'gh issue comment 12 --body x', 'gh pr merge 12', 'gh api -X POST repos/o/r/issues', 'gh api repos/o/r/labels -f name=x', 'git status && gh issue edit 3 --add-label x', 'for id in 1 2; do gh api -X POST repos/o/r/pulls/5/comments/$id/replies -F body=@f; done', 'if true; then gh pr comment 5 --body x; fi', '(gh pr merge 5)', 'GH_TOKEN=x gh pr close 5', 'echo 5 | xargs -n1 gh pr ready'])
     expect(githubWriteDenial('Bash', { command })).not.toBe(null)
   for (const command of ['gh pr view 12', 'gh pr checks 12', 'gh api repos/o/r/pulls/12', 'gh issue view 3'])
     expect(githubWriteDenial('Bash', { command })).toBe(null)
