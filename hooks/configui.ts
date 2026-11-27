@@ -303,6 +303,18 @@ export const SECTIONS: Section[] = [
       { kind: 'number', path: 'budgets.design_reversals', label: t('Rediseños por ítem', 'Redesigns per item') },
       { kind: 'number', path: 'budgets.ci_fix_attempts', label: t('Arreglos de CI', 'CI fixes') },
       { kind: 'number', path: 'budgets.run_minutes', label: t('Minutos por run', 'Minutes per run'), help: t('0 es sin límite', '0 is no limit') },
+      {
+        kind: 'number',
+        path: 'budgets.minutes_per_item',
+        label: t('Minutos por ítem del plan', 'Minutes per plan item'),
+        help: t('el run tiene 90 más estos por ítem, si supera los de arriba; 0 no escala', 'the run gets 90 plus these per item, when above the line above; 0 does not scale'),
+      },
+      {
+        kind: 'number',
+        path: 'context.compact_at',
+        label: t('Compactar pasados (tokens)', 'Compact past (tokens)'),
+        help: t('entre etapas, en una aprobación o con el PR en review; 0 nunca', 'between stages, at a gate or while the PR is in review; 0 never'),
+      },
     ],
   },
 ]

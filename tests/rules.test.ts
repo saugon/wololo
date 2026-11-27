@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { type RunEvent, deriveStatus, rebuild } from '../hooks/model'
-import { changedSinceApproval, checkEvent, stageForFile } from '../hooks/rules'
+import { changedSinceApproval, checkEvent, runMinutesFor, stageForFile } from '../hooks/rules'
 
 function runAt(mode: string, extra: Array<[RunEvent['type'], Record<string, unknown>, number]> = []) {
   const list: Array<[RunEvent['type'], Record<string, unknown>, number]> = [
@@ -421,4 +421,20 @@ test('changes asked for on an open PR go back to implement and out again under t
   const replan = runAt('full', [...toPr, ['stage.entered', { stage: 'plan', reason: 'the approach is wrong' }, 15]])
   expect(replan.rework).toBeNull()
   expect(replan.gates.gate_b).toBeUndefined()
+})
+
+test('the run minutes grow with the plan, and the wait on CI never counts', async () => {
+  const big = implementing()
+  big.items.total = 14
+  const scaled = { ...budgets, minutes_per_item: 20 }
+  // 90 + 14 × 20 = 370 minutes for a 14-item plan; a small plan keeps run_minutes.
+  expect(runMinutesFor(big, scaled)).toBe(370)
+  expect(runMinutesFor({ ...big, items: { ...big.items, total: 3 } }, scaled)).toBe(240)
+  expect(runMinutesFor(big, budgets)).toBe(240)
+  expect(runMinutesFor(big, { ...scaled, run_minutes: 0 })).toBe(0)
+  big.time = { implement: { work: 200 * 60, agents: 100 * 60, tests: 30 * 60, you: 0, roles: {} } }
+  expect(checkEvent(big, 'item.started', { n: 1, title: 'a' }, scaled)).toBe(null)
+  expect(checkEvent(big, 'item.started', { n: 1, title: 'a' }, budgets)).toMatch(/budgets\.run_minutes/)
+  big.time = { implement: { work: 200 * 60, agents: 100 * 60, tests: 0, you: 0, roles: {} }, pr: { ci: 600 * 60, roles: {} } }
+  expect(checkEvent(big, 'item.started', { n: 1, title: 'a' }, scaled)).toBe(null)
 })

@@ -17,7 +17,7 @@ Nothing is written into your repositories. All configuration and run data live i
 | `review.reviewer` | `claude`, `external` or `both` |
 | `review.final.skill`, `review.final.args` | a skill that reviews the whole change after the last item, such as `code-review` with `high {branch}`: the run fixes what it finds and reviews again, and the implement stage ends only once it passes on the code as committed. `{base}` and `{branch}` fill in. Empty: no final review |
 | `isolation`, `worktree_dir`, `branch` | a worktree per run, or a branch in place. `branch` takes `{ref}` (the issue number or plan name; nothing for free text) and `{slug}`: the title's at the start, and at the plan stage a few words the run picks from the spec, while the branch is not on origin yet |
-| `tests.touched` | how to run some test files: `{match: <glob>, cmd: "... {files}"}`. During development, wololo runs the tests the run created or changed |
+| `tests.touched` | how to run some test files: `{match: <glob>, cmd: "... {files}"}`. During development, wololo runs the tests each item created or changed, and once before the suite every test the run touched. `match` takes `**`, `*`, `?` and `{a,b}` |
 | `tests.suite`, `tests.e2e`, `tests.suite_runs`, `tests.e2e_runs` | the full suites, run once at the end, `local` or left to `ci` |
 | `tests.follow`, `tests.rules_from` | `project` makes the project's own testing rules (in those files) win over wololo's |
 | `tests.background` | long suites run in the background; the run shows "running tests" |
@@ -29,9 +29,10 @@ Nothing is written into your repositories. All configuration and run data live i
 | `review.approval` | where the change is approved: `local`, at Aprobar PR in the session, or `pr`, on the PR once CI is green (Aprobar PR passes by itself). `--review-pr` / `--review-local` override it for one run |
 | `languages.*` | chat, spec, issue and PR languages |
 | `models.<role>`, `project_agents.<role>` | the model per role, or a repository agent in place of wololo's |
-| `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes (`budgets.run_minutes: 0` is no limit) |
+| `budgets.*` | design reversals, debate rounds, CI fix attempts, run minutes (`budgets.run_minutes: 0` is no limit). `budgets.minutes_per_item` (default 20) scales the minutes to the plan: the run gets the larger of `run_minutes` and 90 plus that per item, so a big plan is not stopped for its size; `0` keeps `run_minutes`. The run's minutes are its turns, its agents and its tests; the wait on the PR's CI does not count |
 | `mirror.list`, `mirror.run` | show in `/wololo status` the runs another tool drives without a session: the command that lists them (`data.runs`) and the one that says where one stands (`{run}`), both as the JSON protocol of [adapters](adapters.md) |
 | `adapters.<point>` | hand a point of the run (`definition`, `gate_a`, `plan`, `item`, `pr`, `poll`) to another tool; see [adapters](adapters.md) |
+| `context.compact_at` | the context, in tokens (default 400000), past which the run compacts its session at a safe point: after an item's commit or a stage's end it asks the orchestrator to end its turn, compacts, and tells it to go on; a turn that ends with the PR in review, paused or blocked compacts too. Never with an agent or a task running, never mid-item, at most once every ten minutes. Everything the run needs is in its files, and the summary keeps the run and where to read them. `0` never |
 | `keep_awake` | while a run is active, keep the machine from sleeping (`caffeinate`, macOS), in five-minute leases that lapse on their own when the run or the session ends; for a run left unattended in `full` |
 | `risk_paths` | globs: a run whose branch changes a matching path is high risk, and cannot claim less or reach the evidence, Aprobar PR or the PR without `risk.set high` |
 | `env.set`, `env.unset` | variables every project command runs with or without (`env -u NAME NAME=value` before each step), so the session's own environment does not leak in |

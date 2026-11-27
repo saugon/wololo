@@ -55,6 +55,8 @@ import {
   ASLEEP_AFTER_SECONDS,
   awakeUntil,
   liveTasks,
+  liveAgents,
+  busyTasks,
   type PrReview,
 } from './model'
 import { connections, maxConnections } from './postgres'
@@ -91,7 +93,7 @@ import {
 } from './configui'
 import { helpLangOf, helpNow, helpSections, helpText } from './help'
 import { type Entry, formatEntry, historyMarkdown, timeline } from './history'
-import { changedSinceApproval, checkEvent, hintFor, stageForFile } from './rules'
+import { changedSinceApproval, checkEvent, hintFor, runMinutesFor, stageForFile } from './rules'
 import {
   type Paths,
   appendLines,
@@ -183,6 +185,10 @@ let isWriting = false
 let ticks = 0
 let timer: { cancel: () => void } | undefined
 let live: Live = { isTurnRunning: false, question: null, permission: null }
+// When the run last compacted the session on its own (context.compact_at), in seconds, and whether it asked the orchestrator to end
+// its turn for one.
+let lastCompactionAt = 0
+let compactAsked = false
 let priorUserAt: number | null = null
 let lastTurnEndAt = 0
 let reorient = false
@@ -1671,8 +1677,12 @@ async function recordEvent($: Engine, input: Record<string, unknown>): Promise<s
   }
   // Kept short: the answer stays in the conversation and is read again on every request after it. The card already shows the header,
   // and get still returns it.
-  const hint = hintFor(type, data, root)
-  return ok({ ok: true, status: run.status, ...(hint ? { hint } : {}), ...(cleanup ? { cleanup } : {}) })
+  const hint = type === 'plan.ready' ? planBudgetHint() : hintFor(type, data, root)
+  if (await wantsCompaction($, type).catch(() => false)) compactAsked = true
+  const compact = compactAsked
+    ? `The conversation is past ${config.context.compact_at} tokens. Finish this step (its log.md entry), then end your turn without starting anything else: wololo compacts the conversation and tells you to go on.`
+    : null
+  return ok({ ok: true, status: run.status, ...(hint ? { hint } : {}), ...(compact ? { compact } : {}), ...(cleanup ? { cleanup } : {}) })
 }
 
 async function getState($: Engine, input: Record<string, unknown>): Promise<string> {
@@ -2300,8 +2310,8 @@ const TOOLS: ReadonlyArray<{ name: string; description: string; inputSchema: Rec
   {
     name: 'tests',
     description:
-      'Says which tests to run now, from the config\'s tests block. scope "touched": the test files this run created or changed (committed or not) against its base, grouped into ready-to-run commands, plus the ones no configured command matches. scope "suite": the full-suite and e2e commands, and whether they run locally or are left to CI. Run every command it returns exactly as written, from the work tree.',
-    inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['touched', 'suite'] } }, required: ['scope'] },
+      'Says which tests to run now, from the config\'s tests block. scope "item": the test files changed and not yet committed (the item being verified), grouped into ready-to-run commands, plus the ones no configured command matches. scope "touched": the same for every test file this run created or changed against its base, committed or not: the whole branch, once before the suite. scope "suite": the full-suite and e2e commands, and whether they run locally or are left to CI. Run every command it returns exactly as written, from the work tree.',
+    inputSchema: { type: 'object', properties: { scope: { type: 'string', enum: ['item', 'touched', 'suite'] } }, required: ['scope'] },
   },
   {
     name: 'publish',
@@ -2422,10 +2432,11 @@ async function markReady($: Engine, number: number | undefined): Promise<string>
   return ok({ published: true, kind: 'pr_ready', number })
 }
 
-async function changedFiles($: Engine, dir: string, base: string): Promise<string[]> {
-  const ref = (await git($, dir, ['rev-parse', '--verify', '--quiet', `origin/${base}`])) ? `origin/${base}` : base
+// The files changed against the base, committed or not; with base null, only what is not committed yet.
+async function changedFiles($: Engine, dir: string, base: string | null): Promise<string[]> {
+  const ref = base === null ? null : (await git($, dir, ['rev-parse', '--verify', '--quiet', `origin/${base}`])) ? `origin/${base}` : base
   const lists = await Promise.all([
-    git($, dir, ['diff', '--name-only', '--diff-filter=d', `${ref}...HEAD`]),
+    ref === null ? Promise.resolve('') : git($, dir, ['diff', '--name-only', '--diff-filter=d', `${ref}...HEAD`]),
     git($, dir, ['diff', '--name-only', '--diff-filter=d', 'HEAD']),
     git($, dir, ['ls-files', '--others', '--exclude-standard']),
   ])
@@ -2453,7 +2464,7 @@ async function testsToRun($: Engine, input: Record<string, unknown>): Promise<st
       e2e_needs_servers: tests.e2e.length > 0 && config.commands.start.length > 0,
     })
   }
-  const changed = await changedFiles($, workdir(), run.project.base ?? config.pr.base)
+  const changed = await changedFiles($, workdir(), input.scope === 'item' ? null : (run.project.base ?? config.pr.base))
   const plan = planTouched(changed, tests)
   return ok({
     ...common,
@@ -2963,11 +2974,12 @@ export const register: Register = (on, options) => {
       asks = new Map()
       lastTurnEndAt = await nowSeconds($)
       await refresh($)
+      scheduleCompaction($)
       if (run.pause_requested_at && !run.paused && run.status === 'paused') {
         const es = run.lang === 'es'
         await emit($, 'paused', { note: run.doing?.text ?? (es ? 'pausado al terminar el turno' : 'paused at the end of the turn') })
       }
-      if (run.status !== 'stalled' || run.mode !== 'full' || e.isAborted) return
+      if (compactAsked || run.status !== 'stalled' || run.mode !== 'full' || e.isAborted) return
       if (run.counts.nudges < MAX_NUDGES) {
         await emit($, 'stalled', {})
         if (!(await isOwner($))) return
@@ -3971,4 +3983,61 @@ export const register: Register = (on, options) => {
       </Box>
     )
   }).catch(($, e, next) => next(e))
+}
+
+// Past config.context.compact_at the session is compacted, so every later request re-reads less, and only at a safe point: the turn
+// ended, no agent or task is running and no item is half done, so nothing the run still needs lives only in the conversation (a
+// subagent's id, findings not yet logged). Two ways in: the run asks for it after an item's commit or a stage's end (the event's answer
+// tells the orchestrator to end its turn, and once compacted it is told to go on), or a turn simply ends there (the PR in review, a
+// pause, a block). A moment after the turn, since a compaction is refused while one runs; at most once every ten minutes.
+function canCompact(r: Run, asked: boolean): boolean {
+  return (
+    !r.outcome &&
+    !live.isTurnRunning &&
+    (asked || r.status !== 'stalled') &&
+    liveAgents(r).length === 0 &&
+    busyTasks(r).length === 0 &&
+    !(r.stage?.id === 'implement' && r.items.current)
+  )
+}
+
+async function contextTokens($: Engine): Promise<number> {
+  return (await $.session.usage()).context.tokens ?? 0
+}
+
+// Whether the event just recorded is a point to compact at, and the context is past the threshold.
+async function wantsCompaction($: Engine, type: string): Promise<boolean> {
+  if (config.context.compact_at <= 0 || !run || !['item.committed', 'stage.completed'].includes(type)) return false
+  if (liveAgents(run).length > 0 || busyTasks(run).length > 0) return false
+  if ((await nowSeconds($)) - lastCompactionAt < 600) return false
+  return (await contextTokens($)) >= config.context.compact_at
+}
+
+function scheduleCompaction($: Engine) {
+  const asked = compactAsked
+  if (config.context.compact_at <= 0 || !run || !canCompact(run, asked)) return
+  $.clock.after(2000, () => {
+    void quietly(async () => {
+      if (!run || !canCompact(run, asked) || !(await isOwner($))) return
+      const now = await nowSeconds($)
+      if (!asked && (now - lastCompactionAt < 600 || (await contextTokens($)) < config.context.compact_at)) return
+      lastCompactionAt = now
+      compactAsked = false
+      await $.session.compact()
+      if (!asked || !run) return
+      void $.prompt
+        .submit({
+          text: `wololo: the conversation was compacted. Continue run ${run.id}: call ${TOOL_PREFIX}get with scope "run", read what you need from its files, and go on with the next step of stage ${run.stage?.id ?? 'start'}.`,
+        })
+        .catch(() => undefined)
+    })
+  })
+}
+
+// After plan.ready: the minutes the run has for this plan, for the orchestrator to tell the person with the plan.
+function planBudgetHint(): string | null {
+  if (!run || config.budgets.run_minutes <= 0) return null
+  const minutes = runMinutesFor(run, config.budgets)
+  const hours = Math.round((minutes / 60) * 10) / 10
+  return `The run has ${minutes} minutes of its own work for this plan (about ${hours} h, ${run.items.total} items; budgets.run_minutes and minutes_per_item). Tell the person in one line when you present the plan.`
 }

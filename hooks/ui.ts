@@ -137,7 +137,7 @@ export function toneOf(status: Status, run?: Pick<Run, 'pr'>): Tone {
 
 // The time measured as work: the session's turns, its agents, and the tests and CI it waited on.
 function activeSeconds(time: Partial<Record<TimeKind, number>>): number {
-  return (time.work ?? 0) + (time.agents ?? 0) + (time.tests ?? 0)
+  return (time.work ?? 0) + (time.agents ?? 0) + (time.tests ?? 0) + (time.ci ?? 0)
 }
 
 function stageSeconds(run: Run, id: string, now: number): number {
@@ -145,8 +145,8 @@ function stageSeconds(run: Run, id: string, now: number): number {
 }
 
 const TIME_NAMES: Record<'es' | 'en', Record<TimeKind | 'unmeasured', string>> = {
-  es: { work: 'trabajando', agents: 'agentes', tests: 'tests y CI', you: 'te esperó', paused: 'pausado', review: 'en revisión', unmeasured: 'sin medir' },
-  en: { work: 'working', agents: 'agents', tests: 'tests and CI', you: 'waited for you', paused: 'paused', review: 'in review', unmeasured: 'unmeasured' },
+  es: { work: 'trabajando', agents: 'agentes', tests: 'tests', ci: 'esperando CI', you: 'te esperó', paused: 'pausado', review: 'en revisión', unmeasured: 'sin medir' },
+  en: { work: 'working', agents: 'agents', tests: 'tests', ci: 'waiting on CI', you: 'waited for you', paused: 'paused', review: 'in review', unmeasured: 'unmeasured' },
 }
 
 export type WorktreeInfo = {

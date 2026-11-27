@@ -307,6 +307,7 @@ private func timeLine(_ event: RunEvent, lang: Lang) -> String {
     case "work": kind = es ? "de trabajo" : "working"
     case "agents": kind = es ? "de agentes" : "in agents"
     case "tests": kind = es ? "de tests" : "in tests"
+    case "ci": kind = es ? "esperando el CI" : "waiting on CI"
     case "you": kind = es ? "esperándote" : "waiting for you"
     case "paused": kind = es ? "en pausa" : "paused"
     case let other: kind = other

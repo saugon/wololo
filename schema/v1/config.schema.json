@@ -268,6 +268,11 @@
         },
         "run_minutes": {
           "type": "integer"
+        },
+        "minutes_per_item": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minutes each plan item adds to the run's budget, over a fixed 90; the run gets the larger of that and run_minutes. 0 keeps run_minutes."
         }
       }
     },
@@ -528,6 +533,16 @@
     "keep_awake": {
       "type": "boolean",
       "description": "While a run is active, keep the machine from sleeping (caffeinate, macOS)."
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "compact_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Context tokens past which the run compacts its session at a safe point; 0 never."
+        }
+      }
     }
   }
 }

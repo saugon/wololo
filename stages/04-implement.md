@@ -11,12 +11,14 @@ Goal: every plan item implemented, verified, reviewed and committed on the run's
    - for an item that builds a screen, the path of the mockup file it follows: the screen matches it (layout, states, texts), with the project's real components;
    - the findings of the previous attempt, if any, and the minor findings carried to this item (step 4);
    - the work-tree preamble from SKILL.md, and the reminder that it does not commit.
-3. **Verify.** Call `mcp__wololo__tests {scope: "touched"}`. It returns:
-   - the test files this run created or changed;
+
+   **Another attempt at the same item** (a failed verification, or findings to fix) goes to the same implementer: continue it with `SendMessage` and the failures or findings, instead of spawning a new one that reads every file again. Spawn a new one only when that agent is gone or the attempt throws its design away (`reversal: true`). The same holds for the re-review: continue the reviewer that made the findings.
+3. **Verify.** Call `mcp__wololo__tests {scope: "item"}`. It returns:
+   - the test files this item created or changed, the ones not committed yet: earlier items' tests already passed and run again once, branch-wide, before the suite;
    - the commands that run them;
    - the files no configured command covers.
 
-   Then spawn `config.project_agents.verifier`, or `wololo:verifier`, with the work-tree preamble, the `commands` to run exactly as written, and the `unmatched` files. The verifier runs the unmatched files the way the project documents, and you record an `assumption` for each.
+   Then spawn `config.project_agents.verifier`, or `wololo:verifier`, with the work-tree preamble, the `commands` to run exactly as written, and the `unmatched` files. The verifier runs the unmatched files the way the project documents, and you record an `assumption` for each. Never widen them: a whole directory or package in place of the files is the suite, which runs once at the end.
    - **No test file at all:** the item is not done. Back to step 2: a behaviour change without a test fails verification.
    - **`config.tests.follow` is `project`:** the verifier also reads `config.tests.rules_from`, and the project's rules win wherever they differ from these steps.
    - **Stale reports.** The verifier reports the tree hash before and after. If they differ, or they do not match `git rev-parse HEAD` plus `git diff HEAD | shasum` now, the report is stale: discard it and verify again. Never act on a stale PASS.
@@ -77,8 +79,9 @@ After the last item, **the final review**, when `config.review.final.skill` is s
 
 Then **the full suite**:
 
-1. Call `mcp__wololo__tests {scope: "suite"}`.
-2. When `suite_runs` is `local`, run every `suite` command; when `e2e_runs` is `local`, also every `e2e` command.
+1. Call `mcp__wololo__tests {scope: "touched"}` and have the verifier run its commands once: every test the run wrote or changed, against the finished branch. A failure is fixed through the same loop as an item.
+2. Call `mcp__wololo__tests {scope: "suite"}`.
+3. When `suite_runs` is `local`, run every `suite` command; when `e2e_runs` is `local`, also every `e2e` command.
    - With `e2e_needs_servers`, start the servers exactly as `stages/05-evidence.md` says, on the run's ports, and stop them afterwards.
    - When `background` is true, run each one as a background Bash command, from the work tree, writing its output to `logs_dir/<name>-<n>.log`:
 
@@ -88,7 +91,7 @@ Then **the full suite**:
 
      Then end the turn. The mod shows "corriendo tests". When the notification arrives, read the tail of the log.
    - Record the tree hash when it starts. A suite that ran on a tree that changed since is stale.
-3. Fix any failure through the same loop (implementer, the touched tests, a commit), then run the suite again.
-4. When a suite is left to CI (`ci`), record an `assumption` saying so; the pr stage watches it.
-5. `event stage.completed {stage: "implement"}`.
-6. Go to `stages/05-evidence.md`.
+4. Fix any failure through the same loop (implementer, the touched tests, a commit), then run the suite again.
+5. When a suite is left to CI (`ci`), record an `assumption` saying so; the pr stage watches it.
+6. `event stage.completed {stage: "implement"}`.
+7. Go to `stages/05-evidence.md`.

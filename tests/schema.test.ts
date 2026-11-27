@@ -119,6 +119,7 @@ const DATA: Array<[EventType, Record<string, unknown>]> = [
   ['time', { stage: 'context', kind: 'work', seconds: 30 }],
   ['time', { stage: 'context', kind: 'agents', seconds: 12.5 }],
   ['time', { stage: 'context', kind: 'tests', seconds: 3 }],
+  ['time', { stage: 'pr', kind: 'ci', seconds: 3 }],
   ['time', { stage: 'context', kind: 'you', seconds: 4 }],
   ['time', { stage: 'context', kind: 'paused', seconds: 5 }],
   ['time', { stage: 'context', kind: 'review', seconds: 6 }],

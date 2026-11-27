@@ -41,7 +41,20 @@ function gateResolved(run: Run, id: StageId): boolean {
   return run.gates[id]?.resolved_at != null
 }
 
-export type Budgets = Record<BudgetName, number>
+// minutes_per_item scales budgets.run_minutes to the plan: see runMinutesFor.
+export type Budgets = Record<BudgetName, number> & { minutes_per_item?: number }
+
+// What a run of the plan's size takes besides its items: context, definition, plan, evidence and the PR.
+export const RUN_OVERHEAD_MINUTES = 90
+
+// The run's minutes before any extension: budgets.run_minutes, or more when the plan needs it, the overhead plus minutes_per_item for
+// each item in it (an item the review adds grows it; a retry of the same item does not). The limit is then for what nobody planned:
+// an item that will not pass, retries that do not end.
+export function runMinutesFor(run: Run, budgets: Budgets): number {
+  const perItem = budgets.minutes_per_item ?? 0
+  if (budgets.run_minutes <= 0 || perItem <= 0 || run.items.total === 0) return budgets.run_minutes
+  return Math.max(budgets.run_minutes, RUN_OVERHEAD_MINUTES + perItem * run.items.total)
+}
 
 const BUDGET_WHAT: Record<BudgetName, string> = {
   design_reversals: 'design reversals for one item',
@@ -51,10 +64,10 @@ const BUDGET_WHAT: Record<BudgetName, string> = {
 
 // A spent budget stops the run in every mode: the person decides whether it goes on.
 function overBudget(run: Run, type: string, data: Record<string, unknown>, budgets: Budgets): string | null {
-  const allowed = (name: BudgetName) =>
-    budgets[name] * (1 + (run.counts.budget_extensions?.[name] ?? 0)) + (run.counts.budget_added?.[name] ?? 0)
+  const base = (name: BudgetName) => (name === 'run_minutes' ? runMinutesFor(run, budgets) : budgets[name])
+  const allowed = (name: BudgetName) => base(name) * (1 + (run.counts.budget_extensions?.[name] ?? 0)) + (run.counts.budget_added?.[name] ?? 0)
   const spent = (name: BudgetName, used: number) =>
-    `${allowed(name)} ${BUDGET_WHAT[name]} (budgets.${name} and its extensions) are spent, ${Math.round(used)} used: record blocked, ask the person how much to add (offer amounts), and record unblocked {budget: "${name}", amount} with what they chose.`
+    `${Math.round(allowed(name))} ${BUDGET_WHAT[name]} (budgets.${name}${name === 'run_minutes' ? ', scaled to the plan,' : ''} and its extensions) are spent, ${Math.round(used)} used: record blocked, ask the person how much to add (offer amounts), and record unblocked {budget: "${name}", amount} with what they chose.`
   if (type === 'item.started' && data.reversal === true) {
     const used = run.counts.reversals_by_item?.[Number(data.n)] ?? 0
     if (used >= allowed('design_reversals')) return spent('design_reversals', used)

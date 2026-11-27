@@ -84,10 +84,16 @@ export type Config = {
     debate_rounds: number
     ci_fix_attempts: number
     run_minutes: number
+    // Minutes each plan item adds to the run's budget, over a fixed 90 for the rest: the run gets the larger of that and run_minutes.
+    // 0 keeps run_minutes as it is.
+    minutes_per_item: number
   }
   permissions: { auto_allow: boolean }
   // While a run is active and the machine has caffeinate (macOS), keep it from sleeping, so an unattended run goes on.
   keep_awake: boolean
+  // compact_at: the context, in tokens, past which the run compacts its session at a safe point (between stages, at a gate, while the
+  // PR waits), so every later turn re-reads less; 0 never.
+  context: { compact_at: number }
   adapters: Partial<Record<AdapterPoint, Adapter>>
   // Runs another tool drives without a session, shown in /wololo status: the command that lists them, and the one that says where one stands ({run}).
   mirror: { list: string; run: string }
@@ -154,9 +160,11 @@ export const DEFAULT_CONFIG: Config = {
     debate_rounds: 2,
     ci_fix_attempts: 2,
     run_minutes: 240,
+    minutes_per_item: 20,
   },
   permissions: { auto_allow: true },
   keep_awake: false,
+  context: { compact_at: 400_000 },
   adapters: {},
   mirror: { list: '', run: '' },
   instance: { read: '', databases: [], release: '' },
@@ -477,6 +485,12 @@ export function globToRegExp(glob: string): RegExp {
       i += slash ? 2 : 1
     } else if (c === '*') out += '[^/]*'
     else if (c === '?') out += '[^/]'
+    else if (c === '{' && glob.indexOf('}', i) > i) {
+      // {ts,tsx}: one of the alternatives, each matched literally.
+      const end = glob.indexOf('}', i)
+      out += `(?:${glob.slice(i + 1, end).split(',').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`
+      i = end
+    }
     else out += c.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   }
   return new RegExp(`^${out}$`)

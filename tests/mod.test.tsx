@@ -2447,3 +2447,55 @@ test('with review.final set, the implement stage completes only after a passing 
   expect(await event('final_review', { verdict: 'pass', findings: 0 })).toContain('"ok": true')
   expect(await event('stage.completed', { stage: 'implement' })).toContain('"ok": true')
 })
+
+test('an item runs only its own uncommitted tests; touched runs every test the branch changed', async ($, on) => {
+  const host = fakeHost(on)
+  on('tool.call', () => ({ result: {} }))
+  host.files.set(`${DATA}/projects/acme__shop/config.json`, JSON.stringify({ tests: { touched: [{ match: 'src/**/*.test.{ts,tsx}', cmd: 'npm test {files}' }] } }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Tests' } as never)).result)
+  host.git.set('rev-parse --verify --quiet origin/main', 'abc')
+  host.git.set('diff --name-only --diff-filter=d origin/main...HEAD', 'src/old.test.ts')
+  host.git.set('diff --name-only --diff-filter=d HEAD', 'src/now.test.tsx')
+  host.git.set('ls-files --others --exclude-standard', 'src/new.test.ts')
+  const item = parse((await $.tool.call({ tool: 'mcp__wololo__tests', scope: 'item' } as never)).result)
+  expect(item.files).toEqual(['src/new.test.ts', 'src/now.test.tsx'])
+  expect(item.unmatched).toEqual([])
+  const touched = parse((await $.tool.call({ tool: 'mcp__wololo__tests', scope: 'touched' } as never)).result)
+  expect(touched.files).toEqual(['src/new.test.ts', 'src/now.test.tsx', 'src/old.test.ts'])
+})
+
+test('past context.compact_at the run has its turn end at a stage end, compacts, and is told to go on, at most once in ten minutes', async ($, on) => {
+  fakeHost(on, { clock: false })
+  const clock = mock.clock(on, { now: 1_800_000_000_000 })
+  on('tool.call', () => ({ result: {} }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { window: 1_000_000, tokens: 500_000 }, rateLimits: [], cost: { usd: 1 } } }))
+  let compactions = 0
+  on('session.compact', () => {
+    compactions += 1
+    return { skip: 'counted' }
+  })
+  const prompts: string[] = []
+  on('prompt.submit', (_, e) => {
+    prompts.push(e.text)
+    return { text: e.text }
+  })
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: REPO, surface: 'terminal', isInteractive: true })
+  parse((await $.tool.call({ tool: 'mcp__wololo__start', source: { kind: 'github_issue', ref: '12' }, title: 'Partial payments', mode: 'full' } as never)).result)
+  const event = async (type: string, data: Record<string, unknown>) => parse((await $.tool.call({ tool: 'mcp__wololo__event', type, data } as never)).result)
+  const endTurn = async (turnId: string) => {
+    await $.turn.complete({ turnId, reason: 'end_turn', text: '', answer: '', isAborted: false } as never)
+    await clock.advance(3_000)
+  }
+  await event('stage.entered', { stage: 'context' })
+  expect(String((await event('stage.completed', { stage: 'context' })).compact)).toContain('end your turn')
+  await endTurn('t1')
+  expect(compactions).toBe(1)
+  expect(prompts.filter(text => text.includes('the conversation was compacted'))).toHaveLength(1)
+  // Once compacted, not again within ten minutes, and never while an item is half done.
+  await event('stage.entered', { stage: 'definition' })
+  expect((await event('stage.completed', { stage: 'definition' })).compact).toBe(undefined)
+  await endTurn('t2')
+  expect(compactions).toBe(1)
+})

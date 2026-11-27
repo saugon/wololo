@@ -46,6 +46,9 @@ test('globs match the usual test file names', async () => {
   expect(globToRegExp('**/*_test.*').test('orders_test.exs')).toBe(true)
   expect(globToRegExp('frontend/**/*.test.ts').test('frontend/src/a/b.test.ts')).toBe(true)
   expect(globToRegExp('frontend/**/*.test.ts').test('backend/a.test.ts')).toBe(false)
+  expect(globToRegExp('frontend/apps/platform/**/*.test.{ts,tsx}').test('frontend/apps/platform/src/a/b.test.tsx')).toBe(true)
+  expect(globToRegExp('frontend/apps/platform/**/*.test.{ts,tsx}').test('frontend/apps/platform/src/a/b.test.ts')).toBe(true)
+  expect(globToRegExp('frontend/apps/platform/**/*.test.{ts,tsx}').test('frontend/apps/platform/src/a/b.test.js')).toBe(false)
 })
 
 test('touched test files are grouped into the configured commands, the rest reported', async () => {

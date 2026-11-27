@@ -81,6 +81,7 @@ Take the text after `/wololo`:
 - Every decision you take without asking is an `assumption {text, stage}`.
 - Every answer the person gives is a `decision {text, by: "person"}`.
 - The mod refuses out-of-order events. When it does, fix the order instead of working around it.
+- When an event's answer carries `compact`, do what it says: finish that step, then end your turn without starting anything else. wololo compacts the conversation and tells you to go on, and everything you need is in the run's files.
 
 **Ask only through AskUserQuestion**, never as plain text at the end of a message. A question in plain text leaves the run looking stalled.
 - Before every AskUserQuestion, write a short block:
@@ -134,7 +135,7 @@ The run enforces the budgets itself: past `budgets.design_reversals` for an item
 - Write and update the run's files with Write and Edit, never with shell redirection (`cat >>`, `echo >`): the mod approves those tools in `run_dir` without asking, and a shell write stops the run on a permission prompt.
 
 **Tests.**
-- During development, run the tests the run created or changed, as `mcp__wololo__tests {scope: "touched"}` lists them.
+- During development, each item runs the tests it created or changed, as `mcp__wololo__tests {scope: "item"}` lists them; once before the suite, every test the run touched (`scope: "touched"`).
 - Once every item is done, run the full suite (`scope: "suite"`). It runs locally or is left to CI, as the config says.
 - When `config.tests.follow` is `project`, read `config.tests.rules_from` before the first item; the project's rules win wherever they differ.
 - A suite that takes long runs in the background; the mod shows "corriendo tests".

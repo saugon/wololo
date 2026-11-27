@@ -198,9 +198,10 @@ export type Tokens = { input: number; output: number; cache_read: number; cache_
 
 export type StageUsage = Tokens & { usd: number; roles: Record<string, { usd: number; tokens: number }> }
 
-export type TimeKind = 'work' | 'agents' | 'tests' | 'you' | 'paused' | 'review'
+// ci: waiting on the PR's checks on GitHub, which is no work of the run's own and never counts against budgets.run_minutes.
+export type TimeKind = 'work' | 'agents' | 'tests' | 'ci' | 'you' | 'paused' | 'review'
 
-export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'you', 'paused', 'review']
+export const TIME_KINDS: readonly TimeKind[] = ['work', 'agents', 'tests', 'ci', 'you', 'paused', 'review']
 
 // The mod ticks every second while the machine is awake: a gap between ticks longer than this is the machine asleep (the lid closed),
 // when nothing of the run moves but the clock does.
@@ -223,8 +224,9 @@ export function timeKind(status: Status): TimeKind | null {
     case 'waiting_agents':
       return 'agents'
     case 'waiting_tests':
-    case 'waiting_ci':
       return 'tests'
+    case 'waiting_ci':
+      return 'ci'
     case 'waiting_user':
     case 'waiting_permission':
     case 'blocked':
@@ -393,6 +395,7 @@ export function isTerminal(status: Status): boolean {
 }
 
 // The run's own minutes: working, running agents and tests, but not waiting for the person or paused.
+// The run's own work, which budgets.run_minutes measures: its turns, its agents and its tests, not the wait on the PR's CI.
 export function activeMinutes(run: Run): number {
   let seconds = 0
   for (const time of Object.values(run.time ?? {})) seconds += (time?.work ?? 0) + (time?.agents ?? 0) + (time?.tests ?? 0)

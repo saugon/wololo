@@ -527,7 +527,7 @@ export default {
     },
     "time": {
       "type": "object",
-      "description": "Seconds per stage in each kind of wait (work, agents, tests, you, paused), and seconds each agent role ran in all.",
+      "description": "Seconds per stage in each kind of wait (work, agents, tests, ci, you, paused, review), and seconds each agent role ran in all.",
       "additionalProperties": {
         "type": "object",
         "properties": {
@@ -538,6 +538,9 @@ export default {
             "type": "number"
           },
           "tests": {
+            "type": "number"
+          },
+          "ci": {
             "type": "number"
           },
           "you": {

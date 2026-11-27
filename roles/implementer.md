@@ -16,4 +16,4 @@ Rules:
 - Run the targeted checks for what you touched before finishing, in the foreground: never `run_in_background`, and nothing left running when you finish (no servers, watchers or suites). The verifier runs the item's tests after you; a suite you leave running holds the shared database and collides with it.
 - Stay inside the item. If the item cannot be done as written, stop and explain why instead of redesigning it.
 
-Report: what changed (files), the tests added, the commands you ran with their results, and anything you were unsure about.
+Report in at most 15 lines, for the orchestrator that keeps every report in its context: the files changed (paths, not their contents), the tests added, the commands you ran with pass or fail, and anything you were unsure about. No diffs, no lists of strings before and after, no code: the diff is in the tree.

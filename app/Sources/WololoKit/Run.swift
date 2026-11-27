@@ -521,7 +521,8 @@ extension Run {
             let c = try decoder.container(keyedBy: AnyKey.self)
             work = c.value("work", or: 0)
             agents = c.value("agents", or: 0)
-            tests = c.value("tests", or: 0)
+            // Waiting on the PR's checks is kept apart by the mod (ci); the app shows it with the tests.
+            tests = c.value("tests", or: 0) + c.value("ci", or: 0)
             you = c.value("you", or: 0)
             paused = c.value("paused", or: 0)
             roles = c.value("roles", or: [:])
